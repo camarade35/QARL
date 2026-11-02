@@ -18,6 +18,7 @@
 
   // ⭐ État pour afficher la visite au démarrage
   let showTour = $state(false);
+  let hasShownTourThisSession = false; // ⭐ Évite que le tour se relance si on rouvre l'assistant
 
   onMount(() => {
     // ⭐ On écoute le changement d'onglet demandé par la visite
@@ -28,13 +29,24 @@
     };
     window.addEventListener('qarl-change-tab', handleTabChange);
 
-    // ⭐ On affiche la visite si elle n'a jamais été désactivée
-    if (!setupState.tutorialDisabled) {
-      // Petit délai pour ne pas clignoter au tout premier chargement
-      setTimeout(() => { showTour = true; }, 500);
-    }
-
     return () => window.removeEventListener('qarl-change-tab', handleTabChange);
+  });
+
+  // ⭐ On affiche la visite UNIQUEMENT quand l'assistant est fermé
+  $effect(() => {
+    // Si l'assistant est ouvert, on ne fait rien (on attend qu'il se ferme)
+    if (setupState.isOpen) return;
+
+    // Si on a déjà montré le tour, ou si l'utilisateur l'a désactivé, on ne fait rien
+    if (hasShownTourThisSession || setupState.tutorialDisabled) return;
+
+    // Petit délai pour laisser l'interface se charger
+    const timer = setTimeout(() => {
+      showTour = true;
+      hasShownTourThisSession = true;
+    }, 500);
+
+    return () => clearTimeout(timer);
   });
   
   const tabs = [

@@ -1,6 +1,8 @@
 {
   "setup": {
     "title": "Initial Setup",
+    "warning_ac_required": "⚠️ Assetto Corsa must be installed and launched at least once, and your controls assigned, before using QARL.",
+    "warning_close_blocked": "Configuration is not complete. If you quit now, QARL will not work properly. Do you really want to quit?",
     "welcome": {
       "title": "Welcome to QARL!",
       "desc": "Let's configure your launcher in a few steps:\n• Detect your AC installation\n• Verify your files\n• Set your identity\n• Check your weather modules",
@@ -233,6 +235,7 @@
     "launching": "LAUNCHING...",
     "error_select": "Please select a car and a track.",
     "error_path": "Please configure the Assetto Corsa folder in the Cars tab.",
+    "error_docs_path": "Please configure the Documents (Assetto Corsa) folder in Settings.",
     "error_launch": "Launch error:",
     "accent_color_tooltip": "Accent color",
     "toggle_theme_tooltip": "Toggle light/dark",

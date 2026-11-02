@@ -32,9 +32,49 @@
     if (currentIdx > 0) goToStep(currentIdx - 1);
   }
 
-  function handleClose() {
-    // Si on ferme manuellement (skip global), on marque comme complété
-    markSetupCompleted();
+  import { getCurrentWindow } from '@tauri-apps/api/window';
+  import { invoke } from '@tauri-apps/api/core';
+  import { appState } from '$lib/stores/appState.svelte.js';
+  import { confirm } from '$lib/stores/dialog.svelte';
+
+  // ⭐ État pour savoir si la config AC est incomplète
+  let hasError = $state(false);
+
+  async function checkAcSetup() {
+    if (!appState.documentsPath) {
+      hasError = true;
+      return;
+    }
+    try {
+      const res = await invoke<any>('check_ac_initialized', { documentsPath: appState.documentsPath });
+      // Si les contrôles ne sont pas configurés, on active l'erreur
+      hasError = !res.hasControls || !res.hasControllers;
+    } catch (e) {
+      hasError = true;
+    }
+  }
+
+  // ⭐ Vérification automatique au chargement et à chaque changement de chemins
+  $effect(() => {
+    if (appState.acPath && appState.documentsPath) {
+      checkAcSetup();
+    } else {
+      hasError = true;
+    }
+  });
+
+  async function handleClose() {
+    // ⭐ On demande confirmation si on est sur une étape bloquante OU si hasError est vrai
+    const isBlocking = STEPS[currentIdx].blocking;
+    
+    if (isBlocking || hasError) {
+      const msg = $t('setup.warning_close_blocked');
+      if (await confirm(msg, $t('common.warning'), "warning")) {
+        getCurrentWindow().close();
+      }
+    } else {
+      getCurrentWindow().close();
+    }
   }
 
   // Écoute les redirections "Ouvrir Contrôles" depuis Step2Devices
@@ -82,6 +122,13 @@
       </div>
 
       <div class="setup-body">
+        <!-- ⭐ Avertissement conditionnel -->
+        {#if hasError}
+          <div style="background: rgba(229, 115, 115, 0.1); border: 1px solid rgba(229, 115, 115, 0.3); padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; color: #e57373; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 8px; line-height: 1.4;">
+            {$t('setup.warning_ac_required')}
+          </div>
+        {/if}
+
         {#if currentIdx === 0}
           <Step0Paths onContinue={handleContinue} />
         {:else if currentIdx === 1}
@@ -107,7 +154,9 @@
           ← {$t('common.cancel')}
         </button>
         <div class="spacer"></div>
-        {#if currentIdx < totalSteps - 1}
+        
+        <!-- ⭐ Le bouton Skip réapparaît SEULEMENT si tout va bien ET que l'étape n'est pas bloquante -->
+        {#if currentIdx < totalSteps - 1 && !STEPS[currentIdx].blocking && !hasError}
           <button class="filter-btn" onclick={handleClose} style="margin-right: 8px;">
             {$t('setup.welcome.skip')}
           </button>

@@ -144,6 +144,12 @@
       return;
     }
 
+    // ⭐ NOUVEAU : On vérifie aussi le dossier Documents
+    if (!appState.documentsPath) {
+      alert($t('sidebar.error_docs_path'));
+      return;
+    }
+
     isLaunching = true;
     try {
       await invoke('launch_race', {
