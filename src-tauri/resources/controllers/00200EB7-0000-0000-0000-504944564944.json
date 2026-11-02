@@ -1,0 +1,9 @@
+{
+  "name": "FANATEC Wheel",
+  "axis": {
+    "0": "0;Direction",
+    "2": "1;Accélérateur",
+    "5": "5;Frein",
+    "1": "6;Embrayage"
+  }
+}
