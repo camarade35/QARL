@@ -3,7 +3,8 @@ use std::path::Path;
 use std::sync::Mutex;
 use serde::Serialize;
 use tauri::Emitter;
-use tauri::Manager; // ⭐ LA LIGNE MANQUANTE
+use tauri::Manager;
+use tauri::Listener; // ⭐ Ajouté pour corriger l'erreur E0599
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use cpal::traits::{DeviceTrait, HostTrait};
 
@@ -127,6 +128,24 @@ fn get_valid_path_helper(p: std::path::PathBuf) -> Option<String> {
     if p.exists() { Some(p.to_string_lossy().replace("\\", "/")) } else { None }
 }
 
+// ⭐ Fonction magique pour trouver le dossier cfg peu importe le chemin choisi
+fn resolve_cfg_dir(doc_path: &Path) -> std::path::PathBuf {
+    if doc_path.ends_with("cfg") && doc_path.exists() {
+        return doc_path.to_path_buf();
+    }
+    if doc_path.join("cfg").exists() {
+        return doc_path.join("cfg");
+    }
+    // ⭐ Sécurité : Si le chemin se termine déjà par "Assetto Corsa", on ajoute JUSTE cfg
+    if doc_path.file_name().unwrap_or_default().to_string_lossy().eq_ignore_ascii_case("Assetto Corsa") {
+        return doc_path.join("cfg");
+    }
+    if doc_path.join("Assetto Corsa").join("cfg").exists() {
+        return doc_path.join("Assetto Corsa").join("cfg");
+    }
+    doc_path.join("cfg")
+}
+
 fn get_exact_image(dir: &Path, name: &str) -> Option<String> {
     for ext in &["png", "jpg", "jpeg"] {
         let p = dir.join(format!("{}.{}", name, ext));
@@ -220,8 +239,8 @@ fn get_ac_cars(ac_path: String) -> Result<Vec<CarInfo>, String> {
                     }
                 }
                 
-                // ⭐ On utilise la liste exacte
-                let is_kunos = KUNOS_CARS.contains(&id.as_str()); 
+                // ⭐ On considère Kunos si l'ID commence par "ks_" OU s'il est dans la liste statique
+                let is_kunos = id.starts_with("ks_") || KUNOS_CARS.contains(&id.as_str()); 
                 cars.push(CarInfo { id, name, brand, car_class, bhp, pwratio, year, tags, is_kunos, skins, image_path: default_image, flag_path, brand_logo_path });
             }
         }
@@ -292,7 +311,53 @@ fn get_ac_tracks(ac_path: String) -> Result<Vec<TrackInfo>, String> {
                                 let folder_name = sub_path.file_name().unwrap_or_default().to_string_lossy().to_string();
                                 if folder_name == "ui" || folder_name == "skins" || folder_name == "extension" { continue; }
 
-                                // ⭐ On cherche les images dans le dossier du layout ET dans son sous-dossier "ui"
+                                // ⭐ On évite de traiter deux fois le même layout
+                                if layouts.iter().any(|l| l.id == folder_name) { continue; }
+
+                                let mut display_name = folder_name.replace("layout_", "").replace('_', " ");
+
+                                // ⭐ Recherche robuste du ui_track.json
+                                let mut layout_json = sub_path.join("ui_track.json");
+                                if !layout_json.exists() { layout_json = sub_path.join("ui").join("ui_track.json"); }
+                                if !layout_json.exists() { layout_json = ui_dir.join(&folder_name).join("ui_track.json"); }
+                                if !layout_json.exists() { layout_json = ui_dir.join(&folder_name).join("ui").join("ui_track.json"); }
+
+                                if layout_json.exists() {
+                                    if let Ok(bytes) = fs::read(&layout_json) {
+                                        // ⭐ Gestion de TOUS les encodages (UTF-8, ANSI, UTF-16 LE/BE)
+                                        let json_str = if bytes.starts_with(&[0xFF, 0xFE]) {
+                                            let u16_slice: Vec<u16> = bytes[2..].chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+                                            String::from_utf16_lossy(&u16_slice)
+                                        } else if bytes.starts_with(&[0xFE, 0xFF]) {
+                                            let u16_slice: Vec<u16> = bytes[2..].chunks_exact(2).map(|c| u16::from_be_bytes([c[0], c[1]])).collect();
+                                            String::from_utf16_lossy(&u16_slice)
+                                        } else {
+                                            String::from_utf8_lossy(&bytes).to_string()
+                                        };
+
+                                        // ⭐ Parsing fiable avec serde_json
+                                        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&json_str) {
+                                            if let Some(n) = parsed.get("name").and_then(|v| v.as_str()) {
+                                                if !n.is_empty() { display_name = n.to_string(); }
+                                            }
+                                            
+                                            if fallback_country.is_empty() {
+                                                if let Some(c) = parsed.get("country").and_then(|v| v.as_str()) {
+                                                    if !c.is_empty() { fallback_country = c.to_string(); }
+                                                }
+                                            }
+                                            
+                                            if fallback_tags.is_empty() {
+                                                if let Some(tags_arr) = parsed.get("tags").and_then(|v| v.as_array()) {
+                                                    let t: Vec<String> = tags_arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                                                    if !t.is_empty() { fallback_tags = t; }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // ⭐ On cherche les images
                                 let sub_outline = get_exact_image(&sub_path, "outline")
                                     .or_else(|| get_exact_image(&sub_path.join("ui"), "outline"));
                                     
@@ -302,34 +367,6 @@ fn get_ac_tracks(ac_path: String) -> Result<Vec<TrackInfo>, String> {
                                     .or_else(|| get_exact_image(&sub_path.join("ui"), "dlc_preview"));
 
                                 if sub_outline.is_some() || sub_preview.is_some() {
-                                    let mut display_name = folder_name.replace("layout_", "").replace('_', " ");
-                                    
-                                    // ⭐ On cherche aussi le ui_track.json dans le sous-dossier "ui" s'il n'est pas à la racine
-                                    let mut layout_json = sub_path.join("ui_track.json");
-                                    if !layout_json.exists() {
-                                        layout_json = sub_path.join("ui").join("ui_track.json");
-                                    }
-
-                                    if layout_json.exists() {
-                                        if let Ok(json) = fs::read_to_string(&layout_json) {
-                                            let clean_json = json.trim_start_matches('\u{feff}');
-                                            if let Some(n) = extract_json_string(clean_json, "name") {
-                                                if !n.is_empty() { display_name = n; }
-                                            }
-                                            
-                                            // ⭐ NOUVEAU : On récupère le pays et les tags du layout
-                                            if fallback_country.is_empty() {
-                                                if let Some(c) = extract_json_string(clean_json, "country") {
-                                                    if !c.is_empty() { fallback_country = c; }
-                                                }
-                                            }
-                                            if fallback_tags.is_empty() {
-                                                let t = extract_json_tags(clean_json, "tags");
-                                                if !t.is_empty() { fallback_tags = t; }
-                                            }
-                                        }
-                                    }
-
                                     layouts.push(TrackLayoutInfo {
                                         id: folder_name,
                                         name: display_name.to_uppercase(),
@@ -443,15 +480,23 @@ fn get_ac_weathers(ac_path: String) -> Result<Vec<WeatherInfo>, String> {
 fn get_pure_plans(ac_path: String) -> Result<Vec<PurePlanInfo>, String> {
     let plans_dir = Path::new(&ac_path).join("extension").join("config-ext").join("PurePlanner").join("Plans");
     if !plans_dir.exists() { return Ok(Vec::new()); }
+    
+    // ⭐ LECTURE DES PRESETS POUR FAIRE LA CORRESPONDANCE INDEX -> NOM (ex: 20 -> "fog")
+    let presets_path = Path::new(&ac_path).join("extension").join("config-ext").join("PurePlanner").join("WeatherPresets").join("Default_WeatherPresets.json");
+    let presets: Vec<Vec<serde_json::Value>> = fs::read_to_string(&presets_path)
+        .ok()
+        .and_then(|c| serde_json::from_str(&c).ok())
+        .unwrap_or_default();
+
     let mut plans = Vec::new();
     
     // ⭐ Scan récursif pour inclure Stamp/, Daycycle/, etc.
-    fn scan_dir(dir: &Path, base: &Path, plans: &mut Vec<PurePlanInfo>) {
+    fn scan_dir(dir: &Path, base: &Path, plans: &mut Vec<PurePlanInfo>, presets: &[Vec<serde_json::Value>]) {
         if let Ok(entries) = fs::read_dir(dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
                 if path.is_dir() {
-                    scan_dir(&path, base, plans);
+                    scan_dir(&path, base, plans, presets);
                 } else if let Some(ext) = path.extension() {
                     if ext == "json" || ext == "ini" {
                         let relative_path = path.strip_prefix(base).unwrap_or(&path);
@@ -481,9 +526,16 @@ fn get_pure_plans(ac_path: String) -> Result<Vec<PurePlanInfo>, String> {
                                             let index = c["data"]["weather"]["index"].as_i64().unwrap_or(15);
                                             let duration = (c["data"]["duration"].as_i64().unwrap_or(0) / 60) as i32;
                                             
-                                            let weather_id = c["data"]["weather"]["__qarl_weather_id"].as_str()
-                                                .map(|s| s.to_string())
-                                                .unwrap_or_else(|| format!("sol_{}", index));
+                                            let weather_id = if let Some(qarl_id) = c["data"]["weather"]["__qarl_weather_id"].as_str() {
+                                                qarl_id.to_string()
+                                            } else {
+                                                // ⭐ Si c'est un plan Pure natif, on traduit l'index en nom (ex: 20 -> "fog")
+                                                let name = presets.iter()
+                                                    .find(|p| p[1].as_i64().unwrap_or(-1) == index)
+                                                    .and_then(|p| p[0].as_str())
+                                                    .unwrap_or("clear");
+                                                format!("{}", name) // On renvoie juste "fog", "windy", etc.
+                                            };
                                                 
                                             steps.push(PurePlanStep { weather_id, weather_index: index, duration });
 
@@ -509,7 +561,7 @@ fn get_pure_plans(ac_path: String) -> Result<Vec<PurePlanInfo>, String> {
         }
     }
     
-    scan_dir(&plans_dir, &plans_dir, &mut plans);
+    scan_dir(&plans_dir, &plans_dir, &mut plans, &presets);
     plans.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(plans)
 }
@@ -657,8 +709,15 @@ fn save_custom_pure_plan(
 }
 
 #[tauri::command]
-fn read_pure_ctrl(ac_path: String) -> Result<PureCtrlSettings, String> {
-    let config_path = Path::new(&ac_path).join("purectrl_config.json");
+fn read_pure_ctrl(documents_path: String) -> Result<PureCtrlSettings, String> {
+    // ⭐ On utilise le dossier cfg et on crée QARL_Presets/PureCtrl
+    let cfg_dir = resolve_cfg_dir(Path::new(&documents_path));
+    let qarl_dir = cfg_dir.join("QARL_Presets").join("PureCtrl");
+    if !qarl_dir.exists() {
+        let _ = fs::create_dir_all(&qarl_dir);
+    }
+    let config_path = qarl_dir.join("purectrl_config.json");
+    
     let default_settings = PureCtrlSettings { autostart: false, last_used: false, live: false, start_wetness: 1, start_puddles: 1 };
     if !config_path.exists() { return Ok(default_settings); }
     if let Ok(content) = fs::read_to_string(&config_path) {
@@ -668,8 +727,15 @@ fn read_pure_ctrl(ac_path: String) -> Result<PureCtrlSettings, String> {
 }
 
 #[tauri::command]
-fn write_pure_ctrl(ac_path: String, settings: PureCtrlSettings) -> Result<(), String> {
-    let config_path = Path::new(&ac_path).join("purectrl_config.json");
+fn write_pure_ctrl(documents_path: String, settings: PureCtrlSettings) -> Result<(), String> {
+    // ⭐ On écrit dans QARL_Presets/PureCtrl
+    let cfg_dir = resolve_cfg_dir(Path::new(&documents_path));
+    let qarl_dir = cfg_dir.join("QARL_Presets").join("PureCtrl");
+    if !qarl_dir.exists() {
+        let _ = fs::create_dir_all(&qarl_dir);
+    }
+    let config_path = qarl_dir.join("purectrl_config.json");
+    
     let json = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
     fs::write(config_path, json).map_err(|e| e.to_string())?;
     Ok(())
@@ -1094,13 +1160,13 @@ fn check_ac_initialized(documents_path: Option<String>) -> Result<serde_json::Va
     let race_ini = cfg_dir.join("race.ini");
     let controls_ini = cfg_dir.join("controls.ini");
 
-    let hasRace = race_ini.exists();
-    let hasControls = controls_ini.exists();
+    let has_race = race_ini.exists();
+    let has_controls = controls_ini.exists();
 
-    let mut hasControllers = false;
-    let mut controllersCount = 0;
+    let mut has_controllers = false;
+    let mut controllers_count = 0;
 
-    if hasControls {
+    if has_controls {
         if let Ok(content) = fs::read_to_string(&controls_ini) {
             let mut in_controllers = false;
             for line in content.lines() {
@@ -1110,20 +1176,20 @@ fn check_ac_initialized(documents_path: Option<String>) -> Result<serde_json::Va
                     continue;
                 }
                 if in_controllers && trimmed.starts_with("CON") {
-                    controllersCount += 1;
+                    controllers_count += 1;
                 }
             }
-            hasControllers = controllersCount > 0;
+            has_controllers = controllers_count > 0;
         }
     }
 
     Ok(serde_json::json!({
         "success": true,
-        "initialized": hasRace && hasControls && hasControllers,
-        "hasRace": hasRace,
-        "hasControls": hasControls,
-        "hasControllers": hasControllers,
-        "controllersCount": controllersCount,
+        "initialized": has_race && has_controls && has_controllers,
+        "hasRace": has_race,
+        "hasControls": has_controls,
+        "hasControllers": has_controllers,
+        "controllersCount": controllers_count,
         "cfgDir": cfg_dir.to_string_lossy().to_string()
     }))
 }
@@ -1180,8 +1246,8 @@ fn check_ac_capabilities(ac_path: String) -> Result<Capabilities, String> {
 }
 
 // ⭐ Écrit le fichier d'état de PureCtrl pour dire à Pure quel plan charger
-fn write_pure_ctrl_ini(documents_path: &Path, plan_path: &str, cm_weather: i32, pure_ctrl: &serde_json::Value) -> Result<(), String> {
-    let dir = documents_path.join("Assetto Corsa").join("cfg").join("extension").join("state").join("lua").join("wfx_controller");
+fn write_pure_ctrl_ini(cfg_dir: &Path, plan_path: &str, cm_weather: i32, pure_ctrl: &serde_json::Value) -> Result<(), String> {
+    let dir = cfg_dir.join("extension").join("state").join("lua").join("wfx_controller");
     if !dir.exists() {
         fs::create_dir_all(&dir).map_err(|e| format!("Erreur création dossier PureCtrl: {}", e))?;
     }
@@ -1201,16 +1267,15 @@ fn write_pure_ctrl_ini(documents_path: &Path, plan_path: &str, cm_weather: i32, 
         autostart = true;
     }
 
-    // ⭐ On n'écrit QUE si la valeur est différente du défaut (comme CM)
-    if !autostart { lines.push("AUTOSTART=0".to_string()); }
-    if !last_used { lines.push("LAST_USED=0".to_string()); }
-    if live { lines.push("LIVE=1".to_string()); }
+    // ⭐ On force l'écriture avec les espaces et les valeurs par défaut comme Pure Planner
+    lines.push(format!("LIVE = {}", if live { "1" } else { "0" }));
+    lines.push(format!("LAST_USED = {}", if last_used { "1" } else { "0" }));
+    lines.push(format!("AUTOSTART = {}", if autostart { "1" } else { "0" }));
     
-    // ⭐ On n'écrit ces lignes QUE si > 1 (comme QACRL)
-    if start_wetness > 1 { lines.push(format!("START_WETNESS={}", start_wetness)); }
-    if start_puddles > 1 { lines.push(format!("START_PUDDLES={}", start_puddles)); }
+    if start_wetness > 1 { lines.push(format!("START_WETNESS = {}", start_wetness)); }
+    if start_puddles > 1 { lines.push(format!("START_PUDDLES = {}", start_puddles)); }
     
-    if !plan_path.is_empty() { lines.push(format!("PLAN={}", plan_path)); }
+    if !plan_path.is_empty() { lines.push(format!("PLAN = {}", plan_path)); }
 
     let content = lines.join("\n") + "\n";
     fs::write(&file_path, content).map_err(|e| format!("Erreur écriture pureCtrl__settings.ini: {}", e))?;
@@ -1229,6 +1294,141 @@ fn get_pure_ctrl_cm_weather(weather_name: &str) -> i32 {
     }
 }
 
+// ⭐ NOUVEAU : Sauvegarde manuelle du fichier assists.ini
+// ⭐ Dossier des presets d'assistances
+fn get_assists_presets_dir(documents_path: &str) -> Result<std::path::PathBuf, String> {
+    let cfg_dir = resolve_cfg_dir(Path::new(documents_path));
+    let dir = cfg_dir.join("QARL_Presets").join("Assists");
+    if !dir.exists() {
+        fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    }
+    Ok(dir)
+}
+
+#[tauri::command]
+fn list_assists_presets(documents_path: String) -> Result<Vec<String>, String> {
+    let dir = get_assists_presets_dir(&documents_path)?;
+    let mut presets = Vec::new();
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            if let Some(stem) = entry.path().file_stem() {
+                if entry.path().extension().map_or(false, |e| e == "ini") {
+                    presets.push(stem.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+    presets.sort();
+    Ok(presets)
+}
+
+#[tauri::command]
+fn save_assists_preset(documents_path: String, preset_name: String, assists: serde_json::Value, fov: i32) -> Result<(), String> {
+    let cfg_dir = resolve_cfg_dir(Path::new(&documents_path));
+    let get_bool = |key: &str| assists[key].as_bool().unwrap_or(false) as i32;
+    let get_int = |key: &str, def: i32| assists[key].as_i64().unwrap_or(def as i64) as i32;
+
+    let content = format!(
+r#"[ASSISTS]
+IDEAL_LINE={}
+AUTO_BLIP={}
+STABILITY_CONTROL={}
+AUTO_BRAKE=0
+AUTO_SHIFTER={}
+ABS={}
+TRACTION_CONTROL={}
+AUTO_CLUTCH={}
+VISUALDAMAGE=100
+DAMAGE={}
+FUEL_RATE={}
+TYRE_WEAR={}
+TYRE_BLANKETS={}
+SLIPSTREAM={}
+
+[CAMERA]
+FOV={}
+"#,
+        get_bool("idealLine"), get_bool("autoblip"), get_int("stability", 0), 
+        get_bool("autoGearbox"), get_int("abs", 1), get_int("tc", 1), get_bool("autoClutch"),
+        get_int("mechanicalDamage", 100), get_int("fuelRate", 1), get_int("tyreWear", 1), 
+        get_bool("tyreBlankets"), get_int("slipstream", 1), fov
+    );
+
+    // 1. Sauvegarde du profil
+    let presets_dir = get_assists_presets_dir(&documents_path)?;
+    let safe_name = preset_name.trim().replace(|c: char| !c.is_alphanumeric() && c != '_' && c != '-', "_");
+    if safe_name.is_empty() { return Err("Nom invalide".into()); }
+    fs::write(presets_dir.join(format!("{}.ini", safe_name)), &content).map_err(|e| e.to_string())?;
+
+    // 2. Application immédiate dans le fichier global d'AC
+    fs::write(cfg_dir.join("assists.ini"), content).map_err(|e| e.to_string())?;
+    
+    Ok(())
+}
+
+#[tauri::command]
+fn load_assists_preset(documents_path: String, preset_name: String) -> Result<serde_json::Value, String> {
+    let cfg_dir = resolve_cfg_dir(Path::new(&documents_path));
+    let presets_dir = get_assists_presets_dir(&documents_path)?;
+    let file_path = presets_dir.join(format!("{}.ini", preset_name));
+    
+    if !file_path.exists() { return Err("Preset introuvable".into()); }
+    let content = fs::read_to_string(&file_path).map_err(|e| e.to_string())?;
+    
+    // On copie le preset vers le fichier actif d'AC
+    fs::write(cfg_dir.join("assists.ini"), &content).map_err(|e| e.to_string())?;
+
+        // On parse pour renvoyer à Svelte
+    let mut result = serde_json::json!({});
+    let mut in_camera_section = false;
+    
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            in_camera_section = trimmed.eq_ignore_ascii_case("[CAMERA]");
+            continue;
+        }
+        if trimmed.starts_with(';') || trimmed.is_empty() { continue; }
+        
+        if let Some((k, v)) = trimmed.split_once('=') {
+            let val_str = v.split(';').next().unwrap_or("").trim();
+            
+            if in_camera_section && k.trim() == "FOV" {
+                result["fov"] = serde_json::json!(val_str.parse::<i32>().unwrap_or(56));
+                continue;
+            }
+            
+            match k.trim() {
+                "IDEAL_LINE" => result["idealLine"] = serde_json::json!(val_str == "1"),
+                "AUTO_BLIP" => result["autoblip"] = serde_json::json!(val_str == "1"),
+                "STABILITY_CONTROL" => result["stability"] = serde_json::json!(val_str.parse::<i32>().unwrap_or(0)),
+                "AUTO_SHIFTER" => result["autoGearbox"] = serde_json::json!(val_str == "1"),
+                "ABS" => result["abs"] = serde_json::json!(val_str.parse::<i32>().unwrap_or(1)),
+                "TRACTION_CONTROL" => result["tc"] = serde_json::json!(val_str.parse::<i32>().unwrap_or(1)),
+                "AUTO_CLUTCH" => result["autoClutch"] = serde_json::json!(val_str == "1"),
+                "DAMAGE" => result["mechanicalDamage"] = serde_json::json!(val_str.parse::<i32>().unwrap_or(100)),
+                "FUEL_RATE" => result["fuelRate"] = serde_json::json!(val_str.parse::<i32>().unwrap_or(1)),
+                "TYRE_WEAR" => result["tyreWear"] = serde_json::json!(val_str.parse::<i32>().unwrap_or(1)),
+                "TYRE_BLANKETS" => result["tyreBlankets"] = serde_json::json!(val_str == "1"),
+                "SLIPSTREAM" => result["slipstream"] = serde_json::json!(val_str.parse::<i32>().unwrap_or(1)),
+                _ => {}
+            }
+        }
+    }
+    Ok(result)
+}
+
+#[tauri::command]
+fn delete_assists_preset(documents_path: String, preset_name: String) -> Result<(), String> {
+    let presets_dir = get_assists_presets_dir(&documents_path)?;
+    let file_path = presets_dir.join(format!("{}.ini", preset_name));
+    
+    if file_path.exists() {
+        fs::remove_file(file_path).map_err(|e| format!("Erreur suppression: {}", e))?;
+    }
+    Ok(())
+}
+
 #[allow(non_snake_case)]
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 struct SessionData {
@@ -1243,6 +1443,18 @@ struct SessionData {
     assists: serde_json::Value,
     startingPositionMode: Option<String>,
     customStartPos: Option<i32>,
+    aiLevel: Option<i32>,
+    aiLevelVar: Option<i32>,
+    aiAggression: Option<i32>,
+    aiAggressionVar: Option<i32>,
+    fixedSetup: Option<bool>,
+    ballast: Option<i32>,
+    restrictor: Option<i32>,
+    allowedTyresOut: Option<i32>,
+    trackGrip: Option<i32>,
+    windSpeed: Option<i32>,
+    windDirection: Option<i32>,
+    ghostCar: Option<bool>,
 }
 
 #[derive(serde::Deserialize, Clone)]
@@ -1336,6 +1548,7 @@ fn inject_track_ext_config(app_handle: &tauri::AppHandle, ac_path: &str, track_i
 fn launch_race(
     app_handle: tauri::AppHandle, // ⭐ Ajouté ici
     ac_path: String,
+    documents_path: String, // ⭐ NOUVEAU : respecte le documentsPath configuré
     car_id: String,
     skin_id: String,
     track_id: String,
@@ -1343,8 +1556,13 @@ fn launch_race(
     session_data: SessionData,
     ai_grid: Vec<AIData>,
 ) -> Result<(), String> {
-    let docs = dirs::document_dir().ok_or("Impossible de trouver le dossier Documents")?;
-    let cfg_dir = docs.join("Assetto Corsa").join("cfg");
+    // ⭐ Résolution du dossier cfg (respecte documents_path, fallback sur dirs si vide)
+    let cfg_dir = if !documents_path.is_empty() {
+        resolve_cfg_dir(Path::new(&documents_path))
+    } else {
+        let docs_fallback = dirs::document_dir().ok_or("Impossible de trouver le dossier Documents")?;
+        docs_fallback.join("Assetto Corsa").join("cfg")
+    };
     
     if !cfg_dir.exists() {
         fs::create_dir_all(&cfg_dir).map_err(|e| format!("Erreur création dossier cfg: {}", e))?;
@@ -1364,17 +1582,28 @@ fn launch_race(
     };
 
     // ⭐ GESTION DE LA MÉTÉO
-    let weather_mode = session_data.weather["mode"].as_str().unwrap_or("static");
+    let mut weather_mode = session_data.weather["mode"].as_str().unwrap_or("static");
     let mut weather_name = session_data.weather["staticWeather"].as_str().unwrap_or("3_clear").to_string();
     let mut cm_weather = get_pure_ctrl_cm_weather(&weather_name);
     let mut plan_value = String::new();
     let mut use_schedule = false;
 
+    // ⭐ FIX QARL : Le frontend envoie "pure_plan" mais Rust attend "existing_plan" ou "custom_plan"
+    if weather_mode == "pure_plan" {
+        // Si un plan existant est sélectionné, on le traite comme tel
+        if !session_data.weather["existingPlan"].as_str().unwrap_or("").is_empty() {
+            weather_mode = "existing_plan";
+        } 
+        // Sinon, si on a des étapes personnalisées, c'est un plan custom
+        else if session_data.weather["customPlanSteps"].as_array().map_or(false, |a| !a.is_empty()) {
+            weather_mode = "custom_plan";
+        }
+    }
+
     // ⭐ Si c'est le mode Schedule, on prépare la config
     if weather_mode == "schedule" {
         use_schedule = true;
-        let docs = dirs::document_dir().ok_or("Impossible de trouver le dossier Documents")?;
-        let state_dir = docs.join("Assetto Corsa").join("cfg").join("extension").join("state").join("lua").join("weather_controller");
+        let state_dir = cfg_dir.join("extension").join("state").join("lua").join("weather_controller");
         
         if !state_dir.exists() {
             fs::create_dir_all(&state_dir).map_err(|e| format!("Erreur création dossier weather_controller: {}", e))?;
@@ -1539,7 +1768,7 @@ fn launch_race(
     }
 
     let pure_ctrl = &session_data.weather["pureCtrl"];
-    let _ = write_pure_ctrl_ini(&docs, &plan_value, cm_weather, pure_ctrl);
+    let _ = write_pure_ctrl_ini(&cfg_dir, &plan_value, cm_weather, pure_ctrl);
 
     let time_mult = session_data.weather["timeMultiplier"].as_i64().unwrap_or(1) as i32;
     let start_hour = session_data.weather["startHour"].as_f64().unwrap_or(14.0) as f32;
@@ -1574,6 +1803,63 @@ fn launch_race(
     let tyre_wear = get_int("tyreWear", 1);
     let slipstream = get_int("slipstream", 1);
     let tyre_blankets = get_bool("tyreBlankets");
+    let penalties = get_bool("penalties") as i32;
+
+    // ⭐ NOUVEAU : Écriture du fichier assists.ini pour synchroniser les réglages globaux
+    let assists_ini_content = format!(
+r#"[ASSISTS]
+IDEAL_LINE={ideal_line}
+AUTO_BLIP={auto_blip}
+STABILITY_CONTROL={stability}
+AUTO_BRAKE=0
+AUTO_SHIFTER={auto_gear}
+ABS={abs}
+TRACTION_CONTROL={tc}
+AUTO_CLUTCH={auto_clutch}
+VISUALDAMAGE=100
+DAMAGE={damage}
+FUEL_RATE={fuel_rate}
+TYRE_WEAR={tyre_wear}
+TYRE_BLANKETS={tyre_blankets}
+SLIPSTREAM={slipstream}
+"#,
+        ideal_line = ideal_line,
+        auto_blip = auto_blip,
+        stability = stability,
+        auto_gear = auto_gear,
+        abs = abs,
+        tc = tc,
+        auto_clutch = auto_clutch,
+        damage = damage,
+        fuel_rate = fuel_rate,
+        tyre_wear = tyre_wear,
+        tyre_blankets = tyre_blankets,
+        slipstream = slipstream
+    );
+
+    let assists_ini_path = cfg_dir.join("assists.ini");
+    let _ = fs::write(&assists_ini_path, assists_ini_content);
+
+    // ⭐ Nouvelles options
+    let fixed_setup = session_data.fixedSetup.unwrap_or(false) as i32;
+    let ballast = session_data.ballast.unwrap_or(0);
+    let restrictor = session_data.restrictor.unwrap_or(0);
+    let allowed_tyres_out = session_data.allowedTyresOut.unwrap_or(-1);
+    let ghost_car = session_data.ghostCar.unwrap_or(false) as i32;
+    let wind_speed = session_data.windSpeed.unwrap_or(0);
+    let wind_direction = session_data.windDirection.unwrap_or(0);
+
+    // ⭐ Logique d'adhérence
+    let grip = session_data.trackGrip.unwrap_or(1);
+    let (track_start, track_transfer) = match grip {
+        0 => (90, 30),  // Faible
+        2 => (100, 80), // Élevé
+        _ => (100, 50), // Normal
+    };
+    
+    // ⭐ Récupération des valeurs IA depuis l'interface
+    let ai_level = session_data.aiLevel.unwrap_or(90);
+    let ai_aggression = session_data.aiAggression.unwrap_or(50);
 
     // ⭐ On détermine le type de session AVANT de compter les voitures
     let session_type = session_data.session_type.as_str();
@@ -1585,8 +1871,8 @@ fn launch_race(
     if is_race {
         for (i, ai) in ai_grid.iter().enumerate() {
             cars_ini.push_str(&format!(
-                "[CAR_{}]\nMODEL={}\nMODEL_CONFIG=\nSKIN=\nDRIVER_NAME={}\nNATIONALITY=\nAI_LEVEL=90\n\n", 
-                i + 1, ai.id, ai.driver
+                "[CAR_{}]\nMODEL={}\nMODEL_CONFIG=\nSKIN=\nDRIVER_NAME={}\nNATIONALITY=\nAI_LEVEL={}\n\n", 
+                i + 1, ai.id, ai.driver, ai_level
             ));
         }
     }
@@ -1636,7 +1922,7 @@ fn launch_race(
         ));
     }
 
-    let race_ini_content = format!(
+        let race_ini_content = format!(
 r#"[RACE]
 TRACK={track}
 CONFIG_TRACK={config_track}
@@ -1644,16 +1930,16 @@ CARS={total_cars}
 MODEL={car}
 MODEL_CONFIG=
 SKIN={skin}
-AI_LEVEL=98
-FIXED_SETUP=0
-PENALTIES=0
+AI_LEVEL={ai_level}
+FIXED_SETUP={fixed_setup}
+PENALTIES={penalties}
 SUN_ANGLE={sun_azimuth:.2}
 TIME_MULT={time_mult}
 CLOUD_SPEED=0.200
 
 [GHOST_CAR]
-RECORDING=1
-PLAYING=1
+RECORDING={ghost_car}
+PLAYING={ghost_car}
 SECONDS_ADVANTAGE=0
 LOAD=1
 FILE=
@@ -1675,8 +1961,8 @@ MAX_LAPS=30
 STARTING_LAPS=0
 
 [DYNAMIC_TRACK]
-SESSION_START=100
-SESSION_TRANSFER=50
+SESSION_START={track_start}
+SESSION_TRANSFER={track_transfer}
 RANDOMNESS=0
 LAP_GAIN=1
 
@@ -1691,14 +1977,14 @@ REQUESTED_CAR=
 PASSWORD=
 
 [LAP_INVALIDATOR]
-ALLOWED_TYRES_OUT=-1
+ALLOWED_TYRES_OUT={allowed_tyres_out}
 
 {sessions_block}
 
 [WEATHER]
 NAME={weather}
-WIND_SPEED_KMH=0
-WIND_DIRECTION_DEG=0
+WIND_SPEED_KMH={wind_speed}
+WIND_DIRECTION_DEG={wind_direction}
 
 [TEMPERATURE]
 AMBIENT={ambient_temp:.1}
@@ -1725,8 +2011,8 @@ TYRE_WEAR={tyre_wear}
 
 [AI]
 COUNT={opponents}
-AI_LEVEL=90
-AI_AGGRESSION=50
+AI_LEVEL={ai_level}
+AI_AGGRESSION={ai_aggression}
 
 [CAR_0]
 MODEL={car}
@@ -1734,10 +2020,10 @@ MODEL_CONFIG=
 SKIN={skin}
 DRIVER_NAME=
 NATIONALITY=
-AI_LEVEL=96
+AI_LEVEL={ai_level}
 STARTING_POSITION={start_pos}
-BALLAST=0
-RESTRICTOR=0
+BALLAST={ballast}
+RESTRICTOR={restrictor}
 
 {cars_ia}
 "#,
@@ -1746,10 +2032,22 @@ RESTRICTOR=0
         car = car_id,
         skin = skin_id,
         start_pos = start_pos,
+        penalties = penalties,
+        fixed_setup = fixed_setup,
+        ghost_car = ghost_car,
+        track_start = track_start,
+        track_transfer = track_transfer,
+        allowed_tyres_out = allowed_tyres_out,
+        wind_speed = wind_speed,
+        wind_direction = wind_direction,
+        ballast = ballast,
+        restrictor = restrictor,
+        ai_level = ai_level,
+        ai_aggression = ai_aggression,
         sun_azimuth = sun_azimuth,
         sun_elevation = sun_elevation,
         time_mult = time_mult,
-        sessions_block = sessions_str, // ⭐ Injection du bloc dynamique
+        sessions_block = sessions_str,
         weather = weather_name,
         cm_weather = cm_weather,
         abs = abs,
@@ -1822,6 +2120,9 @@ RESTRICTOR=0
         println!("⚠️ RUST : Impossible d'injecter ext_config.ini : {}", e);
     }
 
+    // ⭐ SUPPRESSION DU SWITCH AUTOMATIQUE
+    // QARL ne touche plus à weather_fx.ini au lancement pour éviter les conflits avec Pure.
+
     let ac_exe = Path::new(&ac_path).join("acs.exe");
     if !ac_exe.exists() {
         return Err(format!("acs.exe introuvable dans le dossier : {}", ac_path));
@@ -1844,9 +2145,14 @@ RESTRICTOR=0
 }
 
 #[tauri::command]
-fn read_race_history() -> Result<Vec<HistoryEntry>, String> {
-    let docs = dirs::document_dir().ok_or("Impossible de trouver le dossier Documents")?;
-    let history_file = docs.join("Assetto Corsa").join("cfg").join("QARL_history.json");
+fn read_race_history(documents_path: String) -> Result<Vec<HistoryEntry>, String> {
+    let cfg_dir = if !documents_path.is_empty() {
+        resolve_cfg_dir(Path::new(&documents_path))
+    } else {
+        let docs_fallback = dirs::document_dir().ok_or("Impossible de trouver le dossier Documents")?;
+        docs_fallback.join("Assetto Corsa").join("cfg")
+    };
+    let history_file = cfg_dir.join("QARL_history.json");
     
     if !history_file.exists() { return Ok(Vec::new()); }
     
@@ -1856,9 +2162,14 @@ fn read_race_history() -> Result<Vec<HistoryEntry>, String> {
 }
 
 #[tauri::command]
-fn clear_race_history() -> Result<(), String> {
-    let docs = dirs::document_dir().ok_or("Impossible de trouver le dossier Documents")?;
-    let history_file = docs.join("Assetto Corsa").join("cfg").join("QARL_history.json");
+fn clear_race_history(documents_path: String) -> Result<(), String> {
+    let cfg_dir = if !documents_path.is_empty() {
+        resolve_cfg_dir(Path::new(&documents_path))
+    } else {
+        let docs_fallback = dirs::document_dir().ok_or("Impossible de trouver le dossier Documents")?;
+        docs_fallback.join("Assetto Corsa").join("cfg")
+    };
+    let history_file = cfg_dir.join("QARL_history.json");
     if history_file.exists() {
         fs::remove_file(history_file).map_err(|e| e.to_string())?;
     }
@@ -1866,9 +2177,14 @@ fn clear_race_history() -> Result<(), String> {
 }
 
 #[tauri::command]
-fn delete_history_entry(entry_id: String) -> Result<(), String> {
-    let docs = dirs::document_dir().ok_or("Impossible de trouver le dossier Documents")?;
-    let history_file = docs.join("Assetto Corsa").join("cfg").join("QARL_history.json");
+fn delete_history_entry(documents_path: String, entry_id: String) -> Result<(), String> {
+    let cfg_dir = if !documents_path.is_empty() {
+        resolve_cfg_dir(Path::new(&documents_path))
+    } else {
+        let docs_fallback = dirs::document_dir().ok_or("Impossible de trouver le dossier Documents")?;
+        docs_fallback.join("Assetto Corsa").join("cfg")
+    };
+    let history_file = cfg_dir.join("QARL_history.json");
     
     if history_file.exists() {
         let content = fs::read_to_string(&history_file).map_err(|e| e.to_string())?;
@@ -1901,100 +2217,252 @@ struct ModInstallEntry {
     exists: bool,
 }
 
+// use std::io::{BufRead, BufReader}; // ⭐ Supprimé car inutilisé
+use std::process::{Command, Stdio};
+
+fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            copy_dir_all(&entry.path(), &dst.join(entry.file_name()))?;
+        } else {
+            std::fs::copy(entry.path(), dst.join(entry.file_name()))?;
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 async fn install_mod_from_archive(
+    app_handle: tauri::AppHandle,
     ac_path: String, 
+    documents_path: String, // ⭐ NOUVEAU
     archive_path: String,
     on_event: tauri::ipc::Channel<serde_json::Value>
 ) -> Result<String, String> {
     let ac_root = Path::new(&ac_path);
     
-    // 1. Ouvrir l'archive
-    let mut archive = unarc_rs::unified::ArchiveFormat::open_path(&archive_path)
-        .map_err(|e| format!("Format d'archive non supporté ou corrompu: {}", e))?;
+    // 1. Créer un dossier temporaire unique
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+    let temp_dir = std::env::temp_dir().join(format!("qarl_mod_{}", now));
+    if temp_dir.exists() { let _ = std::fs::remove_dir_all(&temp_dir); }
+    std::fs::create_dir_all(&temp_dir).map_err(|e| format!("Erreur création dossier temp: {}", e))?;
 
-    // 2. Analyser la structure de l'archive pour détecter le type
-    let mut is_car = false;
-    let mut is_track = false;
-    let mut root_has_content = false;
-    let mut entries_info = Vec::new();
+    // 2. Trouver l'exécutable 7za.exe dans les ressources de Tauri
+    let seven_zip_path = app_handle.path().resolve("resources/7za.exe", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| format!("7za.exe introuvable dans les ressources: {}", e))?;
 
-    while let Some(entry) = archive.next_entry().map_err(|e| e.to_string())? {
-        let name = entry.name().replace("\\", "/");
-        entries_info.push(name.clone());
-        
-        if name.starts_with("content/cars/") { is_car = true; }
-        else if name.starts_with("content/tracks/") { is_track = true; }
-        else if name.contains("/ui_car.json") { is_car = true; }
-        else if name.contains("/ui_track.json") { is_track = true; }
-        
-        if name.starts_with("content/") { root_has_content = true; }
-    }
+    let _ = on_event.send(serde_json::json!({ "type": "start", "total": 100.0 }));
 
-    // 3. Déterminer le dossier d'extraction
-    let extract_base = if root_has_content {
-        ac_root.to_path_buf()
-    } else {
-        if is_car {
-            ac_root.join("content").join("cars")
-        } else if is_track {
-            ac_root.join("content").join("tracks")
-        } else {
-            return Err("Impossible de détecter s'il s'agit d'une voiture ou d'un circuit.".into());
-        }
-    };
+    // 3. Lancer 7za.exe pour extraire dans le dossier temporaire
+    let mut child = Command::new(seven_zip_path)
+        .args(["x", &archive_path, &format!("-o{}", temp_dir.to_string_lossy()), "-y", "-bsp1"])
+        .stdout(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Erreur lors du lancement de 7za.exe: {}", e))?;
 
-    // 4. Extraction physique
-    let mod_name = Path::new(&archive_path).file_stem().unwrap_or_default().to_string_lossy().to_string();
-    
-    // On réouvre l'archive pour l'extraction
-    let mut archive_2 = unarc_rs::unified::ArchiveFormat::open_path(&archive_path)
-        .map_err(|e| format!("Erreur réouverture archive: {}", e))?;
+        let mut stdout = child.stdout.take().ok_or("Impossible de lire la sortie de 7za.exe")?;
+    let mut stderr = child.stderr.take(); // ⭐ On capture aussi les erreurs pour éviter les deadlocks
+    let mut last_percent = 0.0;
+    let mut current_str = String::new();
+    let mut buffer = [0u8; 1024];
 
-    // On connait le nombre total de fichiers (grâce à l'analyse précédente)
-    let total_files = entries_info.len() as f64;
-    let mut extracted_count = 0.0;
+    use std::io::Read;
 
-    // Envoi de l'événement de départ
-    let _ = on_event.send(serde_json::json!({ 
-        "type": "start", 
-        "total": total_files 
-    }));
-
-    while let Some(entry) = archive_2.next_entry().map_err(|e| e.to_string())? {
-        let entry_name = entry.name().replace("\\", "/");
-        let entry_path = Path::new(&entry_name);
-        
-        // Sécurité anti Zip-Slip
-        if entry_path.components().any(|c| c == std::path::Component::ParentDir) {
-            continue;
-        }
-
-        let out_path = extract_base.join(entry_path);
-        if entry.is_directory() {
-            std::fs::create_dir_all(&out_path).map_err(|e| e.to_string())?;
-        } else {
-            if let Some(parent) = out_path.parent() {
-                std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    // 4. Lire la sortie en temps réel (gestion des \r de 7za)
+    loop {
+        match stdout.read(&mut buffer) {
+            Ok(0) => break, // Fin de l'extraction
+            Ok(n) => {
+                let chunk = String::from_utf8_lossy(&buffer[..n]);
+                current_str.push_str(&chunk);
+                
+                // ⭐ On sépare sur \r ET \n pour attraper les mises à jour de 7za
+                let parts: Vec<&str> = current_str.split(|c| c == '\n' || c == '\r').collect();
+                
+                // On traite toutes les lignes complètes
+                for part in &parts[..parts.len().saturating_sub(1)] {
+                    if part.contains('%') {
+                        let p_parts: Vec<&str> = part.split('%').collect();
+                        if !p_parts.is_empty() {
+                            let num_str = p_parts[0].trim();
+                            // On nettoie les caractères parasites éventuels
+                            let clean_num: String = num_str.chars().filter(|c| c.is_numeric() || *c == '.').collect();
+                            
+                            if let Ok(p) = clean_num.parse::<f64>() {
+                                if p > last_percent {
+                                    last_percent = p;
+                                    let file_name = if p_parts.len() > 1 {
+                                        p_parts[1].split('-').nth(1).unwrap_or("Extraction...").trim()
+                                    } else {
+                                        "Extraction..."
+                                    };
+                                    
+                                    let _ = on_event.send(serde_json::json!({
+                                        "type": "progress",
+                                        "percent": p,
+                                        "current_file": file_name
+                                    }));
+                                }
+                            }
+                        }
+                    }
+                }
+                // On garde le reste incomplet dans le buffer pour la prochaine lecture
+                current_str = parts.last().unwrap_or(&"").to_string();
             }
-            let mut out_file = std::fs::File::create(&out_path).map_err(|e| e.to_string())?;
-            archive_2.read_to(&entry, &mut out_file).map_err(|e| e.to_string())?;
+            Err(_) => break,
         }
-
-        // ⭐ Envoi de l'événement de progression
-        extracted_count += 1.0;
-        let percent = (extracted_count / total_files) * 100.0;
-        
-        let _ = on_event.send(serde_json::json!({
-            "type": "progress",
-            "percent": percent,
-            "current_file": entry_name
-        }));
+    }
+    
+    // ⭐ On vide stderr à la fin pour éviter que le processus ne bloque s'il y a eu beaucoup d'erreurs
+    if let Some(mut err) = stderr.take() {
+        let mut err_buf = Vec::new();
+        let _ = err.read_to_end(&mut err_buf);
     }
 
-    // 5. Sauvegarde dans l'historique
-    let docs = dirs::document_dir().ok_or("Dossier Documents introuvable")?;
-    let cfg_dir = docs.join("Assetto Corsa").join("cfg");
+    let status = child.wait().map_err(|e| format!("Erreur d'attente de 7za.exe: {}", e))?;
+    if !status.success() {
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        return Err("L'extraction a échoué (archive corrompue ou mot de passe requis).".into());
+    }
+
+    // 5. Analyse intelligente du dossier temporaire
+    let known_dirs = ["content", "extension", "apps", "system", "cfg", "launcher", "plugins", "sdk"];
+    let mut standard_roots = Vec::new();
+    let mut detected_cars = Vec::new();   // (Nom du dossier, Chemin source)
+    let mut detected_tracks = Vec::new(); // (Nom du dossier, Chemin source)
+
+    fn analyze_dir(dir: &Path, ac_root: &Path, known: &[&str], depth: u32, std_roots: &mut Vec<std::path::PathBuf>, cars: &mut Vec<(String, std::path::PathBuf)>, tracks: &mut Vec<(String, std::path::PathBuf)>) {
+        if depth > 3 { return; } // On limite la recherche pour éviter de scanner tout le disque temporaire
+
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    let name = path.file_name().unwrap_or_default().to_string_lossy().to_lowercase();
+                    
+                    // Cas A : C'est un dossier standard AC
+                    if known.contains(&name.as_str()) {
+                        if let Some(parent) = path.parent() {
+                            std_roots.push(parent.to_path_buf());
+                        }
+                        continue;
+                    }
+
+                    // Cas B : C'est une voiture brute (cherche ui/ui_car.json)
+                    let car_json = path.join("ui").join("ui_car.json");
+                    if car_json.exists() {
+                        cars.push((entry.file_name().to_string_lossy().to_string(), path.clone()));
+                        continue;
+                    }
+
+                    // Cas C : C'est un circuit brut (cherche ui/ui_track.json)
+                    let track_json = path.join("ui").join("ui_track.json");
+                    if track_json.exists() {
+                        tracks.push((entry.file_name().to_string_lossy().to_string(), path.clone()));
+                        continue;
+                    }
+
+                    // Si c'est un dossier racine (ex: "MonMod"), on continue de chercher à l'intérieur
+                    analyze_dir(&path, ac_root, known, depth + 1, std_roots, cars, tracks);
+                }
+            }
+        }
+    }
+
+    analyze_dir(&temp_dir, ac_root, &known_dirs, 0, &mut standard_roots, &mut detected_cars, &mut detected_tracks);
+    
+    // Dédoublonnage et tri des racines standards
+    standard_roots.sort();
+    standard_roots.dedup();
+    standard_roots.sort_by_key(|p| p.components().count());
+
+    let mut total_copied = 0;
+
+    // 6. Priorité 1 : Copie des structures standards (Apps, Extension, Content complet)
+    if !standard_roots.is_empty() {
+        let mod_root = &standard_roots[0];
+        if let Ok(entries) = std::fs::read_dir(mod_root) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                let is_known_dir = path.is_dir() && known_dirs.contains(&name.to_lowercase().as_str());
+                let is_root_file = path.is_file() && !name.starts_with('.');
+                
+                if is_known_dir || is_root_file {
+                    // ⭐ NOUVEAU : Si c'est le dossier content, on scanne les voitures et circuits pour l'historique
+                    if name.eq_ignore_ascii_case("content") && path.is_dir() {
+                        if let Ok(sub_entries) = std::fs::read_dir(&path) {
+                            for sub in sub_entries.flatten() {
+                                let sub_name = sub.file_name().to_string_lossy().to_string();
+                                if sub_name.eq_ignore_ascii_case("cars") {
+                                    if let Ok(car_entries) = std::fs::read_dir(sub.path()) {
+                                        for car in car_entries.flatten() {
+                                            detected_cars.push((car.file_name().to_string_lossy().to_string(), car.path()));
+                                        }
+                                    }
+                                } else if sub_name.eq_ignore_ascii_case("tracks") {
+                                    if let Ok(track_entries) = std::fs::read_dir(sub.path()) {
+                                        for track in track_entries.flatten() {
+                                            detected_tracks.push((track.file_name().to_string_lossy().to_string(), track.path()));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    let dest = ac_root.join(&name);
+                    if path.is_dir() {
+                        let _ = copy_dir_all(&path, &dest);
+                    } else {
+                        let _ = std::fs::copy(&path, &dest);
+                    }
+                    total_copied += 1;
+                }
+            }
+        }
+    } 
+    
+    // 7. Priorité 2 : Copie des voitures et circuits bruts (si trouvés)
+    if !detected_cars.is_empty() {
+        let cars_dir = ac_root.join("content").join("cars");
+        let _ = std::fs::create_dir_all(&cars_dir);
+        for (_name, path) in &detected_cars {
+            let dest = cars_dir.join(path.file_name().unwrap());
+            let _ = copy_dir_all(path, &dest);
+            total_copied += 1;
+        }
+    }
+
+    if !detected_tracks.is_empty() {
+        let tracks_dir = ac_root.join("content").join("tracks");
+        let _ = std::fs::create_dir_all(&tracks_dir);
+        for (_name, path) in &detected_tracks {
+            let dest = tracks_dir.join(path.file_name().unwrap());
+            let _ = copy_dir_all(path, &dest);
+            total_copied += 1;
+        }
+    }
+
+    // 8. Nettoyage du dossier temporaire
+    let _ = std::fs::remove_dir_all(&temp_dir);
+
+    // 9. Vérification de sécurité : a-t-on vraiment copié quelque chose ?
+    if total_copied == 0 {
+        return Err("❌ Arborescence non reconnue. Aucun fichier voiture, circuit ou dossier standard (apps, extension) n'a été trouvé dans cette archive.".into());
+    }
+
+    // 10. Sauvegarde dans l'historique
+    let cfg_dir = if !documents_path.is_empty() {
+        resolve_cfg_dir(Path::new(&documents_path))
+    } else {
+        let docs_fallback = dirs::document_dir().ok_or("Dossier Documents introuvable")?;
+        docs_fallback.join("Assetto Corsa").join("cfg")
+    };
     let _ = std::fs::create_dir_all(&cfg_dir);
     let history_file = cfg_dir.join("QARL_mods_history.json");
     
@@ -2002,54 +2470,27 @@ async fn install_mod_from_archive(
         std::fs::read_to_string(&history_file).ok().and_then(|c| serde_json::from_str(&c).ok()).unwrap_or_default()
     } else { Vec::new() };
 
-    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-    
-    // ⭐ On détecte TOUS les dossiers de voitures/circuits contenus dans l'archive
-    let mut detected_cars = Vec::new();
-    let mut detected_tracks = Vec::new();
+    let mod_name = Path::new(&archive_path).file_stem().unwrap_or_default().to_string_lossy().to_string();
 
-    for name in &entries_info {
-        let parts: Vec<&str> = name.split('/').collect();
-        
-        // Si c'est une archive qui a déjà le dossier "content"
-        if parts.len() >= 3 && parts[0].eq_ignore_ascii_case("content") {
-            if parts[1].eq_ignore_ascii_case("cars") {
-                let car_name = parts[2].to_string();
-                if !detected_cars.contains(&car_name) { detected_cars.push(car_name); }
-            } else if parts[1].eq_ignore_ascii_case("tracks") {
-                let track_name = parts[2].to_string();
-                if !detected_tracks.contains(&track_name) { detected_tracks.push(track_name); }
-            }
-        } 
-        // Si c'est une archive qui contient directement les dossiers de voitures à la racine
-        else if name.ends_with("ui_car.json") && parts.len() >= 2 {
-            let car_name = parts[0].to_string();
-            if !detected_cars.contains(&car_name) { detected_cars.push(car_name); }
-        } 
-        else if name.ends_with("ui_track.json") && parts.len() >= 2 {
-            let track_name = parts[0].to_string();
-            if !detected_tracks.contains(&track_name) { detected_tracks.push(track_name); }
-        }
-    }
-
-    // ⭐ On crée une entrée d'historique pour CHAQUE voiture trouvée
-    for car in detected_cars {
+    // Enregistrement des voitures dans l'historique
+    for (car_name, _) in detected_cars {
         history.insert(0, ModInstallEntry {
-            id: format!("{}_{}", now, car),
-            mod_name: car.clone(),
+            id: format!("{}_{}", now, car_name),
+            mod_name: car_name.clone(),
             mod_type: "mods.type_car".into(),
-            path_installed: format!("content/cars/{}", car),
+            path_installed: format!("content/cars/{}", car_name),
             date: now.to_string(),
             exists: true,
         });
     }
-    // ⭐ On crée une entrée d'historique pour CHAQUE circuit trouvé
-    for track in detected_tracks {
+
+    // Enregistrement des circuits dans l'historique
+    for (track_name, _) in detected_tracks {
         history.insert(0, ModInstallEntry {
-            id: format!("{}_{}", now, track),
-            mod_name: track.clone(),
+            id: format!("{}_{}", now, track_name),
+            mod_name: track_name.clone(),
             mod_type: "mods.type_track".into(),
-            path_installed: format!("content/tracks/{}", track),
+            path_installed: format!("content/tracks/{}", track_name),
             date: now.to_string(),
             exists: true,
         });
@@ -2062,9 +2503,14 @@ async fn install_mod_from_archive(
 }
 
 #[tauri::command]
-fn get_mods_history(ac_path: String) -> Result<Vec<ModInstallEntry>, String> {
-    let docs = dirs::document_dir().ok_or("Dossier Documents introuvable")?;
-    let history_file = docs.join("Assetto Corsa").join("cfg").join("QARL_mods_history.json");
+fn get_mods_history(ac_path: String, documents_path: String) -> Result<Vec<ModInstallEntry>, String> {
+    let cfg_dir = if !documents_path.is_empty() {
+        resolve_cfg_dir(Path::new(&documents_path))
+    } else {
+        let docs_fallback = dirs::document_dir().ok_or("Dossier Documents introuvable")?;
+        docs_fallback.join("Assetto Corsa").join("cfg")
+    };
+    let history_file = cfg_dir.join("QARL_mods_history.json");
     if !history_file.exists() { return Ok(Vec::new()); }
     let content = std::fs::read_to_string(history_file).map_err(|e| e.to_string())?;
     let mut history: Vec<ModInstallEntry> = serde_json::from_str(&content).unwrap_or_default();
@@ -2079,24 +2525,18 @@ fn get_mods_history(ac_path: String) -> Result<Vec<ModInstallEntry>, String> {
 }
 
 #[tauri::command]
-fn open_folder(ac_path: String, folder_type: String, folder_id: String) -> Result<(), String> {
+fn open_folder(ac_path: String, documents_path: String, folder_type: String, folder_id: String) -> Result<(), String> {
+    let cfg_dir = resolve_cfg_dir(Path::new(&documents_path));
+    let ac_docs_dir = if cfg_dir.ends_with("cfg") { cfg_dir.parent().unwrap_or(&cfg_dir) } else { &cfg_dir };
+
     let path = match folder_type.as_str() {
         "cars" => Path::new(&ac_path).join("content").join("cars").join(folder_id),
         "tracks" => Path::new(&ac_path).join("content").join("tracks").join(folder_id),
         "mod" => Path::new(&ac_path).join(folder_id),
-        "cfg" => {
-            let docs = dirs::document_dir().ok_or("Impossible de trouver le dossier Documents")?;
-            docs.join("Assetto Corsa").join("cfg")
-        }
+        "cfg" => cfg_dir,
         "absolute" => Path::new(&folder_id).to_path_buf(),
-        "screens" => {
-            let docs = dirs::document_dir().ok_or("Impossible de trouver le dossier Documents")?;
-            docs.join("Assetto Corsa").join("screens").join(folder_id)
-        }
-        "replay" => {
-            let docs = dirs::document_dir().ok_or("Impossible de trouver le dossier Documents")?;
-            docs.join("Assetto Corsa").join("replay").join(folder_id)
-        }
+        "screens" => ac_docs_dir.join("screens").join(folder_id),
+        "replay" => ac_docs_dir.join("replay").join(folder_id),
         _ => return Err("Type inconnu".into()),
     };
 
@@ -2264,19 +2704,20 @@ async fn get_online_servers(page: u32) -> Result<OnlineServersResponse, String> 
 
 #[tauri::command]
 async fn get_server_details(ip: String, http_port: u16) -> Result<serde_json::Value, String> {
-    // On prépare un client avec un timeout pour éviter le chargement infini
+    // On prépare un client avec un timeout plus court (2s) et un User-Agent de navigateur
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(3))
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .timeout(std::time::Duration::from_secs(2)) 
         .build()
         .unwrap_or_default();
 
-    // On teste plusieurs ports, car le port HTTP varie selon les serveurs
-    let candidates = vec![http_port, http_port + 1, http_port.wrapping_sub(1)];
+    let candidates = vec![http_port, http_port.wrapping_add(1), http_port.wrapping_sub(1)];
 
-    for port in candidates {
-        if port == 0 { continue; }
+    // ⭐ Fonction interne pour tester un port spécifique
+    async fn test_port(client: reqwest::Client, ip: String, port: u16) -> Result<serde_json::Value, String> {
+        if port == 0 { return Err("Port invalide".into()); }
 
-        // 1. On tente /api/details EN PRIORITÉ (AssettoServer, qui donne la description, etc.)
+        // 1. On tente /api/details EN PRIORITÉ
         let url_details = format!("http://{}:{}/api/details", ip, port);
         if let Ok(resp) = client.get(&url_details).send().await {
             if resp.status().is_success() {
@@ -2288,7 +2729,7 @@ async fn get_server_details(ip: String, http_port: u16) -> Result<serde_json::Va
             }
         }
 
-        // 2. On tente /INFO en fallback (Kunos / standard)
+        // 2. On tente /INFO en fallback
         let url_info = format!("http://{}:{}/INFO", ip, port);
         if let Ok(resp) = client.get(&url_info).send().await {
             if resp.status().is_success() {
@@ -2299,15 +2740,26 @@ async fn get_server_details(ip: String, http_port: u16) -> Result<serde_json::Va
                 }
             }
         }
+
+        Err("Introuvable".into())
     }
 
-    Err(format!("Serveur injoignable. Vérifie qu'il est en ligne."))
+    // ⭐ On lance les 3 tests EN PARALLÈLE
+    let (res1, res2, res3) = tokio::join!(
+        test_port(client.clone(), ip.clone(), candidates[0]),
+        test_port(client.clone(), ip.clone(), candidates[1]),
+        test_port(client.clone(), ip.clone(), candidates[2])
+    );
+
+    // ⭐ On retourne le premier résultat qui a réussi
+    res1.or(res2).or(res3).or_else(|_| Err("Serveur injoignable. Vérifie qu'il est en ligne.".to_string()))
 }
 
 #[tauri::command]
 fn join_server(
     app_handle: tauri::AppHandle,
     ac_path: String,
+    documents_path: String, // ⭐ NOUVEAU : respecte le documentsPath configuré
     ip: String,
     port: u16,
     http_port: u16,
@@ -2321,8 +2773,13 @@ fn join_server(
     password: String,
     features: Vec<String>,
 ) -> Result<(), String> {
-    let docs = dirs::document_dir().ok_or("Impossible de trouver le dossier Documents")?;
-    let cfg_dir = docs.join("Assetto Corsa").join("cfg");
+    // ⭐ Résolution du dossier cfg (respecte documents_path, fallback sur dirs si vide)
+    let cfg_dir = if !documents_path.is_empty() {
+        resolve_cfg_dir(Path::new(&documents_path))
+    } else {
+        let docs_fallback = dirs::document_dir().ok_or("Impossible de trouver le dossier Documents")?;
+        docs_fallback.join("Assetto Corsa").join("cfg")
+    };
     
     if !cfg_dir.exists() {
         fs::create_dir_all(&cfg_dir).map_err(|e| format!("Erreur création dossier cfg: {}", e))?;
@@ -2408,7 +2865,14 @@ fn join_server(
     cmd.current_dir(&ac_path);
     cmd.env("SteamAppId", "244210");
     cmd.env("SteamGameId", "244210");
-    cmd.spawn().map_err(|e| format!("Erreur lors du lancement du jeu: {}", e))?;
+    
+    // ⭐ On attend la fermeture du jeu en arrière-plan (pour le Focus Auto)
+    let mut child = cmd.spawn().map_err(|e| format!("Erreur lors du lancement du jeu: {}", e))?;
+    let handle = app_handle.clone();
+    std::thread::spawn(move || {
+        let _ = child.wait();
+        let _ = handle.emit("ac-closed", ());
+    });
 
     Ok(())
 }
@@ -3081,12 +3545,14 @@ fn list_csp_templates(ac_path: String) -> Result<Vec<CspModuleInfo>, String> {
 fn resolve_csp_dir(documents_path: &str) -> std::path::PathBuf {
     let base = std::path::Path::new(documents_path);
     
-    // Cas 1 : L'utilisateur a choisi .../Assetto Corsa/cfg
     if base.join("extension").exists() { return base.join("extension"); }
-    // Cas 2 : L'utilisateur a choisi .../Assetto Corsa
     if base.join("cfg").join("extension").exists() { return base.join("cfg").join("extension"); }
     
-    // Cas 3 : L'utilisateur a choisi .../Documents (comportement par défaut)
+    // ⭐ Sécurité : Si le chemin se termine déjà par "Assetto Corsa", on ajoute JUSTE cfg
+    if base.file_name().unwrap_or_default().to_string_lossy().eq_ignore_ascii_case("Assetto Corsa") {
+        return base.join("cfg").join("extension");
+    }
+    
     let fallback = base.join("Assetto Corsa").join("cfg").join("extension");
     if fallback.exists() { return fallback; }
     
@@ -3127,11 +3593,7 @@ fn ensure_user_csp_file(documents_path: &str, ac_path: &str, filename: &str) -> 
 
 // (Fonction list_csp_modules supprimée, remplacée par list_csp_templates)
 
-#[derive(Serialize, Clone)]
-struct CspModuleContent {
-    content: String,
-    enabled: bool,
-}
+// (Structure CspModuleContent supprimée car inutilisée)
 
 // ⭐ HELPERS POUR LE PARSING DES HINTS
 
@@ -3198,6 +3660,31 @@ fn extract_range(hint: &str) -> Option<(f32, f32)> {
     None
 }
 
+// ⭐ NOUVEAU : Découpe intelligemment la chaîne en ignorant les virgules dans les guillemets/parenthèses
+fn split_safe(s: &str) -> Vec<String> {
+    let mut result = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    let mut depth = 0;
+
+    for c in s.chars() {
+        match c {
+            '"' => { in_quotes = !in_quotes; current.push(c); }
+            '(' => { depth += 1; current.push(c); }
+            ')' => { depth -= 1; current.push(c); }
+            ',' if !in_quotes && depth == 0 => {
+                result.push(current.trim().to_string());
+                current.clear();
+            }
+            _ => current.push(c),
+        }
+    }
+    if !current.trim().is_empty() {
+        result.push(current.trim().to_string());
+    }
+    result
+}
+
 fn extract_choices(hint: &str) -> Option<Vec<Choice>> {
     let mut choices = Vec::new();
     let mut valid_count = 0;
@@ -3209,8 +3696,9 @@ fn extract_choices(hint: &str) -> Option<Vec<Choice>> {
         .replace(" or ", ", ");
 
     if normalized.contains(" for ") || normalized.contains(" is ") || normalized.contains("__separator__") {
-        let parts: Vec<&str> = normalized.split(',').map(|s| s.trim()).collect();
+        let parts = split_safe(&normalized);
         for part in parts {
+            let part = part.as_str();
             if part == "__separator__" {
                 choices.push(Choice::Separator);
                 continue;
@@ -3243,7 +3731,7 @@ fn extract_choices(hint: &str) -> Option<Vec<Choice>> {
         }
     } else {
         // ... (la suite de la fonction actuelle)
-        let parts: Vec<&str> = normalized.split(',').map(|s| s.trim()).collect();
+        let parts = split_safe(&normalized);
         let mut all_uppercase = true;
         for part in &parts {
             if part.is_empty() { all_uppercase = false; break; }
@@ -3501,11 +3989,16 @@ fn read_csp_module_data(documents_path: String, ac_path: String, filename: Strin
                             continue;
                         }
 
-                        // ⭐ DÉTECTION DU DOSSIER DES FILTRES LUA
-                        if let Some(idx) = hint.find("look for filter.lua in ") {
-                            let dir = hint[idx + 23..].trim();
-                            lua_filter_dir = Some(dir.to_string());
-                            continue;
+                        // ⭐ DÉTECTION ROBUSTE DU DOSSIER DES FILTRES LUA
+                        let hint_lower = hint.to_lowercase();
+                        if hint_lower.starts_with("look for ") && hint_lower.contains(" in ") {
+                            if let Some(idx) = hint_lower.find(" in ") {
+                                let dir = hint[idx + 4..].trim();
+                                if !dir.is_empty() {
+                                    lua_filter_dir = Some(dir.to_string());
+                                    continue;
+                                }
+                            }
                         }
                         
                         // On ignore les mots-clés parasites pour le label
@@ -4372,42 +4865,82 @@ fn reset_csp_to_defaults(documents_path: String, ac_path: String) -> Result<(), 
 fn set_weather_fx_implementation(documents_path: String, ac_path: String, implementation: String) -> Result<(), String> {
     let filename = "weather_fx.ini";
     let file_path = ensure_user_csp_file(&documents_path, &ac_path, filename)?;
-    
-    let content = fs::read_to_string(&file_path).map_err(|e| e.to_string())?;
+
+    // ⭐ SI ON DEMANDE DEFAULT : On écrase TOUT le fichier pour garantir qu'il n'y a AUCUN résidu de Pure
+    if implementation == "Default" {
+        let clean_content = "[BASIC]\nENABLED=1\nIMPLEMENTATION=Default\n";
+        if file_path.exists() {
+            let _ = fs::copy(&file_path, file_path.with_extension("ini.bak"));
+        }
+        fs::write(&file_path, clean_content).map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+
+    // Sinon (pour Pure / Pure LCS), on utilise le parseur intelligent pour préserver les autres options
+    let content = fs::read_to_string(&file_path).unwrap_or_default();
     let eol = if content.contains("\r\n") { "\r\n" } else { "\n" };
-    let mut lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
     
+    // ⭐ SÉCURITÉ ANTI-CRASH : Si le fichier est vide ou n'a pas de section [BASIC]
+    // On écrase tout avec un contenu propre pour éviter le Panic d'index.
+    if !content.contains("[BASIC]") {
+        let clean_content = format!("[BASIC]\nCONTROLLER='pureCtrl static'\nENABLED=1\nIMPLEMENTATION={}\n", implementation);
+        let _ = fs::copy(&file_path, file_path.with_extension("ini.bak"));
+        fs::write(&file_path, clean_content).map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+
+    let mut new_lines: Vec<String> = Vec::new();
     let mut in_basic = false;
-    let mut impl_idx = None;
-    let mut basic_idx = None;
-    
-    for (i, line) in lines.iter().enumerate() {
+    let mut has_controller = false;
+    let mut has_impl = false;
+
+    for line in content.lines() {
         let trimmed = line.trim();
+        
+        // Gestion des sections
         if trimmed.starts_with('[') && trimmed.ends_with(']') {
             let sec_name = trimmed.trim_matches(|c| c == '[' || c == ']');
-            in_basic = sec_name.eq_ignore_ascii_case("BASIC") || sec_name.to_uppercase().ends_with(":BASIC");
-            if in_basic { basic_idx = Some(i); }
-            continue;
+            in_basic = sec_name.eq_ignore_ascii_case("BASIC");
         }
-        if in_basic && trimmed.to_uppercase().starts_with("IMPLEMENTATION=") {
-            impl_idx = Some(i);
-            break;
+
+        // Traitement de la section BASIC pour réinjecter Pure
+        if in_basic {
+            if trimmed.to_uppercase().starts_with("CONTROLLER=") {
+                new_lines.push("CONTROLLER='pureCtrl static'".to_string());
+                has_controller = true;
+                continue;
+            }
+            if trimmed.to_uppercase().starts_with("IMPLEMENTATION=") {
+                new_lines.push(format!("IMPLEMENTATION={}", implementation));
+                has_impl = true;
+                continue;
+            }
         }
+        
+        new_lines.push(line.to_string());
     }
-    
-    let new_line = format!("IMPLEMENTATION={}", implementation);
-    if let Some(idx) = impl_idx {
-        lines[idx] = new_line;
-    } else if let Some(idx) = basic_idx {
-        lines.insert(idx + 1, new_line);
-    } else {
-        lines.insert(0, "[BASIC]".to_string());
-        lines.insert(1, new_line);
-        lines.insert(2, "".to_string());
+
+    // On est sûr que [BASIC] existe à ce stade
+    let basic_idx = new_lines.iter().position(|l| l.trim().eq_ignore_ascii_case("[BASIC]")).unwrap_or(0);
+
+    // ⭐ Sécurité : Si on passe en Pure et qu'on n'a pas trouvé la ligne CONTROLLER, on l'ajoute
+    if !has_controller {
+        new_lines.insert(basic_idx + 1, "CONTROLLER='pureCtrl static'".to_string());
     }
+
+    // ⭐ Sécurité : Si on n'a pas trouvé la ligne IMPLEMENTATION, on l'ajoute
+    if !has_impl {
+        // On recalcule l'index car l'insertion du CONTROLLER a pu décaler les lignes
+        let basic_idx_final = new_lines.iter().position(|l| l.trim().eq_ignore_ascii_case("[BASIC]")).unwrap_or(0);
+        new_lines.insert(basic_idx_final + 1, format!("IMPLEMENTATION={}", implementation));
+    }
+
+    let final_content = new_lines.join(eol) + eol;
     
-    let new_content = lines.join(eol) + eol;
-    fs::write(&file_path, new_content).map_err(|e| e.to_string())?;
+    if file_path.exists() {
+        let _ = fs::copy(&file_path, file_path.with_extension("ini.bak"));
+    }
+    fs::write(&file_path, final_content).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -4558,6 +5091,83 @@ fn get_directinput_states() -> Result<Vec<serde_json::Value>, String> {
     Ok(states)
 }
 
+// ⭐ NOUVEAU : Lecture du FOV depuis camera_onboard.ini
+#[tauri::command]
+fn read_onboard_fov(documents_path: String) -> Result<i32, String> {
+    let cfg_dir = resolve_cfg_dir(Path::new(&documents_path));
+    let file_path = cfg_dir.join("camera_onboard.ini");
+    
+    if !file_path.exists() {
+        return Ok(56); // Valeur par défaut
+    }
+    
+    if let Ok(content) = fs::read_to_string(&file_path) {
+        let mut in_mode = false;
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with('[') && trimmed.ends_with(']') {
+                in_mode = trimmed.eq_ignore_ascii_case("[MODE]");
+            } else if in_mode && trimmed.to_uppercase().starts_with("FOV=") {
+                if let Some(val) = trimmed.split('=').nth(1) {
+                    return Ok(val.trim().parse::<i32>().unwrap_or(56));
+                }
+            }
+        }
+    }
+    Ok(56)
+}
+
+// ⭐ NOUVEAU : Écriture du FOV (préserve le reste du fichier)
+#[tauri::command]
+fn write_onboard_fov(documents_path: String, fov: i32) -> Result<(), String> {
+    let cfg_dir = resolve_cfg_dir(Path::new(&documents_path));
+    let file_path = cfg_dir.join("camera_onboard.ini");
+    
+    let mut lines: Vec<String> = if file_path.exists() {
+        fs::read_to_string(&file_path)
+            .unwrap_or_default()
+            .lines()
+            .map(|s| s.to_string())
+            .collect()
+    } else {
+        vec!["[MODE]".to_string(), "IS_WORLD_ALIGNED=0".to_string()]
+    };
+
+    let mut in_mode = false;
+    let mut fov_idx = None;
+    let mut mode_idx = None;
+
+    for (i, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            in_mode = trimmed.eq_ignore_ascii_case("[MODE]");
+            if in_mode { mode_idx = Some(i); }
+        } else if in_mode && trimmed.to_uppercase().starts_with("FOV=") {
+            fov_idx = Some(i);
+            break;
+        }
+    }
+
+    let new_line = format!("FOV={}", fov);
+    
+    if let Some(idx) = fov_idx {
+        lines[idx] = new_line;
+    } else if let Some(idx) = mode_idx {
+        lines.insert(idx + 1, new_line);
+    } else {
+        lines.insert(0, "[MODE]".to_string());
+        lines.insert(1, "IS_WORLD_ALIGNED=0".to_string());
+        lines.insert(2, new_line);
+    }
+
+    // Sécurité : Ajouter un saut de ligne à la fin si absent
+    let eol = if lines.join("").contains("\r") { "\r\n" } else { "\n" };
+    let final_content = lines.join(eol) + eol;
+    
+        fs::write(&file_path, final_content).map_err(|e| format!("Erreur écriture camera_onboard.ini: {}", e))?;
+    Ok(())
+}
+
 #[tauri::command]
 fn list_audio_devices() -> Result<Vec<String>, String> {
     let host = cpal::default_host();
@@ -4586,9 +5196,9 @@ struct SchedulePresetData {
     slot_values: Vec<i32>,
 }
 
-fn get_schedule_presets_dir() -> Result<std::path::PathBuf, String> {
-    let docs = dirs::document_dir().ok_or("Dossier Documents introuvable")?;
-    let dir = docs.join("Assetto Corsa").join("cfg").join("QARL_Presets").join("Schedule");
+fn get_schedule_presets_dir(documents_path: &str) -> Result<std::path::PathBuf, String> {
+    let cfg_dir = resolve_cfg_dir(Path::new(documents_path));
+    let dir = cfg_dir.join("QARL_Presets").join("Schedule");
     if !dir.exists() {
         fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     }
@@ -4596,8 +5206,8 @@ fn get_schedule_presets_dir() -> Result<std::path::PathBuf, String> {
 }
 
 #[tauri::command]
-fn list_schedule_presets() -> Result<Vec<String>, String> {
-    let dir = get_schedule_presets_dir()?;
+fn list_schedule_presets(documents_path: String) -> Result<Vec<String>, String> {
+    let dir = get_schedule_presets_dir(&documents_path)?;
     let mut presets = Vec::new();
     if let Ok(entries) = fs::read_dir(dir) {
         for entry in entries.flatten() {
@@ -4614,8 +5224,8 @@ fn list_schedule_presets() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-fn save_schedule_preset(name: String, data: SchedulePresetData) -> Result<(), String> {
-    let dir = get_schedule_presets_dir()?;
+fn save_schedule_preset(documents_path: String, name: String, data: SchedulePresetData) -> Result<(), String> {
+    let dir = get_schedule_presets_dir(&documents_path)?;
     let safe_name = name.trim().replace(|c: char| !c.is_alphanumeric() && c != '_' && c != '-', "");
     if safe_name.is_empty() { return Err("Nom de preset invalide".into()); }
     
@@ -4626,8 +5236,8 @@ fn save_schedule_preset(name: String, data: SchedulePresetData) -> Result<(), St
 }
 
 #[tauri::command]
-fn load_schedule_preset(name: String) -> Result<SchedulePresetData, String> {
-    let dir = get_schedule_presets_dir()?;
+fn load_schedule_preset(documents_path: String, name: String) -> Result<SchedulePresetData, String> {
+    let dir = get_schedule_presets_dir(&documents_path)?;
     let file_path = dir.join(format!("{}.json", name));
     if !file_path.exists() {
         return Err("Preset introuvable".into());
@@ -4638,8 +5248,8 @@ fn load_schedule_preset(name: String) -> Result<SchedulePresetData, String> {
 }
 
 #[tauri::command]
-fn delete_schedule_preset(name: String) -> Result<(), String> {
-    let dir = get_schedule_presets_dir()?;
+fn delete_schedule_preset(documents_path: String, name: String) -> Result<(), String> {
+    let dir = get_schedule_presets_dir(&documents_path)?;
     let file_path = dir.join(format!("{}.json", name));
     if file_path.exists() {
         fs::remove_file(file_path).map_err(|e| e.to_string())?;
@@ -4871,9 +5481,9 @@ async fn install_csp_archive(
 
 // ⭐ GESTION DES PRESETS VIDÉO
 
-fn get_video_presets_dir() -> Result<std::path::PathBuf, String> {
-    let docs = dirs::document_dir().ok_or("Dossier Documents introuvable")?;
-    let dir = docs.join("Assetto Corsa").join("cfg").join("QARL_Presets").join("Video");
+fn get_video_presets_dir(documents_path: &str) -> Result<std::path::PathBuf, String> {
+    let cfg_dir = resolve_cfg_dir(Path::new(documents_path));
+    let dir = cfg_dir.join("QARL_Presets").join("Video");
     if !dir.exists() {
         fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     }
@@ -4881,8 +5491,8 @@ fn get_video_presets_dir() -> Result<std::path::PathBuf, String> {
 }
 
 #[tauri::command]
-fn list_video_presets() -> Result<Vec<String>, String> {
-    let dir = get_video_presets_dir()?;
+fn list_video_presets(documents_path: String) -> Result<Vec<String>, String> {
+    let dir = get_video_presets_dir(&documents_path)?;
     let mut presets = Vec::new();
     if let Ok(entries) = fs::read_dir(dir) {
         for entry in entries.flatten() {
@@ -4899,8 +5509,8 @@ fn list_video_presets() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-fn save_video_preset(name: String, content: String) -> Result<(), String> {
-    let dir = get_video_presets_dir()?;
+fn save_video_preset(documents_path: String, name: String, content: String) -> Result<(), String> {
+    let dir = get_video_presets_dir(&documents_path)?;
     let safe_name = name.trim().replace(|c: char| !c.is_alphanumeric() && c != '_' && c != '-', "_");
     if safe_name.is_empty() { return Err("Nom de preset invalide".into()); }
     
@@ -4911,7 +5521,7 @@ fn save_video_preset(name: String, content: String) -> Result<(), String> {
 
 #[tauri::command]
 fn load_video_preset(documents_path: String, name: String) -> Result<String, String> {
-    let dir = get_video_presets_dir()?;
+    let dir = get_video_presets_dir(&documents_path)?;
     let file_path = dir.join(format!("{}.ini", name));
     if !file_path.exists() {
         return Err("Preset introuvable".into());
@@ -4957,8 +5567,8 @@ fn load_video_preset(documents_path: String, name: String) -> Result<String, Str
 }
 
 #[tauri::command]
-fn delete_video_preset(name: String) -> Result<(), String> {
-    let dir = get_video_presets_dir()?;
+fn delete_video_preset(documents_path: String, name: String) -> Result<(), String> {
+    let dir = get_video_presets_dir(&documents_path)?;
     let file_path = dir.join(format!("{}.ini", name));
     if file_path.exists() {
         fs::remove_file(file_path).map_err(|e| e.to_string())?;
@@ -5039,6 +5649,37 @@ async fn get_media_files(documents_path: String, app_handle: tauri::AppHandle) -
     }
 
     let replay_dir = ac_docs.join("replay");
+    let temp_replay_dir = replay_dir.join("temp");
+
+    // ⭐ NOUVEAU : On déplace automatiquement les replays de 'temp' vers le dossier principal
+    if temp_replay_dir.exists() {
+        if let Ok(entries) = fs::read_dir(&temp_replay_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() && path.extension().map_or(false, |e| e == "acreplay") {
+                    let file_name = path.file_name().unwrap_or_default();
+                    let dest_path = replay_dir.join(file_name);
+                    
+                    // Si le fichier existe déjà à destination, on le supprime pour le remplacer
+                    if dest_path.exists() {
+                        let _ = fs::remove_file(&dest_path);
+                    }
+                    
+                    // On déplace le fichier
+                    let _ = fs::rename(&path, &dest_path);
+                    
+                    // Fallback si le rename échoue (ex: disques différents)
+                    if !dest_path.exists() {
+                        if fs::copy(&path, &dest_path).is_ok() {
+                            let _ = fs::remove_file(&path);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Scan normal du dossier replay (qui contient maintenant les anciens fichiers de temp)
     if replay_dir.exists() {
         if let Ok(entries) = fs::read_dir(replay_dir) {
             for entry in entries.flatten() {
@@ -5119,16 +5760,56 @@ fn get_replay_info(file_path: String) -> Result<Vec<String>, String> {
 fn launch_replay(app_handle: tauri::AppHandle, ac_path: String, replay_filename: String) -> Result<(), String> {
     let ac_exe = Path::new(&ac_path).join("acs.exe");
     
-    // ⭐ On garde la sécurité
     if !ac_exe.exists() {
         return Err(format!("acs.exe introuvable dans le dossier : {}", ac_path));
     }
 
+    // ⭐ 1. Modifier le race.ini pour injecter le replay
+    if let Some(docs) = dirs::document_dir() {
+        let cfg_dir = docs.join("Assetto Corsa").join("cfg");
+        let race_ini_path = cfg_dir.join("race.ini");
+        
+        if race_ini_path.exists() {
+            if let Ok(content) = fs::read_to_string(&race_ini_path) {
+                let mut lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
+                let mut in_replay = false;
+                let mut found_filename = false;
+                let mut found_active = false;
+
+                for i in 0..lines.len() {
+                    let trimmed = lines[i].trim();
+                    if trimmed.starts_with('[') && trimmed.ends_with(']') {
+                        in_replay = trimmed.eq_ignore_ascii_case("[REPLAY]");
+                    } else if in_replay {
+                        if trimmed.to_uppercase().starts_with("FILENAME=") {
+                            lines[i] = format!("FILENAME={}", replay_filename);
+                            found_filename = true;
+                        } else if trimmed.to_uppercase().starts_with("ACTIVE=") {
+                            lines[i] = "ACTIVE=1".to_string();
+                            found_active = true;
+                        }
+                    }
+                }
+
+                // Si la section [REPLAY] n'existait pas ou n'avait pas ces clés, on les ajoute à la fin
+                if !found_filename {
+                    lines.push(format!("FILENAME={}", replay_filename));
+                }
+                if !found_active {
+                    lines.push("ACTIVE=1".to_string());
+                }
+
+                let new_content = lines.join("\r\n") + "\r\n";
+                let _ = fs::write(&race_ini_path, new_content);
+            }
+        }
+    }
+
+    // ⭐ 2. Lancer AC SANS AUCUN ARGUMENT
     let mut cmd = std::process::Command::new(ac_exe);
     cmd.current_dir(&ac_path);
     cmd.env("SteamAppId", "244210");
     cmd.env("SteamGameId", "244210");
-    cmd.arg(format!("--replay=\"{}\"", replay_filename));
     
     // ⭐ On attend la fermeture du jeu en arrière-plan
     let mut child = cmd.spawn().map_err(|e| format!("Erreur lors du lancement du replay: {}", e))?;
@@ -5242,12 +5923,477 @@ fn get_ini_hints_from_documents(
     Ok(std::collections::HashMap::new())
 }
 
+#[tauri::command]
+fn set_ac_language(documents_path: String, language_code: String) -> Result<(), String> {
+    let base_path = Path::new(&documents_path);
+    
+    // Résolution robuste du dossier cfg
+    let mut cfg_dir = base_path.join("cfg");
+    if !cfg_dir.exists() {
+        cfg_dir = base_path.join("Assetto Corsa").join("cfg");
+    }
+    
+    let file_path = cfg_dir.join("launcher.ini");
+    
+    if !file_path.exists() {
+        return Err("launcher.ini introuvable dans le dossier AC.".into());
+    }
+
+    let content = fs::read_to_string(&file_path).map_err(|e| e.to_string())?;
+    let eol = if content.contains("\r\n") { "\r\n" } else { "\n" };
+    let mut lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
+
+    // ⭐ Sécurité : Assetto Corsa attend des minuscules (ex: fr, en, it)
+    let clean_lang = language_code.to_lowercase();
+
+    let mut in_window = false;
+    let mut found = false;
+    
+    for line in lines.iter_mut() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            in_window = trimmed.eq_ignore_ascii_case("[WINDOW]");
+        } else if in_window && trimmed.to_uppercase().starts_with("LANGUAGE=") {
+            *line = format!("LANGUAGE={}", clean_lang);
+            found = true;
+            break;
+        }
+    }
+
+    if !found {
+        // Si la clé n'existe pas, on l'ajoute à la fin de [WINDOW] ou à la fin du fichier
+        let mut insert_idx = lines.len();
+        for (i, line) in lines.iter().enumerate() {
+            if line.trim().eq_ignore_ascii_case("[WINDOW]") {
+                insert_idx = i + 1;
+                break;
+            }
+        }
+        lines.insert(insert_idx, format!("LANGUAGE={}", clean_lang));
+    }
+
+    let new_content = lines.join(eol) + eol;
+    
+    // Backup
+    let backup_path = file_path.with_extension("ini.bak");
+    let _ = fs::copy(&file_path, backup_path);
+
+    fs::write(&file_path, new_content).map_err(|e| format!("Erreur d'écriture launcher.ini: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
+fn launch_ac_only() -> Result<(), String> {
+    // ⭐ On utilise le protocole Steam pour lancer le jeu.
+    // 244210 est l'AppID d'Assetto Corsa.
+    let steam_url = "steam://rungameid/244210";
+
+    #[cfg(target_os = "windows")]
+    {
+        // explorer gère très bien les protocoles URL et évite les soucis de parsing de cmd
+        std::process::Command::new("explorer")
+            .arg(steam_url)
+            .spawn()
+            .map_err(|e| format!("Erreur lors du lancement de Steam: {}", e))?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(steam_url)
+            .spawn()
+            .map_err(|e| format!("Erreur lors du lancement de Steam: {}", e))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(steam_url)
+            .spawn()
+            .map_err(|e| format!("Erreur lors du lancement de Steam: {}", e))?;
+    }
+
+    Ok(())
+}
+
+#[derive(Serialize, Clone)]
+struct PythonApp {
+    name: String,
+    active: bool,
+}
+
+#[tauri::command]
+fn list_python_apps(ac_path: String, documents_path: String) -> Result<Vec<PythonApp>, String> {
+    let apps_dir = Path::new(&ac_path).join("apps").join("python");
+    if !apps_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut apps = Vec::new();
+
+    // 1. Scanner les dossiers d'applications
+    if let Ok(entries) = fs::read_dir(apps_dir) {
+        for entry in entries.flatten() {
+            if entry.path().is_dir() {
+                let app_name = entry.file_name().to_string_lossy().to_string();
+                apps.push(PythonApp { name: app_name, active: false });
+            }
+        }
+    }
+
+    // 2. Lire python.ini pour voir lesquelles sont actives
+    let base = Path::new(&documents_path);
+    let mut ini_path = base.join("Assetto Corsa").join("cfg").join("python.ini");
+    if !ini_path.exists() {
+        ini_path = base.join("cfg").join("python.ini");
+    }
+
+    if ini_path.exists() {
+        if let Ok(content) = fs::read_to_string(&ini_path) {
+            let mut current_section = String::new();
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with('[') && trimmed.ends_with(']') {
+                    current_section = trimmed.trim_matches(|c| c == '[' || c == ']').to_string();
+                } else if current_section.to_lowercase() == "active" {
+                    // Ignore
+                } else if trimmed.to_uppercase().starts_with("ACTIVE=") {
+                    let is_active = trimmed.split('=').nth(1).unwrap_or("0").trim() == "1";
+                    if let Some(app) = apps.iter_mut().find(|a| a.name.eq_ignore_ascii_case(&current_section)) {
+                        app.active = is_active;
+                    }
+                }
+            }
+        }
+    }
+
+    apps.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(apps)
+}
+
+#[tauri::command]
+fn toggle_python_app(documents_path: String, app_name: String, enabled: bool) -> Result<(), String> {
+    let base = Path::new(&documents_path);
+    let mut ini_path = base.join("Assetto Corsa").join("cfg").join("python.ini");
+    if !ini_path.exists() {
+        ini_path = base.join("cfg").join("python.ini");
+    }
+
+    if !ini_path.exists() {
+        return Err("python.ini introuvable".into());
+    }
+
+    let content = fs::read_to_string(&ini_path).map_err(|e| e.to_string())?;
+    let eol = if content.contains("\r\n") { "\r\n" } else { "\n" };
+    let mut lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
+
+    let header = format!("[{}]", app_name.to_uppercase());
+    let mut found_section = false;
+    let mut active_idx = None;
+    let mut header_idx = None;
+
+    // 1. Chercher la section et la ligne ACTIVE
+    for (i, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            if found_section && active_idx.is_none() {
+                // On est sorti de la section sans trouver ACTIVE
+                break;
+            }
+            if trimmed.eq_ignore_ascii_case(&header) {
+                found_section = true;
+                header_idx = Some(i);
+            }
+        } else if found_section && trimmed.to_uppercase().starts_with("ACTIVE=") {
+            active_idx = Some(i);
+            break;
+        }
+    }
+
+    // 2. Appliquer la modification
+    let new_val = if enabled { "ACTIVE=1" } else { "ACTIVE=0" };
+    if found_section {
+        if let Some(idx) = active_idx {
+            lines[idx] = new_val.to_string();
+        } else if let Some(idx) = header_idx {
+            lines.insert(idx + 1, new_val.to_string());
+        }
+    } else {
+        // Si la section n'existe pas du tout, on l'ajoute à la fin
+        if !lines.is_empty() && !lines.last().unwrap().trim().is_empty() {
+            lines.push(String::new());
+        }
+        lines.push(header);
+        lines.push(new_val.to_string());
+    }
+
+    let final_content = lines.join(eol) + eol;
+    let _ = fs::copy(&ini_path, ini_path.with_extension("ini.bak"));
+    fs::write(&ini_path, final_content).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+// ⭐ Ouvre les paramètres Windows pour l'association des applications
+#[tauri::command]
+fn open_windows_default_apps() -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "ms-settings:defaultapps"])
+            .spawn()
+            .map_err(|e| format!("Erreur lors de l'ouverture des paramètres : {}", e))?;
+    }
+    Ok(())
+}
+
+// ⭐ Gestion du protocole acmanager://
+fn get_acmanager_registry_cmd() -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    {
+        let output = std::process::Command::new("reg")
+            .args(&["query", "HKCU\\Software\\Classes\\acmanager\\shell\\open\\command", "/ve"])
+            .output()
+            .map_err(|e| e.to_string())?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        // On cherche la ligne qui contient REG_SZ
+        for line in stdout.lines() {
+            if line.contains("REG_SZ") {
+                if let Some(val) = line.split("REG_SZ").nth(1) {
+                    return Ok(val.trim().to_string());
+                }
+            }
+        }
+    }
+    Ok(String::new())
+}
+
+fn get_backup_path() -> std::path::PathBuf {
+    let mut path = dirs::data_dir().unwrap_or_default();
+    path.push("QARL");
+    let _ = fs::create_dir_all(&path);
+    path.join("protocol_backup.json")
+}
+
+#[tauri::command]
+fn get_protocol_status() -> Result<bool, String> {
+    let cmd = get_acmanager_registry_cmd()?;
+    let exe_path = std::env::current_exe().map_err(|e| e.to_string())?;
+    let exe_name = exe_path.file_name().unwrap_or_default().to_string_lossy().to_lowercase();
+    
+    // On vérifie si la commande pointe vers notre exécutable actuel
+    Ok(cmd.to_lowercase().contains(&exe_name))
+}
+
+#[tauri::command]
+fn associate_protocol() -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        let current_cmd = get_acmanager_registry_cmd()?;
+        
+        // 1. Backup de l'ancienne valeur si elle existe et n'est pas QARL
+        if !current_cmd.is_empty() && !current_cmd.to_lowercase().contains("qarl.exe") {
+            let backup_path = get_backup_path();
+            if !backup_path.exists() {
+                let _ = fs::write(&backup_path, serde_json::json!({ "old_cmd": current_cmd }).to_string());
+            }
+        }
+
+        // 2. Obtention du chemin de l'exécutable actuel (qarl.exe)
+        let exe_path = std::env::current_exe().map_err(|e| e.to_string())?;
+        let new_cmd = format!("\"{}\" \"%1\"", exe_path.to_string_lossy());
+
+        // ⭐ 3. Création de la clé parente (indispensable pour Windows)
+        let _ = std::process::Command::new("reg")
+            .args(&["add", "HKCU\\Software\\Classes\\acmanager", "/ve", "/t", "REG_SZ", "/d", "URL:QARL Protocol", "/f"])
+            .output();
+
+        // ⭐ 4. Ajout de la valeur "URL Protocol" (vide, mais obligatoire)
+        let _ = std::process::Command::new("reg")
+            .args(&["add", "HKCU\\Software\\Classes\\acmanager", "/v", "URL Protocol", "/t", "REG_SZ", "/d", "", "/f"])
+            .output();
+
+        // 5. Écriture de la commande
+        let output = std::process::Command::new("reg")
+            .args(&[
+                "add", "HKCU\\Software\\Classes\\acmanager\\shell\\open\\command",
+                "/ve", "/t", "REG_SZ", "/d", &new_cmd, "/f"
+            ])
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn dissociate_protocol() -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        let backup_path = get_backup_path();
+        
+        // 1. Si on a un backup, on le restaure
+        if backup_path.exists() {
+            if let Ok(content) = fs::read_to_string(&backup_path) {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(old_cmd) = json["old_cmd"].as_str() {
+                        let _ = std::process::Command::new("reg")
+                            .args(&[
+                                "add", "HKCU\\Software\\Classes\\acmanager\\shell\\open\\command",
+                                "/ve", "/t", "REG_SZ", "/d", old_cmd, "/f"
+                            ])
+                            .output();
+                    }
+                }
+            }
+            let _ = fs::remove_file(backup_path);
+        } else {
+            // 2. Si pas de backup (QARL était le seul), on supprime la clé
+            let _ = std::process::Command::new("reg")
+                .args(&["delete", "HKCU\\Software\\Classes\\acmanager", "/f"])
+                .output();
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn download_csp_configs(
+    _app_handle: tauri::AppHandle,
+    ac_path: String,
+    on_event: tauri::ipc::Channel<serde_json::Value>, // ⭐ Nouveau canal
+) -> Result<String, String> {
+    let url = "https://github.com/ac-custom-shaders-patch/acc-extension-config/archive/refs/heads/master.zip";
+    
+    // 1. Création d'un dossier temporaire
+    let temp_dir = std::env::temp_dir().join("qarl_csp_config_temp");
+    if temp_dir.exists() { let _ = std::fs::remove_dir_all(&temp_dir); }
+    std::fs::create_dir_all(&temp_dir).map_err(|e| e.to_string())?;
+    let zip_path = temp_dir.join("csp_config.zip");
+
+    // 2. Client HTTP avec timeout de 10 minutes, HTTP/1.1 forcé et User-Agent complet
+    let client = reqwest::Client::builder()
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .http1_only() // ⭐ Force HTTP/1.1 pour éviter le 502 de codeload
+        .connect_timeout(std::time::Duration::from_secs(30))
+        .timeout(std::time::Duration::from_secs(600)) // 10 minutes
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    println!("⏳ RUST : Début du téléchargement de l'archive CSP...");
+    let _ = on_event.send(serde_json::json!({ "type": "info", "msg": "Téléchargement de l'archive (400 Mo)..." }));
+    let resp = client.get(url)
+        .header("Accept", "application/zip, application/octet-stream, */*")
+        .send().await.map_err(|e| format!("Erreur réseau (timeout ?): {}", e))?;
+    
+    if !resp.status().is_success() {
+        return Err(format!("Erreur HTTP: {}", resp.status()));
+    }
+    
+    let bytes = resp.bytes().await.map_err(|e| format!("Erreur lecture: {}", e))?;
+    println!("✅ RUST : Téléchargement terminé ({} Mo).", bytes.len() / 1024 / 1024);
+    
+    let mut file = std::fs::File::create(&zip_path).map_err(|e| e.to_string())?;
+    use std::io::Write;
+    file.write_all(&bytes).map_err(|e| e.to_string())?;
+
+    // 3. Extraction
+    println!("⏳ RUST : Extraction des fichiers...");
+    let _ = on_event.send(serde_json::json!({ "type": "info", "msg": "Extraction des fichiers..." }));
+    let ac_extension_dir = std::path::Path::new(&ac_path).join("extension");
+    let mut copied = 0;
+
+    let mut archive = unarc_rs::unified::ArchiveFormat::open_path(&zip_path)
+        .map_err(|e| format!("Erreur ouverture ZIP: {}", e))?;
+
+    while let Some(entry) = archive.next_entry().map_err(|e| e.to_string())? {
+        let entry_name = entry.name().replace("\\", "/");
+        
+        let relative_path = if let Some(p) = entry_name.strip_prefix("acc-extension-config-master/config/cars/") {
+            format!("config/cars/{}", p)
+        } else if let Some(p) = entry_name.strip_prefix("acc-extension-config-master/config/tracks/") {
+            format!("config/tracks/{}", p)
+        } else if let Some(p) = entry_name.strip_prefix("acc-extension-config-master/backgrounds/") {
+            format!("backgrounds/{}", p)
+        } else {
+            continue;
+        };
+
+        if relative_path.contains("..") { continue; }
+
+        let out_path = ac_extension_dir.join(&relative_path);
+
+        if entry.is_directory() {
+            let _ = std::fs::create_dir_all(&out_path);
+        } else {
+            if let Some(parent) = out_path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            if let Ok(mut out_file) = std::fs::File::create(&out_path) {
+                let _ = archive.read_to(&entry, &mut out_file);
+                copied += 1;
+
+                // ⭐ NOUVEAU : Envoi de la progression toutes les 100 fichiers
+                if copied % 100 == 0 {
+                    let _ = on_event.send(serde_json::json!({
+                        "type": "progress",
+                        "msg": format!("{} fichiers extraits...", copied)
+                    }));
+                    tokio::task::yield_now().await;
+                }
+            }
+        }
+    }
+
+    // 4. Nettoyage
+    let _ = std::fs::remove_dir_all(&temp_dir);
+    println!("✅ RUST : {} fichiers copiés dans extension/config/", copied);
+
+    if copied == 0 {
+        return Err("Aucun fichier de configuration trouvé dans l'archive.".into());
+    }
+
+    Ok(format!("✅ {} fichiers de configuration CSP installés !", copied))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(WatcherState::default())
         // ⭐ LOT 3 : Le Watchdog des périphériques
         .setup(|app| {
+            // ⭐ On vérifie les arguments au démarrage (si QARL était fermé)
+            let args: Vec<String> = std::env::args().collect();
+            let initial_url = args.iter().find(|arg| arg.starts_with("acmanager://") || arg.starts_with("qarl://"));
+            
+            if let Some(url) = initial_url {
+                let url = url.clone();
+                let handle = app.handle().clone();
+                // On attend un peu que le frontend soit prêt
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(1000));
+                    let _ = handle.emit("qarl-deep-link", url);
+                });
+            }
+
+            // ⭐ Écoute des URLs entrantes (Deep Link)
+            // L'événement est déclenché par le plugin single-instance (via la feature "deep-link")
+            let deep_link_handle = app.handle().clone();
+            app.listen("deep-link://new-url", move |event| {
+                // Le payload contient l'URL sous forme de chaîne JSON
+                let payload = event.payload();
+                // On nettoie les guillemets éventuels autour de l'URL
+                let clean_url = payload.trim_matches('"').to_string();
+                
+                println!("🔗 Deep Link reçu : {}", clean_url);
+                
+                // On émet un événement personnalisé pour le frontend Svelte
+                let _ = deep_link_handle.emit("qarl-deep-link", clean_url);
+            });
+
             let handle = app.handle().clone();
             std::thread::spawn(move || {
                 let mut last_iguids = Vec::new();
@@ -5273,6 +6419,23 @@ pub fn run() {
             });
             Ok(())
         })
+        // ⭐ Le plugin single-instance DOIT être le premier enregistré
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            use tauri::Manager;
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_focus();
+                let _ = window.unminimize();
+            }
+            
+            // ⭐ On cherche l'URL dans les arguments et on l'envoie au frontend
+            for arg in argv {
+                if arg.starts_with("acmanager://") || arg.starts_with("qarl://") {
+                    let _ = app.emit("qarl-deep-link", arg);
+                    break;
+                }
+            }
+        }))
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_window_state::Builder::default().build()) // ⭐ Sauvegarde de la fenêtre
@@ -5285,6 +6448,8 @@ pub fn run() {
             read_pure_ctrl,
             write_pure_ctrl,
             launch_race,
+            launch_ac_only, // ⭐ Ajouté
+            set_ac_language, // ⭐ NOUVEAU
             check_ac_capabilities,
             save_custom_pure_plan,
             read_race_history,
@@ -5318,12 +6483,18 @@ pub fn run() {
             read_ini_file,
             write_ini_file,
             list_audio_devices,
+            read_onboard_fov,
+            write_onboard_fov,
             list_csp_templates,
             read_csp_module_data,
             set_csp_module_enabled,
             write_csp_module,
             update_ini_values,
             set_weather_fx_implementation,
+            list_assists_presets,
+            save_assists_preset,
+            load_assists_preset,
+            delete_assists_preset,
             list_csp_presets,
             save_csp_preset,
             load_csp_preset,
@@ -5347,7 +6518,14 @@ pub fn run() {
             delete_media_file,
             write_specific_ini,
             get_ini_hints,
-            get_ini_hints_from_documents
+            get_ini_hints_from_documents,
+            list_python_apps,
+            toggle_python_app,
+            open_windows_default_apps,
+            get_protocol_status,      // ⭐ Ajouté
+            associate_protocol,       // ⭐ Ajouté
+            dissociate_protocol,      // ⭐ Ajouté
+            download_csp_configs      // ⭐ NOUVEAU
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

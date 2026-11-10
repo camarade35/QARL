@@ -15,6 +15,7 @@
   import { searchState } from '$lib/stores/searchState.svelte.js';
   import { setupState } from '$lib/stores/setupState.svelte.js';
   import { onMount } from 'svelte';
+  import { listen } from '@tauri-apps/api/event'; // ⭐ Import pour écouter le Deep Link
 
   // ⭐ État pour afficher la visite au démarrage
   let showTour = $state(false);
@@ -29,7 +30,26 @@
     };
     window.addEventListener('qarl-change-tab', handleTabChange);
 
-    return () => window.removeEventListener('qarl-change-tab', handleTabChange);
+    // ⭐ Écoute du Deep Link provenant de Rust
+    let unlisten: (() => void) | undefined;
+    listen<string>('qarl-deep-link', (event) => {
+      const url = event.payload;
+      console.log('🔗 Deep Link reçu dans Svelte:', url);
+      
+      // On bascule sur l'onglet Online
+      appState.activeTab = 'tab-online';
+      
+      // On émet un événement personnalisé que OnlineTab.svelte pourra écouter
+      // (avec un petit délai pour laisser le temps à l'onglet de s'afficher)
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('qarl-process-deep-link', { detail: { url } }));
+      }, 300);
+    }).then((fn) => { unlisten = fn; });
+
+    return () => {
+      window.removeEventListener('qarl-change-tab', handleTabChange);
+      if (unlisten) unlisten();
+    };
   });
 
   // ⭐ On affiche la visite UNIQUEMENT quand l'assistant est fermé
@@ -60,6 +80,9 @@
     { id: 'tab-settings', key: 'tabs.settings' }
   ];
 </script>
+
+<!-- ⭐ Blocage global du menu contextuel natif de Windows/WebView2 -->
+<svelte:window oncontextmenu={(e) => e.preventDefault()} />
 
 <Sidebar />
 

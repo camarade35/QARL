@@ -1,4 +1,7 @@
+import { loadAccentState, applyAccentColor, applyBackgroundShade } from '$lib/utils/accentUtils.js';
+
 const savedPath = typeof localStorage !== 'undefined' ? localStorage.getItem('acPath') || '' : '';
+const savedFont = typeof localStorage !== 'undefined' ? localStorage.getItem('qarl_font_family') || 'Inter' : 'Inter';
 const savedSteamId = typeof localStorage !== 'undefined' ? localStorage.getItem('qarl_steam_id') || '' : '';
 const savedDriverName = typeof localStorage !== 'undefined' ? localStorage.getItem('qarl_driver_name') || 'Driver' : 'Driver';
 const savedOnlineName = typeof localStorage !== 'undefined' ? localStorage.getItem('qarl_online_name') || '' : '';
@@ -32,6 +35,18 @@ const defaultSession = {
   aiAggression: 50,
   aiAggressionVar: 10,
 
+  // Règles & Équilibrage
+  fixedSetup: false,
+  ballast: 0,
+  restrictor: 0,
+
+  // Conditions de piste & Environnement
+  allowedTyresOut: -1, // -1 = Large (Défaut), 1 = Strict, 2 = Normal, 3 = Très Large
+  trackGrip: 1,        // 0 = Faible, 1 = Normal, 2 = Élevé
+  windSpeed: 0,
+  windDirection: 0,
+  ghostCar: true,
+
   // Pilote & Réalisme
   assists: {
     autoGearbox: false,
@@ -45,13 +60,15 @@ const defaultSession = {
     mechanicalDamage: 100,
     tyreWear: 1,
     slipstream: 1,
-    tyreBlankets: false
+    tyreBlankets: false,
+    penalties: false
   },
 
   // ⭐ Météo & Pure Ctrl (migré depuis QACRL)
   weather: {
     // Mode principal
-    mode: 'static',              // 'static' | 'schedule' | 'existing_plan' | 'custom_plan'
+    mode: 'static',              // 'static' | 'schedule' | 'pure_plan'
+    weatherFxStyle: 'pure',      // ⭐ NOUVEAU : 'pure', 'lcs', 'default'
     
     // Météo statique (ID de preset AC, ex: '3_clear', '7_heavy_clouds')
     staticWeather: '3_clear',
@@ -118,6 +135,7 @@ const savedSession = savedSessionRaw
 
 export const appState = $state({
   acPath: savedPath,
+  fontFamily: savedFont, // ⭐ NOUVEAU
   steamId: savedSteamId,
   driverName: savedDriverName,
   onlineName: savedOnlineName,
@@ -134,7 +152,7 @@ export const appState = $state({
   modalData: null,
   favorites: savedFavorites,
   used: savedUsed,
-  carFilters: { type: 'all', search: '', tags: [] },
+  carFilters: { type: 'all', search: '', tags: [], power: '' },
   trackFilters: { type: 'all', search: '', tags: [] },
   
   // ⭐ Serveurs
@@ -277,25 +295,30 @@ export function saveServerState() {
   }
 }
 
-// ⭐ Application immédiate de la couleur sauvegardée au démarrage
+// ⭐ Fonction pour changer la police
+export function setFontFamily(fontName) {
+  appState.fontFamily = fontName;
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('qarl_font_family', fontName);
+  }
+  // ⭐ APPLICATION IMMÉDIATE DANS LE DOM
+  if (typeof document !== 'undefined') {
+    document.documentElement.style.setProperty('--font-main', `'${fontName}', -apple-system, sans-serif`);
+  }
+}
+
+// ⭐ Application immédiate des préférences visuelles au démarrage
 if (typeof document !== 'undefined') {
-  const savedAccent = localStorage.getItem('qarl_accent') || '#319dd3';
-  const savedTheme = localStorage.getItem('qarl_theme') || 'dark';
-  document.documentElement.setAttribute('data-theme', savedTheme);
-  
-  // Un mini calcul pour appliquer la couleur sans attendre Svelte
-  const r = parseInt(savedAccent.slice(1, 3), 16);
-  const g = parseInt(savedAccent.slice(3, 5), 16);
-  const b = parseInt(savedAccent.slice(5, 7), 16);
-  
-  const finalR = savedTheme === 'light' ? Math.floor(r * 0.75) : Math.min(255, Math.floor(r * 1.15));
-  const finalG = savedTheme === 'light' ? Math.floor(g * 0.75) : Math.min(255, Math.floor(g * 1.15));
-  const finalB = savedTheme === 'light' ? Math.floor(b * 0.75) : Math.min(255, Math.floor(b * 1.15));
-  
-  const adjustedHex = `#${finalR.toString(16).padStart(2, '0')}${finalG.toString(16).padStart(2, '0')}${finalB.toString(16).padStart(2, '0')}`;
-  
-  document.documentElement.style.setProperty('--accent', adjustedHex);
-  document.documentElement.style.setProperty('--accent-rgb', `${finalR}, ${finalG}, ${finalB}`);
-  document.documentElement.style.setProperty('--accent-muted', `rgba(${finalR}, ${finalG}, ${finalB}, 0.12)`);
-  document.documentElement.style.setProperty('--accent-glow', `rgba(${finalR}, ${finalG}, ${finalB}, 0.4)`);
+  // ⭐ Application immédiate de la police
+  document.documentElement.style.setProperty('--font-main', `'${savedFont}', -apple-system, sans-serif`);
+
+  // ⭐ Chargement et application de la couleur d'accentuation (centralisé)
+  //    → Pipette fidèle + intensité + adaptation hover selon le thème.
+  const { color, intensity, theme } = loadAccentState();
+  document.documentElement.setAttribute('data-theme', theme);
+  applyAccentColor(color, theme, intensity);
+
+  // ⭐ Chargement et application du fond personnalisé (s'il y en a un)
+  const savedBgShade = localStorage.getItem('qarl_bg_shade') || 'auto';
+  applyBackgroundShade(savedBgShade);
 }

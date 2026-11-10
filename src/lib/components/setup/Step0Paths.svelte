@@ -11,6 +11,7 @@
   let acPath = $state(appState.acPath || setupState.data.acPath || '');
   let documentsPath = $state(appState.documentsPath || setupState.data.documentsPath || '');
   let detecting = $state(false);
+  let isLaunching = $state(false); // ⭐ Nouvel état
 
   async function autoDetect() {
     detecting = true;
@@ -31,15 +32,22 @@
     }
   }
 
+  // ⭐ Nouvelle fonction pour lancer AC
+  async function launchAc() {
+    isLaunching = true;
+    try {
+      await invoke('launch_ac_only');
+    } catch (e) {
+      alert("Erreur lors du lancement d'AC via Steam : " + e);
+    } finally {
+      isLaunching = false;
+    }
+  }
+
   async function browseAc() {
     const selected = await open({ directory: true, multiple: false, title: $t('setup.paths.ac_label') });
     if (selected) {
-      // Vérification basique : le dossier doit contenir acs.exe
-      try {
-        const status = await invoke<any>('detect_setup_status');
-        // On fait juste confiance à la sélection utilisateur, la validation se fera au continue
-        acPath = selected as string;
-      } catch (e) {}
+      acPath = selected as string;
     }
   }
 
@@ -59,7 +67,6 @@
       alert($t('setup.errors.no_docs_path'));
       return;
     }
-    // Persiste
     setAcPath(acPath);
     setDocumentsPath(documentsPath);
     setupState.data.acPath = acPath;
@@ -92,6 +99,17 @@
     <div class="setup-hint" style="color: #e6a33b;">{$t('setup.paths.docs_not_found')}</div>
   {/if}
 </div>
+
+<!-- ⭐ NOUVEAU : Bloc d'aide avec lancement d'AC -->
+{#if !documentsPath}
+  <div class="setup-warning" style="margin-top: 15px; background: rgba(230, 163, 59, 0.1); border: 1px solid rgba(230, 163, 59, 0.3);">
+    <strong style="color: #e6a33b;">💡 Besoin de générer les fichiers AC ?</strong>
+    <p style="margin-top: 8px; font-size: 0.85rem;">Lancez Assetto Corsa une première fois pour créer les dossiers nécessaires, assignez vos contrôles, puis fermez le jeu. QARL détectera tout automatiquement.</p>
+    <button class="filter-btn" onclick={launchAc} disabled={isLaunching} style="margin-top: 10px; background: var(--accent); color: #fff; border-color: var(--accent);">
+      {isLaunching ? '⏳ Lancement...' : $t('setup.ac_init.launch_ac')}
+    </button>
+  </div>
+{/if}
 
 <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
   <button class="filter-btn" onclick={handleContinue} style="padding: 10px 22px; background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 700;">

@@ -71,7 +71,7 @@
   }
 
   // ⭐ Évaluation récursive de l'AST de condition
-  function evaluateCondition(expr: ConditionExpr | undefined, allSections: CspSection[]): boolean {
+  function evaluateCondition(expr: ConditionExpr | undefined, allSections: CspSection[], currentSectionName?: string): boolean {
     if (!expr) return true;
 
     const findValue = (key: string) => {
@@ -86,6 +86,13 @@
 
       for (const sec of allSections) {
         if (targetSection && sec.name !== targetSection) continue;
+        
+        // ⭐ CORRECTION : Si on cherche "ENABLED", on regarde l'état de la section
+        if (targetKey === 'ENABLED') {
+          if (targetSection && sec.name === targetSection) return sec.is_enabled ? '1' : '0';
+          if (!targetSection) return sec.is_enabled ? '1' : '0';
+        }
+
         const target = sec.options.find(o => o.key === targetKey);
         if (target) return target.value;
       }
@@ -97,20 +104,36 @@
     }
 
     if (expr.type === 'truthy') {
+      // ⭐ CORRECTION : Gestion spéciale pour ENABLED
+      if (expr.key === 'ENABLED' && currentSectionName) {
+        const sec = allSections.find(s => s.name === currentSectionName);
+        return sec?.is_enabled ?? false;
+      }
       const v = findValue(expr.key);
       return v === '1' || v?.toLowerCase() === 'true';
     }
 
-    if (expr.type === 'not') return !evaluateCondition(expr.expr, allSections);
-    if (expr.type === 'and') return evaluateCondition(expr.left, allSections) && evaluateCondition(expr.right, allSections);
-    if (expr.type === 'or') return evaluateCondition(expr.left, allSections) || evaluateCondition(expr.right, allSections);
+    if (expr.type === 'not') return !evaluateCondition(expr.expr, allSections, currentSectionName);
+    if (expr.type === 'and') return evaluateCondition(expr.left, allSections, currentSectionName) && evaluateCondition(expr.right, allSections, currentSectionName);
+    if (expr.type === 'or') return evaluateCondition(expr.left, allSections, currentSectionName) || evaluateCondition(expr.right, allSections, currentSectionName);
 
     return true;
   }
 
-  function isOptionVisible(opt: CspOption, allSections: CspSection[]): boolean {
+  function isOptionVisible(opt: CspOption, allSections: CspSection[], currentSectionName: string): boolean {
     if (opt.is_hidden) return false;
-    return evaluateCondition(opt.condition, allSections);
+    return evaluateCondition(opt.condition, allSections, currentSectionName);
+  }
+
+  // ⭐ NOUVEAU : Vérifie si la valeur est hors limites
+  function isOutOfBounds(entry: CspOption): boolean {
+    if (entry.option_type !== 'number') return false;
+    if (entry.min === undefined || entry.max === undefined) return false;
+
+    const val = parseFloat(entry.value);
+    if (isNaN(val)) return true; // Si ce n'est pas un nombre valide
+
+    return val < entry.min || val > entry.max;
   }
 
   async function loadModule() {
@@ -230,6 +253,40 @@
       options: sec.options.filter(e => e.label.toLowerCase().includes(q) || e.key.toLowerCase().includes(q))
     })).filter(sec => sec.options.length > 0 || sec.name.toLowerCase().includes(q));
   });
+
+  // ⭐ Transforme un label brut en clé i18n valide (minuscules, sans accents, sans points)
+  function labelToKey(label: string): string {
+    return label
+      .toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+  }
+
+  // ⭐ Résolution d'un label d'option : 4 niveaux (key → label brut → label sanitisé → fallback)
+  function trOptionLabel(key: string, label: string): string {
+    const byKey = $t(`csp.option_labels.${key}`, { default: '' });
+    if (byKey) return byKey;
+    const byLabel = $t(`csp.option_labels.${label}`, { default: '' });
+    if (byLabel) return byLabel;
+    const bySanitized = $t(`csp.option_labels.${labelToKey(label)}`, { default: '' });
+    if (bySanitized) return bySanitized;
+    return label || key;
+  }
+
+  // ⭐ Résolution de la description du module via le filename (stable) au lieu du texte brut
+  function trModuleDescription(data: CspModuleData | null): string {
+    if (!data) return '';
+    const fileKey = data.filename.replace(/\.ini$/i, '');
+    
+    // ⭐ Priorité 1 : On utilise la description courte (qui est déjà traduite dans csp.modules)
+    const byModule = $t(`csp.modules.${fileKey}.desc`, { default: '' });
+    if (byModule) return byModule;
+
+    // Priorité 2 : On cherche une éventuelle description longue spécifique (ex: extra_fx)
+    const byFile = $t(`csp.module_descriptions.${fileKey}`, { default: '' });
+    return byFile || data.description;
+  }
 </script>
 
 {#if show}
@@ -238,10 +295,10 @@
       <AutosaveBanner hasChanges={hasChanges} onSave={() => saveModule(true)} />
       <div class="modal-header">
         <div>
-          <h3 class="modal-title" id="csp-module-modal-title">{moduleData?.fullname || $t(title)} — {filename}</h3>
+          <h3 class="modal-title" id="csp-module-modal-title">{$t(title, { default: moduleData?.fullname || title })} — {filename}</h3>
           {#if moduleData?.description}
             <p style="font-size: 0.8rem; color: var(--text-tertiary); margin-top: 4px; max-width: 600px;">
-              {$t(`csp.option_labels.${moduleData.description}`, { default: moduleData.description })}
+              {trModuleDescription(moduleData)}
             </p>
           {/if}
         </div>
@@ -276,14 +333,15 @@
               </div>
               
               {#each section.options as entry}
-                {#if isOptionVisible(entry, moduleData?.sections || [])}
-                  <div class="csp-opt-row" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #2a2a2a;">
+                {#if isOptionVisible(entry, moduleData?.sections || [], section.name)}
+                  <div class="csp-opt-row" class:has-error={isOutOfBounds(entry)} style="display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #2a2a2a;">
                     <span class="csp-opt-label" title="{entry.key}" style="flex: 1; margin-right: 15px; font-size: 0.85rem; line-height: 1.4; color: var(--text-primary);">
-                      {$t(`csp.option_labels.${entry.key}`, { 
-                        default: $t(`csp.option_labels.${entry.label}`, { 
-                          default: entry.label || entry.key 
-                        }) 
-                      })}
+                      {trOptionLabel(entry.key, entry.label)}
+                      {#if isOutOfBounds(entry)}
+                        <span style="color: var(--danger, #ff4c4c); margin-left: 6px; font-size: 0.75rem; font-weight: 700; cursor: help; display: inline-flex; align-items: center; gap: 4px;" title="Min: {entry.min}, Max: {entry.max}">
+                          ⚠️ {$t('csp.invalid_value', { default: 'Valeur invalide' })}
+                        </span>
+                      {/if}
                     </span>
                     
                     <div class="csp-opt-widget" style="flex-shrink: 0; min-width: 150px; display: flex; justify-content: flex-end;">
@@ -442,3 +500,18 @@
     </div>
   </div>
 {/if}
+
+<style>
+  /* ⭐ NOUVEAU : Style d'alerte pour les valeurs hors limites */
+  .csp-opt-row.has-error {
+    background-color: rgba(255, 76, 76, 0.08) !important;
+    border-left: 3px solid var(--danger, #ff4c4c) !important;
+    animation: pulse-error 2s infinite;
+  }
+
+  @keyframes pulse-error {
+    0% { box-shadow: inset 0 0 0 0 rgba(255, 76, 76, 0.2); }
+    50% { box-shadow: inset 0 0 10px 0 rgba(255, 76, 76, 0.4); }
+    100% { box-shadow: inset 0 0 0 0 rgba(255, 76, 76, 0.2); }
+  }
+</style>

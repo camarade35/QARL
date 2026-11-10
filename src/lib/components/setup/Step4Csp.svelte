@@ -7,6 +7,7 @@
   import { open } from '@tauri-apps/plugin-dialog';
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { getCurrentWebview } from '@tauri-apps/api/webview';
+  import { alert } from '$lib/stores/dialog.svelte.js';
 
   let { onContinue = () => {} } = $props();
 
@@ -24,7 +25,7 @@
   async function handleFileSelect(filePath: string) {
     if (!filePath) return;
     if (!filePath.match(/\.(zip|rar|7z)$/i)) {
-      alert($t('setup.csp.install_error') + " (Format non supporté)");
+      alert($t('setup.csp.install_error') + " (Format non supporté)", $t('common.error'), 'error');
       return;
     }
 
@@ -48,9 +49,9 @@
       });
 
       await load(); // On rafraîchit le statut
-      alert($t('setup.csp.install_success'));
+      alert($t('setup.csp.install_success'), $t('common.success'), 'success');
     } catch (e) {
-      alert($t('setup.csp.install_error') + e);
+      alert($t('setup.csp.install_error') + e, $t('common.error'), 'error');
     } finally {
       isInstalling = false;
       installProgress = 0;

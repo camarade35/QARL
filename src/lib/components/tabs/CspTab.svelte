@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { invoke } from '@tauri-apps/api/core';
+  import { invoke, Channel } from '@tauri-apps/api/core';
   import { onMount } from 'svelte';
   import { t } from 'svelte-i18n';
   import { appState } from '$lib/stores/appState.svelte.js';
@@ -39,6 +39,8 @@
   });
 
   let loading = $state(true);
+  let isDownloadingConfigs = $state(false);
+  let downloadStatus = $state(''); // ⭐ Pour afficher le message en cours
   let errorMsg = $state('');
   let moduleInfos = $state<Record<string, boolean>>({}); // ⭐ Déplacé ici
   
@@ -244,7 +246,7 @@
   }
 
   async function loadModules() {
-    if (!appState.documentsPath) return;
+    if (!appState.documentsPath || !appState.acPath) return; // ⭐ On vérifie aussi acPath
     loading = true;
     errorMsg = '';
     
@@ -326,11 +328,50 @@
     }
   }
 
+  async function handleDownloadConfigs() {
+    if (!appState.acPath) {
+      dialog.alert("Veuillez d'abord configurer le chemin d'Assetto Corsa.", "Erreur", "error");
+      return;
+    }
+    isDownloadingConfigs = true;
+    downloadStatus = "Démarrage...";
+
+    // ⭐ Création du canal pour recevoir les logs
+    const onEvent = new Channel<any>();
+    onEvent.onmessage = (message) => {
+      if (message.type === 'info' || message.type === 'progress') {
+        downloadStatus = message.msg;
+      }
+    };
+
+    try {
+      const result = await invoke<string>('download_csp_configs', { 
+        acPath: appState.acPath,
+        onEvent: onEvent 
+      });
+      showToast(result);
+      downloadStatus = '';
+    } catch (e) {
+      dialog.alert("Erreur lors du téléchargement : " + e, "Erreur", "error");
+      downloadStatus = '';
+    } finally {
+      isDownloadingConfigs = false;
+    }
+  }
+
   function openOptions(modId: string, label: string) {
     modalFilename = `${modId}.ini`;
     modalTitle = label;
     showModal = true;
   }
+
+  // ⭐ NOUVEAU : On recharge les données dès que les chemins deviennent disponibles
+  $effect(() => {
+    if (appState.documentsPath && appState.acPath) {
+      loadModules();
+      loadPresets();
+    }
+  });
 
   onMount(() => {
     // Restauration de l'état des accordéons
@@ -345,9 +386,6 @@
         }
       } catch (e) {}
     }
-
-    loadModules();
-    loadPresets();
   });
 </script>
 
@@ -387,6 +425,17 @@
     
     <div style="flex: 1;"></div>
     
+        <div style="display: flex; align-items: center; gap: 10px;">
+      {#if isDownloadingConfigs}
+        <span style="font-size: 0.75rem; color: var(--success); font-weight: 600; font-style: italic;">
+          {downloadStatus}
+        </span>
+      {/if}
+      <button class="filter-btn" onclick={handleDownloadConfigs} disabled={isDownloadingConfigs} title="Mettre à jour les configs (clignotants, feux, etc.)" style="padding: 6px 12px; height: 32px; min-width: 130px; justify-content: center; background: rgba(76, 175, 80, 0.1); border-color: var(--success); color: var(--success);">
+        {isDownloadingConfigs ? '⏳ Chargement...' : '📥 Configs CSP'}
+      </button>
+    </div>
+
     <button class="filter-btn" onclick={handleResetDefaults} title={$t('csp.btn_reset_title')} style="padding: 6px 12px; height: 32px; border-color: #a83a3a; color: #e57373;">{$t('csp.btn_reset')}</button>
   </div>
 </div>

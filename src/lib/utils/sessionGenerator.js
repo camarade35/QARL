@@ -10,7 +10,10 @@ function getRandomName() {
 export function generateGrid(playerCar, allCars, sessionSettings) {
   if (!playerCar || !allCars || allCars.length === 0) return [];
 
-  const { opponentsCount, gridType } = sessionSettings;
+  // ⭐ Sécurité : Si les anciennes sessions n'ont pas le gridType, on met RANDOM par défaut
+  const opponentsCount = sessionSettings.opponentsCount || 0;
+  const gridType = sessionSettings.gridType || 'RANDOM';
+  
   let candidates = [];
   
   // 1. On filtre les voitures selon la règle choisie

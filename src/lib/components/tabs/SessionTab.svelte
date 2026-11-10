@@ -15,7 +15,9 @@
 
   async function loadHistory() {
     try {
-      history = await invoke<any[]>('read_race_history');
+      history = await invoke<any[]>('read_race_history', {
+        documentsPath: appState.documentsPath
+      });
     } catch (e) {
       console.error("Error loading history:", e);
     }
@@ -34,14 +36,19 @@
 
   async function clearHistory() {
     if (await confirm($t('session.history.confirm_clear'), $t('dialog.confirm'), "warning")) {
-      await invoke('clear_race_history');
+      await invoke('clear_race_history', {
+        documentsPath: appState.documentsPath
+      });
       history = [];
     }
   }
 
   async function deleteEntry(id: string, e: Event) {
     e.stopPropagation();
-    await invoke('delete_history_entry', { entryId: id });
+    await invoke('delete_history_entry', {
+      documentsPath: appState.documentsPath,
+      entryId: id
+    });
     history = history.filter(h => h.id !== id);
   }
 
@@ -103,6 +110,7 @@
     try {
       await invoke('launch_race', {
         acPath: appState.acPath,
+        documentsPath: appState.documentsPath,
         carId: appState.selectedCar.id,
         skinId: appState.selectedCarSkin?.name || "",
         trackId: appState.selectedTrack.id,
@@ -133,6 +141,110 @@
     presets = [...presets, { id: Date.now(), name: presetName, data: JSON.parse(JSON.stringify(appState.session)) }];
     presetName = '';
     alert($t('session.presets.save_success'));
+  }
+
+  // ⭐ NOUVEAU : Gestion des presets d'assistances
+  let assistsPresets = $state<string[]>([]);
+  let selectedAssistPreset = $state('');
+  let newAssistPresetName = $state('');
+
+  async function loadAssistsList() {
+    try {
+      assistsPresets = await invoke('list_assists_presets', { documentsPath: appState.documentsPath });
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async function saveAssistPreset() {
+    if (!newAssistPresetName.trim()) {
+      alert("Veuillez donner un nom au profil.");
+      return;
+    }
+    try {
+      await invoke('save_assists_preset', {
+        documentsPath: appState.documentsPath,
+        presetName: newAssistPresetName,
+        assists: appState.session.assists,
+        fov: currentFov // ⭐ Ajout du FOV
+      });
+      newAssistPresetName = '';
+      await loadAssistsList();
+      alert($t('session.pilot.save_success'));
+    } catch (e) {
+      alert("Erreur : " + e);
+    }
+  }
+
+  async function deleteAssistPreset() {
+    if (!selectedAssistPreset) return;
+    
+    if (await confirm($t('session.pilot.confirm_delete_preset'), $t('dialog.confirm'), "warning")) {
+      try {
+        await invoke('delete_assists_preset', {
+          documentsPath: appState.documentsPath,
+          presetName: selectedAssistPreset
+        });
+        selectedAssistPreset = ''; // On reset la sélection
+        await loadAssistsList();   // On rafraîchit la liste
+      } catch (e) {
+        alert("Erreur : " + e);
+      }
+    }
+  }
+
+  async function loadAssistPreset() {
+    if (!selectedAssistPreset) return;
+    try {
+      const data = await invoke<any>('load_assists_preset', {
+        documentsPath: appState.documentsPath,
+        presetName: selectedAssistPreset
+      });
+      // Mise à jour de l'UI
+      appState.session.assists = { ...appState.session.assists, ...data };
+      
+      // ⭐ Application du FOV s'il est présent dans le profil
+      if (data.fov) {
+        currentFov = data.fov;
+        await invoke('write_onboard_fov', {
+          documentsPath: appState.documentsPath,
+          fov: currentFov
+        });
+      }
+      
+      alert($t('session.pilot.load_success'));
+    } catch (e) {
+      alert("Erreur : " + e);
+    }
+  }
+
+  $effect(() => {
+    if (appState.documentsPath && activeSubTab === 'subtab-pilot-realism') {
+      loadAssistsList();
+      loadFov();
+    }
+  });
+
+  // ⭐ NOUVEAU : Gestion du FOV
+  let currentFov = $state(56);
+
+  async function loadFov() {
+    if (!appState.documentsPath) return;
+    try {
+      currentFov = await invoke<number>('read_onboard_fov', { documentsPath: appState.documentsPath });
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async function updateFov(val: number) {
+    if (!appState.documentsPath) return;
+    try {
+      await invoke('write_onboard_fov', { documentsPath: appState.documentsPath, fov: val });
+      currentFov = val;
+    } catch (e) {
+      console.error(e);
+    }
   }
 </script>
 
@@ -264,12 +376,75 @@
       </div>
     </div>
   </div>
+
+  <div class="group">
+    <div class="group-title">{$t('session.pilot.group_balancing')}</div>
+    <div class="row">
+      <div class="field">
+        <label class="check"><input type="checkbox" bind:checked={appState.session.fixedSetup} /> {$t('session.pilot.fixed_setup')}</label>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>{$t('session.pilot.ballast')} : {appState.session.ballast} kg</label>
+        <input type="range" bind:value={appState.session.ballast} min="0" max="200" step="5" />
+      </div>
+      <div class="field">
+        <label>{$t('session.pilot.restrictor')} : {appState.session.restrictor} %</label>
+        <input type="range" bind:value={appState.session.restrictor} min="0" max="100" step="5" />
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ⭐ SOUS-ONGLET 3 : PILOTE & RÉALISME -->
 <div class="subtab-content" class:active={activeSubTab === 'subtab-pilot-realism'}>
+  
+  <!-- ⭐ NOUVEAU : Barre de gestion des presets -->
+  <div class="group" style="padding: 15px; margin-bottom: 15px; background: var(--bg-elevated); border-left: 4px solid var(--accent);">
+    <div class="row" style="align-items: flex-end;">
+      <!-- Charger un preset -->
+      <div class="field">
+        <label>{$t('session.pilot.load_preset')}</label>
+        <div style="display: flex; gap: 8px;">
+          <select 
+            bind:value={selectedAssistPreset} 
+            onchange={loadAssistPreset} 
+            class="ini-select" 
+            style="flex: 1;"
+          >
+            <option value="">{$t('session.pilot.choose_preset')}</option>
+            {#each assistsPresets as p}
+              <option value={p}>{p}</option>
+            {/each}
+          </select>
+          
+          <button 
+            class="filter-btn" 
+            onclick={deleteAssistPreset} 
+            disabled={!selectedAssistPreset}
+            title={$t('session.pilot.delete_preset')}
+            style="padding: 8px 12px; color: #e57373; border-color: rgba(229, 115, 115, 0.4);"
+          >
+            🗑️
+          </button>
+        </div>
+      </div>
+
+      <!-- Sauvegarder un nouveau preset -->
+      <div class="field">
+        <label>{$t('session.pilot.save_preset')}</label>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" bind:value={newAssistPresetName} placeholder={$t('session.pilot.preset_name_placeholder')} style="flex: 1;" />
+          <button class="filter-btn" onclick={saveAssistPreset} style="background-color: var(--accent); color: white; border-color: var(--accent);">💾 {$t('common.save')}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="group">
     <div class="group-title">{$t('session.pilot.group_assists')}</div>
+    
     <div class="row">
       <div class="field"><label class="check"><input type="checkbox" bind:checked={appState.session.assists.autoGearbox} /> {$t('session.pilot.auto_gearbox')}</label></div>
       <div class="field"><label class="check"><input type="checkbox" bind:checked={appState.session.assists.autoClutch} /> {$t('session.pilot.auto_clutch')}</label></div>
@@ -277,6 +452,27 @@
     <div class="row">
       <div class="field"><label class="check"><input type="checkbox" bind:checked={appState.session.assists.autoblip} /> {$t('session.pilot.autoblip')}</label></div>
       <div class="field"><label class="check"><input type="checkbox" bind:checked={appState.session.assists.idealLine} /> {$t('session.pilot.ideal_line')}</label></div>
+    </div>
+    
+    <!-- ⭐ NOUVEAU : Couvertures chauffantes & FOV -->
+    <div class="row">
+      <div class="field">
+        <label class="check"><input type="checkbox" bind:checked={appState.session.assists.tyreBlankets} /> {$t('session.pilot.tyre_blankets')}</label>
+      </div>
+      
+      <!-- ⭐ Slider FOV -->
+      <div class="field">
+        <label>{$t('session.pilot.fov')} : {currentFov}°</label>
+        <input 
+          type="range" 
+          min="5" 
+          max="180" 
+          step="1" 
+          value={currentFov} 
+          oninput={(e) => updateFov(parseInt(e.currentTarget.value))}
+          title={$t('session.pilot.fov_tooltip')}
+        />
+      </div>
     </div>
     <div class="row">
       <div class="field">
@@ -318,6 +514,47 @@
       <div class="field">
         <label>{$t('session.pilot.slipstream', { values: { value: appState.session.assists.slipstream } })}</label>
         <input type="range" bind:value={appState.session.assists.slipstream} min="0" max="5" step="1" />
+      </div>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">{$t('session.pilot.group_track_conditions')}</div>
+    <div class="row">
+      <div class="field">
+        <label class="check"><input type="checkbox" bind:checked={appState.session.assists.penalties} /> {$t('session.pilot.penalties')}</label>
+      </div>
+      <div class="field">
+        <label class="check"><input type="checkbox" bind:checked={appState.session.ghostCar} /> {$t('session.pilot.ghost_car')}</label>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>{$t('session.pilot.tyres_out')}</label>
+        <select bind:value={appState.session.allowedTyresOut}>
+          <option value={-1}>{$t('session.pilot.tyres_out_unlimited')}</option>
+          <option value={1}>{$t('session.pilot.tyres_out_strict')}</option>
+          <option value={2}>{$t('session.pilot.tyres_out_normal')}</option>
+          <option value={3}>{$t('session.pilot.tyres_out_wide')}</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>{$t('session.pilot.track_grip')}</label>
+        <select bind:value={appState.session.trackGrip}>
+          <option value={0}>{$t('session.pilot.track_grip_low')}</option>
+          <option value={1}>{$t('session.pilot.track_grip_normal')}</option>
+          <option value={2}>{$t('session.pilot.track_grip_high')}</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>{$t('session.pilot.wind_speed')} : {appState.session.windSpeed} km/h</label>
+        <input type="range" bind:value={appState.session.windSpeed} min="0" max="40" step="1" />
+      </div>
+      <div class="field">
+        <label>{$t('session.pilot.wind_direction')} : {appState.session.windDirection}°</label>
+        <input type="range" bind:value={appState.session.windDirection} min="0" max="360" step="10" />
       </div>
     </div>
   </div>

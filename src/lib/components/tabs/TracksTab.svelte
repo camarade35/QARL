@@ -42,8 +42,7 @@
     loading = true;
     try {
       tracks = await invoke<any[]>('get_ac_tracks', { acPath: appState.acPath });
-      
-      // ⭐ LA LIGNE CRUCIALE : on met à jour le store global !
+
       appState.tracks = tracks;
       
     } catch (e) {
@@ -103,6 +102,7 @@
   }
 </script>
 
+<div class="sticky-header-wrapper">
 <div class="section-header">
   <h2 class="section-title">{$t('tracks.header', { values: { count: filteredTracks.length } })}</h2>
   <div class="filters-group">
@@ -137,19 +137,22 @@
   </div>
 {/if}
 
-<!-- ⭐ Toolbar repensée pour aligner Recherche + Pays -->
-<div class="toolbar" style="margin-top: 15px; margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: nowrap;">
-  <div class="search-input" style="flex: 1; min-width: 150px;">
-    <input type="text" placeholder={$t('tracks.search_placeholder')} bind:value={searchQuery} />
+<!-- ⭐ Toolbar alignée : Recherche à gauche, Filtres à droite -->
+<div class="toolbar" style="margin-top: 15px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+  <div class="search-input" style="flex: 1; min-width: 250px; max-width: 400px;">
+    <input type="text" placeholder={$t('tracks.search_placeholder')} bind:value={searchQuery} style="width: 100%;" />
   </div>
 
-  <select class="manufacturer-select" bind:value={selectedCountry} style="flex: 1; min-width: 140px;">
-    <option value="">{$t('tracks.all_countries')}</option>
-    {#each allCountries as country}
-      <option value={country}>{$t('countries.' + country.toLowerCase(), { default: country })}</option>
-    {/each}
-  </select>
+  <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+    <select class="manufacturer-select" bind:value={selectedCountry} style="min-width: 160px; width: auto;">
+      <option value="">{$t('tracks.all_countries')}</option>
+      {#each allCountries as country}
+        <option value={country}>{$t(country, { default: country })}</option>
+      {/each}
+    </select>
+  </div>
 </div>
+</div> <!-- ⭐ Fermeture du sticky-header-wrapper -->
 
 {#if !appState.acPath}
   <div style="padding: 30px; color: var(--text-secondary); text-align: center; border: 1px dashed var(--border); border-radius: var(--r); background: var(--bg-elevated); margin-top: 15px;">
@@ -177,7 +180,12 @@
         onclick={() => selectTrack(track)}
         oncontextmenu={(e) => { 
           e.preventDefault(); 
-          invoke('open_folder', { acPath: appState.acPath, folderType: 'tracks', folderId: track.id }).catch(err => console.error(err)); 
+          invoke('open_folder', { 
+            acPath: appState.acPath, 
+            documentsPath: appState.documentsPath, // ⭐ Ajout du paramètre manquant
+            folderType: 'tracks', 
+            folderId: track.id 
+          }).catch(err => console.error(err)); 
         }}
         role="button"
         tabindex="0"

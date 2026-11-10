@@ -5,11 +5,15 @@
   import { getWeatherIcon, translateWeatherName } from '$lib/utils/weatherUtils.js';
   import { t, locale } from 'svelte-i18n';
   import LanguagePicker from '$lib/components/LanguagePicker.svelte';
+  import ColorPicker from '$lib/components/ColorPicker.svelte';
   import { alert } from '$lib/stores/dialog.svelte'; // ⭐ On importe l'alerte QARL
-  
-  // ⭐ Gestion du thème (Sombre, Clair, Bureautique)
-  const savedTheme = typeof localStorage !== 'undefined' ? localStorage.getItem('qarl-theme') : null;
-  let currentTheme = $state(savedTheme || 'dark');
+  import { applyAccentColor, loadAccentState, applyBackgroundShade, GRAYSCALE_SHADES } from '$lib/utils/accentUtils.js';
+
+  // ⭐ Chargement de l'état d'accentuation (thème, couleur, intensité)
+  const accentState = loadAccentState();
+
+  // ⭐ Gestion du thème (Carbon, Cloud, Bureautique)
+  let currentTheme = $state(accentState.theme);
 
   // Appliquer le thème au chargement
   if (typeof document !== 'undefined') {
@@ -21,62 +25,53 @@
     document.documentElement.setAttribute('data-theme', theme);
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem('qarl-theme', theme);
+      localStorage.setItem('qarl_theme', theme); // ⭐ sync avec appState
     }
   }
 
   // ⭐ Gestion de la couleur d'accentuation
-  const savedAccent = typeof localStorage !== 'undefined' ? localStorage.getItem('qarl_accent') : null;
-  let accentColor = $state(savedAccent || '#319dd3');
+  let accentColor = $state(accentState.color);
 
-  function hexToRgb(hex: string) {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ? {
-      r: parseInt(result[1], 16),
-      g: parseInt(result[2], 16),
-      b: parseInt(result[3], 16)
-    } : { r: 49, g: 157, b: 211 };
-  }
+  // ⭐ Intensité de la couleur (0–100) : module uniquement les halos
+  let accentIntensity = $state(accentState.intensity);
 
-  function applyAccentColor(color: string, currentMode: string) {
-    if (typeof document === 'undefined') return;
-    let { r, g, b } = hexToRgb(color);
-
-    // ⭐ Adaptation selon le thème
-    if (currentMode === 'light') {
-      // En mode clair, on assombrit la couleur de 25% pour le contraste
-      r = Math.floor(r * 0.75);
-      g = Math.floor(g * 0.75);
-      b = Math.floor(b * 0.75);
-    } else {
-      // En mode sombre, on éclaircit la couleur de 15% pour le côté néon
-      r = Math.min(255, Math.floor(r * 1.15));
-      g = Math.min(255, Math.floor(g * 1.15));
-      b = Math.min(255, Math.floor(b * 1.15));
-    }
-
-    const adjustedHex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-    
-    document.documentElement.style.setProperty('--accent', adjustedHex);
-    document.documentElement.style.setProperty('--accent-rgb', `${r}, ${g}, ${b}`);
-    
-    // Couleur de survol (hover) : on éclaircit encore un peu en mode sombre, on assombrit en mode clair
-    const hoverR = currentMode === 'light' ? Math.max(0, r - 20) : Math.min(255, r + 20);
-    const hoverG = currentMode === 'light' ? Math.max(0, g - 20) : Math.min(255, g + 20);
-    const hoverB = currentMode === 'light' ? Math.max(0, b - 20) : Math.min(255, b + 20);
-    
-    document.documentElement.style.setProperty('--accent-hover', `rgb(${hoverR}, ${hoverG}, ${hoverB})`);
-    document.documentElement.style.setProperty('--accent-muted', `rgba(${r}, ${g}, ${b}, 0.12)`);
-    document.documentElement.style.setProperty('--accent-glow', `rgba(${r}, ${g}, ${b}, 0.4)`);
-    
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('qarl_accent', color);
-    }
-  }
-
-  // ⭐ Applique la couleur dès le chargement et à chaque changement de couleur OU de thème
+  // ⭐ Applique la couleur à chaque changement de couleur, thème ou intensité
   $effect(() => {
-    applyAccentColor(accentColor, currentTheme);
+    applyAccentColor(accentColor, currentTheme, accentIntensity);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('qarl_accent', accentColor);
+      localStorage.setItem('qarl_accent_intensity', String(accentIntensity));
+    }
   });
+
+  // ⭐ NOUVEAU : Gestion du fond (Nuances de gris)
+  let currentBgShade = $state(
+    typeof localStorage !== 'undefined' ? localStorage.getItem('qarl_bg_shade') || 'auto' : 'auto'
+  );
+
+  // ⭐ On applique le fond au chargement et à chaque changement
+  $effect(() => {
+    applyBackgroundShade(currentBgShade);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('qarl_bg_shade', currentBgShade);
+    }
+  });
+
+  // ⭐ NOUVEAU : État du panneau "réglages avancés" (Intensité + Fond)
+  // Replié par défaut pour alléger la Sidebar. L'état est mémorisé.
+  let showAdvancedSettings = $state(
+    typeof localStorage !== 'undefined'
+      ? localStorage.getItem('qarl_show_advanced_settings') === 'true'
+      : false
+  );
+
+  // ⭐ Bascule + persistance localStorage
+  function toggleAdvancedSettings() {
+    showAdvancedSettings = !showAdvancedSettings;
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('qarl_show_advanced_settings', String(showAdvancedSettings));
+    }
+  }
 
   // ⭐ Génération réactive de la grille
   let aiGrid = $derived.by(() => {
@@ -87,21 +82,30 @@
   // ⭐ Affichage météo pour la carte Session
   let weatherDisplay = $derived.by(() => {
     const w = appState.session.weather;
-    if (w.mode === 'existing_plan') {
-      if (w.existingPlanRandom) return $t('sidebar.plan_random');
-      const planName = w.existingPlan || $t('sidebar.plan_none');
-      // ⭐ Nettoyage du nom pour retirer le chemin et l'extension
-      const cleanName = planName.split('/').pop()?.replace('.json', '').replace(/_/g, ' ') || planName;
-      return `${$t('sidebar.plan_prefix')} ${cleanName}`;
+    
+    // ⭐ FIX : On gère le mode "pure_plan" qui regroupe les plans existants et custom
+    if (w.mode === 'pure_plan' || w.mode === 'existing_plan' || w.mode === 'custom_plan') {
+      
+      // Si on a un plan existant sélectionné
+      if (w.existingPlan) {
+        if (w.existingPlanRandom) return $t('sidebar.plan_random');
+        const planName = w.existingPlan;
+        const cleanName = planName.split('/').pop()?.replace('.json', '').replace(/_/g, ' ') || planName;
+        return `${$t('sidebar.plan_prefix')} ${cleanName}`;
+      }
+      
+      // Sinon, si c'est un plan personnalisé en cours de création
+      if (w.customPlanSteps && w.customPlanSteps.length > 0) {
+        const count = w.customPlanSteps.length;
+        const name = w.customPlanName || $t('sidebar.plan_unnamed');
+        return $t('sidebar.plan_custom', { values: { name, count } });
+      }
     }
+
     if (w.mode === 'schedule') {
       return $t('sidebar.schedule_display', { values: { count: w.scheduleSlots || 3 } });
     }
-    if (w.mode === 'custom_plan') {
-      const count = w.customPlanSteps.length;
-      const name = w.customPlanName || $t('sidebar.plan_unnamed');
-      return $t('sidebar.plan_custom', { values: { name, count } });
-    }
+
     // Mode static (fallback)
     const id = w.staticWeather || '';
     const icon = getWeatherIcon(id);
@@ -154,6 +158,7 @@
     try {
       await invoke('launch_race', {
         acPath: appState.acPath,
+        documentsPath: appState.documentsPath,
         carId: appState.selectedCar.id,
         skinId: appState.selectedCarSkin?.name || "",
         trackId: appState.selectedTrack.id,
@@ -190,27 +195,74 @@
       </div>
 
       <!-- Ligne 3 : Thèmes & Couleur -->
-      <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
-        <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">{$t('sidebar.label_theme')}</span>
-        <div class="theme-controls" style="gap: 8px;">
-          <!-- ⭐ Sélecteur de couleur -->
-          <label class="theme-picker" title={$t('sidebar.accent_color_tooltip')}>
-            <input type="color" bind:value={accentColor} />
-            <svg class="theme-picker-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg>
-          </label>
+      <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
+        <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap;">{$t('sidebar.label_theme')}</span>
+        <div class="theme-controls" style="gap: 6px; padding-right: 6px;">
+          <!-- ⭐ Sélecteur de couleur d'accentuation -->
+          <ColorPicker bind:value={accentColor} />
 
           <!-- ⭐ Menu déroulant de sélection du thème -->
           <select 
             bind:value={currentTheme} 
             onchange={(e) => setTheme(e.currentTarget.value)}
             class="ini-select"
-            style="width: auto; min-width: 110px; height: 34px; padding: 0 10px; cursor: pointer; font-size: 0.8rem; font-weight: 600;"
+            style="width: auto; min-width: 80px; height: 30px; padding: 0 4px; cursor: pointer; font-size: 0.75rem; font-weight: 600;"
             title={$t('sidebar.theme_tooltip')}
           >
-            <option value="dark">🌙 {$t('sidebar.theme_dark')}</option>
-            <option value="light">☀️ {$t('sidebar.theme_light')}</option>
+            <option value="dark">🌑 {$t('sidebar.theme_dark')}</option>
+            <option value="light">☁️ {$t('sidebar.theme_light')}</option>
             <option value="office">💼 {$t('sidebar.theme_office')}</option>
           </select>
+
+          <!-- ⭐ Bouton Réglages avancés : affiche/masque Intensité + Fond -->
+          <button
+            class="palette-toggle-btn"
+            class:active={showAdvancedSettings}
+            onclick={toggleAdvancedSettings}
+            title={$t('sidebar.toggle_advanced_settings', { default: 'Réglages avancés de couleur et de fond' })}
+            aria-expanded={showAdvancedSettings}
+            aria-label={$t('sidebar.toggle_advanced_settings', { default: 'Réglages avancés de couleur et de fond' })}
+          >
+            🔆
+          </button>
+        </div>
+      </div>
+
+      <!-- ⭐ Bloc pliable : Intensité + Fond (masqués par défaut) -->
+      <div class="advanced-settings" class:open={showAdvancedSettings}>
+        <div class="advanced-settings-inner">
+          <!-- ⭐ Ligne 4 : Intensité de la couleur d'accentuation -->
+          <div class="accent-intensity-row">
+            <span class="accent-intensity-label">{$t('sidebar.accent_intensity', { default: 'Intensité' })}</span>
+            <input 
+              type="range" 
+              min="0" 
+              max="100" 
+              step="1"
+              class="accent-intensity-slider"
+              bind:value={accentIntensity}
+              title={$t('sidebar.accent_intensity_tooltip', { default: "Ajuste l'intensité du halo de la couleur d'accentuation" })}
+            />
+            <span class="accent-intensity-value">{accentIntensity}%</span>
+          </div>
+
+          <!-- ⭐ Ligne 5 : Fond de l'application -->
+          <div class="accent-intensity-row">
+            <span class="accent-intensity-label">{$t('sidebar.bg_shade', { default: 'Fond' })}</span>
+            <div class="bg-shade-selector">
+              {#each GRAYSCALE_SHADES as shade}
+                <button
+                  class="bg-shade-btn {shade.id === 'auto' ? 'auto' : ''}"
+                  class:active={currentBgShade === shade.id}
+                  style={shade.hex !== 'auto' ? `background-color: ${shade.hex};` : ''}
+                  onclick={() => currentBgShade = shade.id}
+                  title={shade.label}
+                >
+                  {#if shade.id === 'auto'}Auto{/if}
+                </button>
+              {/each}
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -303,7 +355,7 @@
       <!-- ⭐ Plus d'affichage détaillé pour les plans personnalisés (géré dans l'onglet Météo) -->
 
       <!-- ⭐ Affichage pour les plans existants (chargés depuis l'onglet Météo) -->
-      {#if appState.session.weather.mode === 'existing_plan'}
+      {#if appState.session.weather.mode === 'existing_plan' || (appState.session.weather.mode === 'pure_plan' && appState.session.weather.existingPlan)}
         
         <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 0.72rem; font-weight: 600; margin-top: 6px; margin-bottom: 6px;">
           <span style="color: var(--accent); display: flex; align-items: center; gap: 4px;">
@@ -335,7 +387,7 @@
         {/if}
       
       <!-- ⭐ NOUVEAU : Affichage pour les plans personnalisés -->
-      {:else if appState.session.weather.mode === 'custom_plan'}
+      {:else if appState.session.weather.mode === 'custom_plan' || (appState.session.weather.mode === 'pure_plan' && appState.session.weather.customPlanSteps.length > 0)}
         {#if appState.session.weather.customPlanSteps && appState.session.weather.customPlanSteps.length > 0}
           <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 6px;">
             {#each appState.session.weather.customPlanSteps as step, index}

@@ -22,6 +22,7 @@ export const MODULES = [
   { id: 'smart_shadows',         label: 'csp.modules.smart_shadows.label',         category: 'graphics', description: 'csp.modules.smart_shadows.desc' },
   { id: 'smart_mirror',          label: 'csp.modules.smart_mirror.label',          category: 'graphics', description: 'csp.modules.smart_mirror.desc', disableable: false },
   { id: 'graphics_adjustments',  label: 'csp.modules.graphics_adjustments.label',  category: 'graphics', description: 'csp.modules.graphics_adjustments.desc', disableable: false },
+  { id: 'weather_fx',            label: 'csp.modules.weather_fx.label',            category: 'graphics', description: 'csp.modules.weather_fx.desc' },
 
   // CAMÉRA & VUE
   { id: 'neck',          label: 'csp.modules.neck.label',          category: 'camera', description: 'csp.modules.neck.desc' },

@@ -1,16 +1,52 @@
 /* ============================================================
+   POLICES EMBARQUÉES
+   ============================================================ */
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/Inter.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Roboto';
+  src: url('/fonts/Roboto.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Montserrat';
+  src: url('/fonts/Montserrat.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Poppins';
+  src: url('/fonts/Poppins.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  src: url('/fonts/SpaceGrotesk.woff2') format('woff2');
+  font-weight: 300 700;
+  font-display: swap;
+}
+
+/* ============================================================
    QACRL — Design Tokens
    ============================================================ */
 :root,
 :root[data-theme="dark"] {
-  --bg-root:      #0a0c12;
-  --bg-panel:     #0f1219;
-  --bg-elevated:  #14181f;
-  --bg-hover:     #1a1e27;
+  --font-main: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* ⭐ CARBON — fond très sombre, panneaux sensiblement plus clairs */
+  --bg-root:      #08090d;
+  --bg-panel:     #14171f;
+  --bg-elevated:  #1b1f2a;
+  --bg-hover:     #232836;
 
-  --border-subtle: rgba(255, 255, 255, 0.05);
-  --border:        rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.14);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border:        rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.16);
 
   --text-primary:   #eef0f6;
   --text-secondary: #98a0b5;
@@ -45,10 +81,11 @@
    THÈME CLAIR
    ============================================================ */
 :root[data-theme="light"] {
-  --bg-root:      #f0f2f7;
-  --bg-panel:     #ffffff;
-  --bg-elevated:  #f8f9fc;
-  --bg-hover:     #eef1f7;
+  /* ⭐ CLOUD — fond très clair, panneaux légèrement plus sombres */
+  --bg-root:      #f2f4f8;
+  --bg-panel:     #e8ebf1;
+  --bg-elevated:  #dde1e8;
+  --bg-hover:     #d2d6e0;
 
   --border-subtle: rgba(0, 0, 0, 0.06);
   --border:        rgba(0, 0, 0, 0.10);
@@ -78,7 +115,7 @@
    ============================================================ */
 :root[data-theme="office"] {
   /* Fond neutre, façon Windows / VS Code */
-  --bg-root:      #f3f3f3;
+  --bg-root:      #eaeaea; /* Un peu plus foncé que l'original */
   --bg-panel:     #ffffff;
   --bg-elevated:  #f9f9f9;
   --bg-hover:     #eaeaea;
@@ -220,7 +257,7 @@ body {
 
 /* ... ancien contenu de body suit ici (déjà présent) */
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif;
+  font-family: var(--font-main);
   font-size: 14px;
   line-height: 1.5;
   background: var(--bg-root);
@@ -278,8 +315,8 @@ body {
 .theme-controls {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding-right: 4px; /* ⭐ Empêche le bouton de déborder au survol */
+  gap: 6px;
+  padding-right: 8px; /* ⭐ Assez d'espace pour le halo au survol */
   flex-shrink: 0;
 }
 
@@ -322,18 +359,18 @@ body {
 }
 .theme-picker {
   position: relative;
-  width: 34px; height: 34px;
+  width: 28px; height: 28px;
   border-radius: 50%;
   background: var(--accent);
   cursor: pointer;
   flex-shrink: 0;
   transition: transform var(--t), box-shadow var(--t);
-  box-shadow: 0 0 0 1px rgba(255,255,255,0.1), 0 0 0 4px var(--accent-muted), 0 4px 12px var(--accent-glow);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.1), 0 0 0 3px var(--accent-muted), 0 4px 12px var(--accent-glow);
   display: flex; align-items: center; justify-content: center;
 }
 .theme-picker:hover {
   transform: scale(1.08);
-  box-shadow: 0 0 0 1px rgba(255,255,255,0.2), 0 0 0 5px var(--accent-muted), 0 6px 20px var(--accent-glow);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.2), 0 0 0 4px var(--accent-muted), 0 6px 20px var(--accent-glow);
 }
 .theme-picker input[type="color"] {
   position: absolute;
@@ -384,6 +421,41 @@ body {
 :root[data-theme="light"] .theme-toggle-icon-sun { display: none; }
 :root[data-theme="dark"] .theme-toggle-icon-moon { display: none; }
 :root[data-theme="dark"] .theme-toggle-icon-sun { display: block; }
+
+/* ============================================================
+   ⭐ SLIDER D'INTENSITÉ DE LA COULEUR D'ACCENTUATION (Sidebar)
+   ============================================================ */
+.accent-intensity-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.accent-intensity-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.accent-intensity-slider {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.accent-intensity-value {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 34px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
 
 /* ============================================================
    RECAP CARDS (Sidebar)
@@ -1038,6 +1110,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  box-shadow: var(--shadow-sm); /* ⭐ Ajout de l'ombre pour le relief */
 }
 .group-title {
   font-size: 0.72rem;
@@ -7142,4 +7215,355 @@ select:disabled, input:disabled {
   background: rgba(var(--accent-rgb), 0.6); /* ⭐ Prend la couleur du thème */
   border: 2px solid var(--accent);
   box-shadow: 0 0 15px var(--accent-glow), inset 0 0 10px var(--accent-glow);
+}
+
+/* ============================================================
+   ⭐ OMBRE GLOBALE POUR TOUS LES CONTENEURS
+   ============================================================ */
+.group,
+.recap-card,
+.help-card,
+.settings-search-group,
+.server-row,
+.preset-row,
+.plan-row,
+.session-history-item,
+.mods-history-group,
+.csp-module-row,
+.csp-opt-section,
+.card,
+.qacrl-ctrl-section,           /* ⭐ Sections de la page Contrôles */
+.qacrl-ctrl-device-row,        /* ⭐ Lignes de périphériques */
+.ini-section,                  /* ⭐ Sections de l'éditeur INI (Vidéo/Audio/Expert) */
+.pedal-card-wrapper,           /* ⭐ Si les pédales sont dans un wrapper */
+.track-preview-box,            /* ⭐ Boîtes de prévisualisation de circuit */
+.csp-install-card,             /* ⭐ Cartes du guide d'installation CSP */
+.csp-install-step,             /* ⭐ Étapes du guide d'installation */
+.csp-install-drop-zone,        /* ⭐ Zone de drop du guide */
+.csp-install-order-banner,     /* ⭐ Bandeau d'ordre du guide */
+.update-notes-wrap,            /* ⭐ Section des notes de mise à jour */
+.update-versions,              /* ⭐ Section des versions dans la modale de MAJ */
+.qacrl-dialog                { /* ⭐ Modales de dialogue (alert/confirm) */
+  box-shadow: var(--shadow-sm) !important;
+}
+
+/* ⭐ Ajustement spécifique pour les blocs qui doivent ressortir encore plus */
+.modal-content,
+.qacrl-dialog,
+.csp-install-modal-content {
+  box-shadow: var(--shadow-lg) !important;
+}
+
+/* ⭐ Ombre spécifique pour la roue et les pédales si nécessaire */
+.qacrl-ctrl-wheel-display, 
+.pedal-visual {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+}
+
+/* ============================================================
+   GRILLE POUR LES PARAMÈTRES (Optimisation de l'espace)
+   ============================================================ */
+.settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 16px;
+  align-items: stretch; /* Pour que toutes les cartes aient la même hauteur */
+}
+
+.settings-row > .group {
+  flex: 1 1 300px; /* Taille de base 300px, s'étire pour remplir */
+  margin-bottom: 0; /* On retire la marge du bas car c'est le gap de la row qui gère */
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-row > .group.full-width {
+  flex: 1 1 100%;
+}
+
+/* Pousse les boutons tout en bas de leur carte pour un alignement parfait */
+.settings-row > .group > button {
+  margin-top: auto;
+}
+
+/* ⭐ Barre de filtres fixe pour les Voitures et Circuits */
+.sticky-header-wrapper {
+  position: sticky;
+  top: -24px; /* Remonte pour annuler le padding du parent */
+  z-index: 50;
+  background: var(--bg-root);
+  padding-top: 24px; 
+  padding-bottom: 10px;
+  margin-top: -24px;
+  margin-bottom: 10px;
+  /* Une ombre subtile qui apparaît quand on scrolle */
+  box-shadow: 0 10px 15px -10px rgba(0, 0, 0, 0.3); 
+}
+
+/* ============================================================
+   ⭐ SÉLECTEUR DE FOND (NUANCES DE GRIS)
+   ============================================================ */
+.bg-shade-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.bg-shade-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 1px solid rgba(128, 128, 128, 0.4);
+  cursor: pointer;
+  padding: 0;
+  transition: transform var(--t), box-shadow var(--t), border-color var(--t);
+  position: relative;
+}
+
+.bg-shade-btn:hover {
+  transform: scale(1.15);
+  z-index: 2;
+}
+
+.bg-shade-btn.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg-root), 0 0 0 3px var(--accent);
+  transform: scale(1.1);
+  z-index: 1;
+}
+
+/* Style spécifique pour le bouton Auto */
+.bg-shade-btn.auto {
+  width: auto;
+  min-width: 32px;
+  padding: 0 6px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.bg-shade-btn.auto.active {
+  color: var(--accent);
+  background: var(--accent-muted);
+}
+
+/* ============================================================
+   ⭐ Bloc pliable "Réglages avancés" (Intensité + Fond)
+   ------------------------------------------------------------
+   Technique : grid-template-rows 0fr → 1fr, qui anime la
+   hauteur sans connaître sa valeur réelle.
+   Le margin-top négatif compense le `gap: 16px` du parent
+   .app-header lorsque le bloc est replié, afin de ne pas
+   laisser d'espace vide.
+   ============================================================ */
+.advanced-settings {
+  display: grid;
+  grid-template-rows: 0fr;
+  overflow: hidden;
+  width: 100%;
+  margin-top: -16px; /* annule le gap du parent quand replié */
+  transition:
+    grid-template-rows 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    margin-top 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.advanced-settings.open {
+  grid-template-rows: 1fr;
+  margin-top: 0;
+}
+
+.advanced-settings-inner {
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ============================================================
+   ⭐ Bouton Palette (toggle des réglages avancés)
+   ============================================================ */
+.palette-toggle-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 0;
+  flex-shrink: 0;
+  font-family: inherit;
+  transition:
+    transform var(--t),
+    background var(--t),
+    border-color var(--t),
+    box-shadow var(--t);
+}
+
+.palette-toggle-btn:hover {
+  transform: scale(1.08);
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}
+
+.palette-toggle-btn.active {
+  background: var(--accent-muted);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-muted);
+}
+
+.palette-toggle-btn.active:hover {
+  box-shadow: 0 0 0 4px var(--accent-muted), 0 0 12px var(--accent-glow);
+}
+
+/* ============================================================
+   ⭐ NOUVEAU SÉLECTEUR DE COULEUR (POPOVER)
+   ============================================================ */
+.custom-color-picker {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.color-popover {
+  position: fixed; /* ⭐ On passe en fixed pour ignorer les parents */
+  z-index: 99999;  /* ⭐ Au-dessus de tout */
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-lg);
+  padding: 12px;
+  width: 190px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: colorPopoverIn 0.15s ease-out;
+  transform-origin: top center; /* ⭐ S'ouvre depuis le haut */
+}
+
+/* ⭐ Nouvelle animation propre, sans décalage */
+@keyframes colorPopoverIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.color-popover-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  letter-spacing: 0.5px;
+}
+
+.color-popover-close {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 0;
+  font-size: 1rem;
+}
+.color-popover-close:hover {
+  color: var(--text-primary);
+}
+
+.color-popover-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.native-picker-wrap {
+  width: 100%;
+  height: 45px; /* ⭐ Réduit de 80px à 45px */
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.native-picker-wrap input[type="color"] {
+  width: 100%;
+  height: 100%;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  background: transparent;
+}
+
+.color-inputs {
+  display: flex;
+  gap: 6px; /* ⭐ Un peu moins d'espace entre l'input et la pipette */
+  align-items: center;
+  width: 100%;
+}
+
+.hex-input {
+  flex: 1;
+  min-width: 0;
+  height: 34px; 
+  padding: 0 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text-primary);
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  text-align: center;
+  box-sizing: border-box;
+}
+.hex-input:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-muted);
+}
+
+/* (bloc pipette supprimé) */
+
+.preset-swatches {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px; /* ⭐ Un peu plus serré */
+  justify-items: center;
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.swatch {
+  width: 22px; /* ⭐ Plus petit */
+  height: 22px;
+  border-radius: 6px; /* ⭐ Carré arrondi */
+  border: none;
+  cursor: pointer;
+  transition: transform var(--t), box-shadow var(--t);
+  padding: 0;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.swatch:hover {
+  transform: scale(1.15);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
+/* ⭐ Indicateur visuel adapté au carré arrondi */
+.swatch.active {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 2px var(--bg-panel), 0 0 0 4px var(--accent);
 }

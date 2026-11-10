@@ -106,7 +106,10 @@
             if (currentSec === 'POST_PROCESS') {
               if (k === 'DOF') videoData.post_process.dof = parseInt(v);
               if (k === 'ENABLED') videoData.post_process.enabled = v === '1';
-              if (k === 'FILTER') videoData.post_process.filter = v;
+              if (k === 'FILTER') {
+                // ⭐ On nettoie la valeur lue (retire les .ini et les espaces)
+                videoData.post_process.filter = v.replace('.ini', '').trim();
+              }
               if (k === 'FXAA') videoData.post_process.fxaa = v === '1';
               if (k === 'GLARE') videoData.post_process.glare = parseInt(v);
               if (k === 'HEAT_SHIMMER') videoData.post_process.heatShimmer = v === '1';
@@ -134,9 +137,16 @@
       
       if (implOption) {
         const impl = String(implOption.value).trim().toLowerCase();
-        if (impl === 'pure') videoData.weatherFx.style = 'pure';
-        else if (impl === 'pure lcs') videoData.weatherFx.style = 'lcs';
-        else videoData.weatherFx.style = 'default';
+        if (impl === 'pure') {
+          videoData.weatherFx.style = 'pure';
+          appState.session.weather.weatherFxStyle = 'pure';
+        } else if (impl === 'pure lcs') {
+          videoData.weatherFx.style = 'lcs';
+          appState.session.weather.weatherFxStyle = 'lcs';
+        } else {
+          videoData.weatherFx.style = 'default';
+          appState.session.weather.weatherFxStyle = 'default';
+        }
       } else {
         console.warn("⚠️ IMPLEMENTATION option not found in weather_fx.ini");
       }
@@ -245,7 +255,7 @@ WIDTH=${v.video.width}
   // ⭐ Fonctions des Presets Vidéo
   async function loadVideoPresets() {
     try {
-      videoPresets = await invoke<string[]>('list_video_presets');
+      videoPresets = await invoke<string[]>('list_video_presets', { documentsPath: appState.documentsPath });
     } catch (e) {
       console.warn("Erreur chargement presets vidéo:", e);
     }
@@ -268,7 +278,7 @@ WIDTH=${v.video.width}
       const fullContent = content + `\n[WEATHER_FX]\nIMPLEMENTATION=${implValue}\n`;
       
       // 4. On sauvegarde le tout
-      await invoke('save_video_preset', { name: newPresetName.trim(), content: fullContent });
+      await invoke('save_video_preset', { documentsPath: appState.documentsPath, name: newPresetName.trim(), content: fullContent });
       
       showSaveAsVideo = false;
       newPresetName = '';
@@ -307,7 +317,7 @@ WIDTH=${v.video.width}
     if (!selectedPreset) return;
     if (confirm($t('video.presets.delete_confirm'))) {
       try {
-        await invoke('delete_video_preset', { name: selectedPreset });
+        await invoke('delete_video_preset', { documentsPath: appState.documentsPath, name: selectedPreset });
         selectedPreset = '';
         await loadVideoPresets();
       } catch (e) {
@@ -330,9 +340,29 @@ WIDTH=${v.video.width}
     }
   });
 
+  // ⭐ NOUVEAU : On recharge les données dès que le chemin AC devient disponible
+  // (utile après le SetupWizard au premier lancement)
+  $effect(() => {
+    if (appState.acPath && appState.documentsPath) {
+      loadPpfilters();
+      loadVideoIni();
+    }
+  });
+
+    // ⭐ NOUVEAU : Sync de l'interface vers appState
+  $effect(() => {
+    if (appState.session && appState.session.weather) {
+      appState.session.weather.weatherFxStyle = videoData.weatherFx.style;
+    }
+  });
+
+
   onMount(() => {
-    loadVideoIni();
-    loadPpfilters();
+    // On garde l'appel initial au cas où les chemins seraient déjà configurés au démarrage
+    if (appState.acPath && appState.documentsPath) {
+      loadVideoIni();
+      loadPpfilters();
+    }
     loadVideoPresets(); // ⭐ Chargement des presets
 
     // ⭐ Écouteur pour recharger l'onglet Vidéo quand un profil CSP est importé
@@ -427,14 +457,17 @@ WIDTH=${v.video.width}
             <input type="checkbox" bind:checked={videoData.post_process.enabled} /> {$t('video.enable')}
           </label>
         </div>
-        <select class="ini-select" style="width: 100%; font-weight: 700;" bind:value={videoData.post_process.filter}>
-          {#each availableFilters as filter}
-            <option value={filter}>{filter}</option>
-          {/each}
-          {#if videoData.post_process.filter && !availableFilters.includes(videoData.post_process.filter)}
-            <option value={videoData.post_process.filter}>{videoData.post_process.filter} ({$t('audio.not_found')})</option>
-          {/if}
-        </select>
+        <div style="display: flex; gap: 8px;">
+          <select class="ini-select" style="flex: 1; font-weight: 700;" bind:value={videoData.post_process.filter}>
+            {#each availableFilters as filter}
+              <option value={filter}>{filter}</option>
+            {/each}
+            {#if videoData.post_process.filter && !availableFilters.some(f => f.toLowerCase() === videoData.post_process.filter.trim().toLowerCase() || f.toLowerCase() === videoData.post_process.filter.replace('.ini', '').trim().toLowerCase())}
+              <option value={videoData.post_process.filter}>{videoData.post_process.filter} ({$t('audio.not_found')})</option>
+            {/if}
+          </select>
+          <button class="filter-btn" onclick={loadPpfilters} style="padding: 0 12px; height: 100%;" title="Rafraîchir la liste des filtres">🔄</button>
+        </div>
       </div>
     </div>
     

@@ -24,7 +24,26 @@
     if (currentIdx < totalSteps - 1) {
       goToStep(currentIdx + 1);
     } else {
-      markSetupCompleted();
+      finishSetup();
+    }
+  }
+
+  // ⭐ NOUVELLE FONCTION : Appelée par Step6Recap ET par handleContinue
+  async function finishSetup() {
+    await alert(
+      $t('setup.reboot_required_msg', { default: "L'installation est terminée !\n\nVeuillez redémarrer QARL pour que toutes les météos et les filtres PP soient correctement chargés." }),
+      $t('setup.reboot_required_title', { default: "Redémarrage nécessaire" }),
+      "info"
+    );
+    
+    markSetupCompleted();
+    
+    // ⭐ On utilise l'API Tauri pour forcer un vrai rechargement de la WebView (équivalent F5)
+    try {
+      await getCurrentWindow().reload();
+    } catch (e) {
+      // Fallback au cas où l'API Tauri échoue
+      window.location.reload();
     }
   }
 
@@ -35,7 +54,7 @@
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { invoke } from '@tauri-apps/api/core';
   import { appState } from '$lib/stores/appState.svelte.js';
-  import { confirm } from '$lib/stores/dialog.svelte';
+  import { confirm, alert } from '$lib/stores/dialog.svelte';
 
   // ⭐ État pour savoir si la config AC est incomplète
   let hasError = $state(false);
@@ -122,8 +141,8 @@
       </div>
 
       <div class="setup-body">
-        <!-- ⭐ Avertissement conditionnel -->
-        {#if hasError}
+        <!-- ⭐ Avertissement conditionnel (caché sur l'étape 1 pour éviter le doublon) -->
+        {#if hasError && currentIdx !== 1}
           <div style="background: rgba(229, 115, 115, 0.1); border: 1px solid rgba(229, 115, 115, 0.3); padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; color: #e57373; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 8px; line-height: 1.4;">
             {$t('setup.warning_ac_required')}
           </div>
@@ -140,7 +159,7 @@
         {:else if currentIdx === 4}
           <Step4Csp onContinue={handleContinue} />
         {:else if currentIdx === 5}
-          <Step6Recap onFinish={markSetupCompleted} />
+          <Step6Recap onFinish={finishSetup} />
         {/if}
       </div>
 
@@ -165,3 +184,19 @@
     </div>
   </div>
 {/if}
+
+<style>
+  /* ⭐ FORCE LA TAILLE POUR ÉVITER LES SAUTS */
+  .setup-modal {
+    min-width: 800px;
+    min-height: 700px; /* Assez grand pour contenir l'étape CSP sans sauter */
+    max-height: 90vh;  /* Ne dépasse pas l'écran */
+    display: flex;
+    flex-direction: column;
+  }
+
+  .setup-body {
+    flex: 1; /* Le corps prend tout l'espace disponible */
+    overflow-y: auto; /* Scroll interne si le contenu est trop grand (ex: installation en cours) */
+  }
+</style>

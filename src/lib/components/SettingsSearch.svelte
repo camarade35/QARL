@@ -72,6 +72,13 @@
     SATURATION: { LEVEL: 'video.label_saturation_pct' }
   };
 
+  // ⭐ Mapping Launcher (pour la langue du jeu)
+  const LAUNCHER_MAP: Record<string, Record<string, string>> = {
+    WINDOW: {
+      LANGUAGE: 'settings.general.ac_language_label'
+    }
+  };
+
   function parseIniIntoEntries(
     content: string, filename: string, tab: string,
     mapping: Record<string, Record<string, string>>
@@ -177,6 +184,14 @@
       entries.push(...parseIniIntoEntries(videoContent, 'video.ini', 'subtab-video', VIDEO_MAP));
     } catch (e) { console.warn('video load', e); }
 
+    // ⭐ Launcher (Langue)
+    try {
+      const launcherContent = await invoke<string>('read_ini_file', {
+        documentsPath: appState.documentsPath, filename: 'launcher.ini'
+      });
+      entries.push(...parseIniIntoEntries(launcherContent, 'launcher.ini', 'subtab-general', LAUNCHER_MAP));
+    } catch (e) { console.warn('launcher load', e); }
+
     // Controls
     try {
       const controlsContent = await invoke<string>('read_controls_ini', {
@@ -225,6 +240,19 @@
         entries.push(...cspResults.flat());
       } catch (e) { console.warn('csp list', e); }
     }
+
+    // ⭐ Ajout du Guide Visuel dans l'index de recherche
+    entries.push({
+      file: 'QARL',
+      section: 'HELP',
+      key: 'GUIDE',
+      value: '',
+      tab: 'subtab-help',
+      groupKey: 'guide',
+      labelKey: 'settings.help.guide.title',
+      labelDefault: 'Visual Guide',
+      cspFile: null
+    });
 
     allEntries = entries;
     loaded = true;

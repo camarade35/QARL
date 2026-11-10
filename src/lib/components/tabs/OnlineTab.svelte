@@ -103,6 +103,36 @@
   let editName = $state('');
   let editIp = $state('');
 
+  // ⭐ État pour l'association du protocole
+  let isAssociated = $state(false);
+
+  // ⭐ Vérifier l'état au chargement
+  $effect(() => {
+    async function checkStatus() {
+      try {
+        isAssociated = await invoke<boolean>('get_protocol_status');
+      } catch (e) {
+        console.error("Erreur de vérification du protocole:", e);
+      }
+    }
+    checkStatus();
+  });
+
+  async function toggleAssociation() {
+    try {
+      if (isAssociated) {
+        await invoke('dissociate_protocol');
+        isAssociated = false;
+      } else {
+        await invoke('associate_protocol');
+        isAssociated = true;
+        alert($t('online.protocol_assoc_success'));
+      }
+    } catch (e) {
+      alert(String(e));
+    }
+  }
+
   // ⭐ Fonction utilitaire pour nettoyer les chemins bizarres (ex: "csp/.../D:/../ks_nordschleife")
   function cleanTrackName(raw: string) {
     if (!raw) return $t('common.unknown');
@@ -317,7 +347,8 @@
     let ip = '', httpPort = 0, password = '';
     
     const ipMatch = s.match(/[?&]ip=([^&\s]+)/i);
-    if (ipMatch) ip = decodeURIComponent(ipMatch[1]);
+    // ⭐ On enlève le ^ (caret) et les espaces qui pourraient traîner à cause de CMD
+    if (ipMatch) ip = decodeURIComponent(ipMatch[1]).replace(/\^/g, '').trim();
     
     const httpMatch = s.match(/[?&]httpPort=([^&\s]+)/i);
     if (httpMatch) httpPort = parseInt(httpMatch[1], 10) || 0;
@@ -373,22 +404,23 @@
   }
 
   async function pingAllServers() {
-    for (const server of servers) {
-      const key = server.ip + ':' + server.port;
-      if (serverInfos[key]) continue; // Si on a déjà les infos, on saute
+    // ⭐ On filtre pour ne garder que les serveurs qui n'ont pas encore été analysés
+    const serversToPing = servers.filter(server => !serverInfos[server.ip + ':' + server.port]);
 
+    // ⭐ On lance TOUTES les requêtes en même temps au lieu de les faire une par une
+    await Promise.all(serversToPing.map(async (server) => {
+      const key = server.ip + ':' + server.port;
       try {
         const start = Date.now();
-        // On récupère les détails du serveur
         const info = await invoke<any>('get_server_details', { ip: server.ip, httpPort: server.port });
         const ms = Date.now() - start;
         
         pingStatus[key] = { ms, status: 'ok' };
-        serverInfos[key] = info; // ⭐ On sauvegarde les infos (track, cars, etc.)
+        serverInfos[key] = info;
       } catch (e) {
         pingStatus[key] = { ms: null, status: 'fail' };
       }
-    }
+    }));
   }
 
   function handlePasteLink() {
@@ -606,6 +638,7 @@
 
       await invoke('join_server', {
         acPath: appState.acPath,
+        documentsPath: appState.documentsPath,
         ip: selectedServer.ip,
         // ⭐ On prend le port de jeu (UDP) qui est 'port' dans /INFO ou 'gamePort' dans /api/details
         port: serverDetails?.gamePort || serverDetails?.port || selectedServer.port,
@@ -613,7 +646,7 @@
         httpPort: serverDetails?.httpPort || serverDetails?.cport || selectedServer.port,
         carId: selectedCar.id,
         skinId: selectedSkin ? selectedSkin.name : "",
-        onlineName: appState.playerName || "Player",
+        onlineName: appState.onlineName || appState.driverName || "Player",
         steamId: appState.steamId || "", 
         serverName: selectedServer.name,
         track: trackId,        // ⭐ Ex: "ks_nordschleife"
@@ -642,11 +675,44 @@
   $effect(() => {
     chargerServeurs(false);
   });
+
+  // ⭐ Écoute du Deep Link pour ouvrir automatiquement la modale
+  $effect(() => {
+    const handleDeepLink = (e: any) => {
+      const url = e.detail?.url;
+      if (!url) return;
+
+      console.log('🔗 OnlineTab traite le lien:', url);
+
+      // On utilise la fonction parseServerLink existante
+      const parsed = parseServerLink(url);
+      if (parsed) {
+        // On ouvre la modale de connexion avec les infos extraites
+        openJoinModal({ 
+          id: 'deeplink_' + Date.now(), 
+          ip: parsed.ip, 
+          port: parsed.httpPort || parsed.port, // On s'assure d'avoir un port
+          name: parsed.ip,
+          source: 'deeplink'
+        });
+      } else {
+        alert($t('online.error_format_link'));
+      }
+    };
+
+    window.addEventListener('qarl-process-deep-link', handleDeepLink);
+    return () => window.removeEventListener('qarl-process-deep-link', handleDeepLink);
+  });
 </script>
 
 <!-- PARTIE HAUTE : Coller un lien & Ajouter manuellement -->
 <div class="group">
-  <div class="group-title">{$t('online.paste_title')}</div>
+  <div class="group-title" style="display: flex; justify-content: space-between; align-items: center;">
+    <span>{$t('online.paste_title')}</span>
+    <button class="btn-secondary" onclick={toggleAssociation} style="font-size: 0.75rem; padding: 4px 10px; height: auto;">
+      {isAssociated ? '🔓 DISSOCIER' : '🔗 ASSOCIER'}
+    </button>
+  </div>
   <div class="row">
     <div class="field" style="flex: 3;">
       <input type="text" bind:value={pastedLink} placeholder={$t('online.paste_placeholder')} />
@@ -885,6 +951,7 @@
           {$t('online_servers.loading_details')}
         </div>
       {:else if serverDetails}
+        {@const trackInfo = getTrackDisplay(serverDetails.track)}
         
         <!-- INFOS SERVEUR -->
         <div class="server-join-info">
@@ -894,11 +961,15 @@
           </div>
           <div class="item">
             <span class="label">{$t('online_servers.info_track')}</span>
-            <span class="value">{serverDetails.track} {serverDetails.track_config ? `(${serverDetails.track_config})` : ''}</span>
+            <span class="value">{trackInfo.name} {serverDetails.track_config ? `(${serverDetails.track_config})` : ''}</span>
           </div>
           <div class="item">
             <span class="label">{$t('online_servers.info_players')}</span>
-            <span class="value">{serverDetails.clients || serverDetails.players || 0} / {serverDetails.maxclients || serverDetails.max_players || 0}</span>
+            <span class="value">
+              {typeof serverDetails.clients === 'number' ? serverDetails.clients : (typeof serverDetails.players === 'number' ? serverDetails.players : 0)} 
+              / 
+              {typeof serverDetails.maxclients === 'number' ? serverDetails.maxclients : (typeof serverDetails.max_players === 'number' ? serverDetails.max_players : 0)}
+            </span>
           </div>
           <div class="item">
             <span class="label">{$t('online_servers.info_password')}</span>

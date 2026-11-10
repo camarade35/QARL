@@ -1,6 +1,6 @@
 [package]
 name = "qarl"
-version = "0.1.0"
+version = "1.0.0"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2024"
@@ -26,13 +26,15 @@ tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 dirs = "5.0"
-unarc-rs = "0.6.3"
 tauri-plugin-window-state = "2"
 reqwest = { version = "0.11", features = ["json"] }
+tauri-plugin-deep-link = "2"
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 cpal = "0.15"
 tokio = { version = "1", features = ["full"] }
 scraper = "0.19"
 notify = "6.1"
+unarc-rs = "0.6.3"
 
 # ⭐ Ajout pour la détection native des périphériques
 [target.'cfg(windows)'.dependencies]

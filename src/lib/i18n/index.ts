@@ -4,9 +4,11 @@ import { register, init, locale } from 'svelte-i18n';
 // Le chargement du JSON est lazy (fait au changement de locale)
 register('fr', () => import('./locales/fr.json'));
 register('en', () => import('./locales/en.json'));
-register('es', () => import('./locales/es.json')); // ⭐ Ajout de l'espagnol
+register('es', () => import('./locales/es.json'));
+register('it', () => import('./locales/it.json')); // ⭐ NOUVEAU
+register('de', () => import('./locales/de.json')); // ⭐ NOUVEAU
 
-const AVAILABLE = ['fr', 'en', 'es']; // ⭐ Ajout de 'es' dans la liste des langues acceptées
+const AVAILABLE = ['fr', 'en', 'es', 'it', 'de']; // ⭐ Ajout de it et de
 
 function getInitialLocale(): string {
   if (typeof localStorage === 'undefined') return 'fr';

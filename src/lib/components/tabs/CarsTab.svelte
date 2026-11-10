@@ -83,6 +83,8 @@
     return Array.from(countries).sort();
   });
 
+    // (Variable allYears supprimée)
+
   // ⭐ Fonction pour deviner la catégorie CM d'une voiture
   function getCarCMCategory(car: any) {
     const carClass = (car.car_class || '').toLowerCase();
@@ -118,6 +120,17 @@
         const cmCat = getCarCMCategory(c);
         if (cmCat !== selectedClass) return false;
       }
+
+            // (Filtre Année supprimé)
+
+      // ⭐ Filtre par Puissance
+      if (appState.carFilters.power) {
+        const p = c.bhp;
+        if (appState.carFilters.power === 'under_200' && p >= 200) return false;
+        if (appState.carFilters.power === '200_400' && (p < 200 || p > 400)) return false;
+        if (appState.carFilters.power === '400_600' && (p < 400 || p > 600)) return false;
+        if (appState.carFilters.power === 'over_600' && p <= 600) return false;
+      }
       
       if (appState.carFilters.tags.length > 0) {
         if (!c.tags || !appState.carFilters.tags.every((t: string) => c.tags.includes(t))) return false;
@@ -142,6 +155,7 @@
   }
 </script>
 
+<div class="sticky-header-wrapper">
 <div class="section-header">
   <h3 class="section-title">{$t('cars.header', { values: { count: filteredCars.length } })}</h3>
   <div class="filters-group">
@@ -176,32 +190,47 @@
   </div>
 {/if}
 
-<div class="toolbar" style="margin-top: 15px; display: grid; grid-template-columns: minmax(180px, 1.5fr) repeat(3, minmax(130px, 1fr)); gap: 10px;">
-  <div class="search-input">
-    <input type="text" placeholder={$t('cars.search_placeholder')} bind:value={searchQuery} />
+<div class="toolbar" style="margin-top: 15px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+  <!-- Recherche à gauche -->
+  <div class="search-input" style="flex: 1; min-width: 250px; max-width: 400px;">
+    <input type="text" placeholder={$t('cars.search_placeholder')} bind:value={searchQuery} style="width: 100%;" />
   </div>
-  
-  <select class="manufacturer-select" bind:value={selectedBrand}>
-    <option value="">{$t('cars.all_brands')}</option>
-    {#each allBrands as brand}
-      <option value={brand}>{brand}</option>
-    {/each}
-  </select>
 
-  <select class="manufacturer-select" bind:value={selectedCountry}>
-    <option value="">{$t('cars.all_countries')}</option>
-    {#each allCountries as country}
-      <option value={country}>{$t('countries.' + country.toLowerCase(), { default: country })}</option>
-    {/each}
-  </select>
+  <!-- Filtres à droite -->
+  <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+    <select class="manufacturer-select" bind:value={selectedBrand} style="min-width: 150px; width: auto;">
+      <option value="">{$t('cars.all_brands')}</option>
+      {#each allBrands as brand}
+        <option value={brand}>{brand}</option>
+      {/each}
+    </select>
 
-  <select class="manufacturer-select" bind:value={selectedClass}>
-    <option value="">{$t('cars.all_classes')}</option>
-    {#each CM_CATEGORIES as cat}
-      <option value={cat.id}>{$t(`cars.categories.${cat.id}`, { default: cat.id })}</option>
-    {/each}
-  </select>
+    <select class="manufacturer-select" bind:value={selectedCountry} style="min-width: 150px; width: auto;">
+      <option value="">{$t('cars.all_countries')}</option>
+      {#each allCountries as country}
+        <option value={country}>{$t(country, { default: country })}</option>
+      {/each}
+    </select>
+
+    <select class="manufacturer-select" bind:value={selectedClass} style="min-width: 150px; width: auto;">
+      <option value="">{$t('cars.all_classes')}</option>
+      {#each CM_CATEGORIES as cat}
+        <option value={cat.id}>{$t(`cars.categories.${cat.id}`, { default: cat.id })}</option>
+      {/each}
+    </select>
+
+        <!-- Filtre Année supprimé -->
+
+    <select class="manufacturer-select" bind:value={appState.carFilters.power} style="min-width: 160px; width: auto;">
+      <option value="">{$t('cars.all_powers')}</option>
+      <option value="under_200">{$t('cars.power_under_200')}</option>
+      <option value="200_400">{$t('cars.power_200_400')}</option>
+      <option value="400_600">{$t('cars.power_400_600')}</option>
+      <option value="over_600">{$t('cars.power_over_600')}</option>
+    </select>
+  </div>
 </div>
+</div> <!-- ⭐ Fermeture du sticky-header-wrapper -->
 
 {#if !appState.acPath}
   <div style="padding: 30px; color: var(--text-secondary); text-align: center; border: 1px dashed var(--border); border-radius: var(--r); background: var(--bg-elevated); margin-top: 20px;">
@@ -223,7 +252,12 @@
       onclick={() => handleCarClick(car)}
       oncontextmenu={(e) => { 
         e.preventDefault(); 
-        invoke('open_folder', { acPath: appState.acPath, folderType: 'cars', folderId: car.id }).catch(err => console.error(err)); 
+        invoke('open_folder', { 
+          acPath: appState.acPath, 
+          documentsPath: appState.documentsPath, // ⭐ Ajout du paramètre manquant
+          folderType: 'cars', 
+          folderId: car.id 
+        }).catch(err => console.error(err)); 
       }}
       role="button"
       tabindex="0"

@@ -13,7 +13,7 @@
   
   let mediaFiles = $state<{ screens: any[], replays: any[] }>({ screens: [], replays: [] });
   let isLoading = $state(false);
-  let lightboxImage = $state<string | null>(null);
+  let lightboxIndex = $state(-1);
   
   // États pour la vue détaillée des replays
   let selectedReplay = $state<any>(null);
@@ -26,9 +26,9 @@
   let visiblePhotos = $state(48);
   let visibleReplays = $state(24);
 
-  // Accordéons
-  let openPhotoAccordions = $state<Record<string, boolean>>({ general: true });
-  let openReplayAccordions = $state<Record<string, boolean>>({ general: true, autosave: true });
+  // Accordéons (repliés par défaut, mémorisés)
+  let openPhotoAccordions = $state<Record<string, boolean>>({});
+  let openReplayAccordions = $state<Record<string, boolean>>({});
 
   // États des paramètres
   let replayIni = $state({ 
@@ -325,7 +325,7 @@
 
   function openFolder(file: any) {
     const dir = file.path.substring(0, file.path.lastIndexOf('/'));
-    invoke('open_folder', { acPath: appState.acPath, folderType: 'absolute', folderId: dir });
+    invoke('open_folder', { acPath: appState.acPath, documentsPath: appState.documentsPath, folderType: 'absolute', folderId: dir });
   }
 
   $effect(() => {
@@ -342,10 +342,25 @@
       loadData();
     }).then(u => unlistenThumbs = u);
 
-    // ⭐ NOUVEAU : On recharge quand AC se ferme (pour avoir les nouveaux ralentis)
+    // On recharge quand AC se ferme (pour avoir les nouveaux ralentis)
     listen('ac-closed', () => {
       loadData();
     }).then(u => unlistenClosed = u);
+
+    // ⭐ Restauration de l'état des accordéons (MÊME LOGIQUE QUE CSP)
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const savedPhoto = localStorage.getItem('qarl_media_photo_categories');
+        if (savedPhoto) {
+          openPhotoAccordions = JSON.parse(savedPhoto);
+        }
+
+        const savedReplay = localStorage.getItem('qarl_media_replay_categories');
+        if (savedReplay) {
+          openReplayAccordions = JSON.parse(savedReplay);
+        }
+      } catch (e) {}
+    }
 
     return () => { 
       if (unlistenThumbs) unlistenThumbs(); 
@@ -362,20 +377,65 @@
 
   function togglePhotoAccordion(key: string) {
     openPhotoAccordions[key] = !openPhotoAccordions[key];
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('qarl_media_photo_categories', JSON.stringify(openPhotoAccordions));
+    }
   }
+  
   function toggleReplayAccordion(key: string) {
     openReplayAccordions[key] = !openReplayAccordions[key];
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('qarl_media_replay_categories', JSON.stringify(openReplayAccordions));
+    }
   }
 
   // ⭐ Traduit un hint INI en utilisant la clé i18n (fallback sur l'anglais brut si absente)
-  function tHint(key: string, fallback: string | undefined): string | undefined {
+    function tHint(key: string, fallback: string | undefined): string | undefined {
     if (!fallback) return undefined;
     const i18nKey = `media.hints.${key}`;
     const translated = $t(i18nKey);
-    // svelte-i18n retourne la clé brute si elle n'existe pas
     return translated === i18nKey ? fallback : translated;
   }
+
+  // ⭐ NOUVEAU : Liste des photos actuellement affichées (pour la navigation)
+  let displayedPhotos = $derived(mediaFiles.screens.slice(0, visiblePhotos));
+
+  // ⭐ NOUVEAU : Fonctions de navigation pour la Lightbox
+  function openLightbox(index: number) {
+    lightboxIndex = index;
+  }
+
+  function closeLightbox() {
+    lightboxIndex = -1;
+  }
+
+  function nextPhoto(e?: Event) {
+    if (e) e.stopPropagation();
+    if (lightboxIndex < displayedPhotos.length - 1) {
+      lightboxIndex++;
+    } else {
+      lightboxIndex = 0; // Boucler à la fin
+    }
+  }
+
+  function prevPhoto(e?: Event) {
+    if (e) e.stopPropagation();
+    if (lightboxIndex > 0) {
+      lightboxIndex--;
+    } else {
+      lightboxIndex = displayedPhotos.length - 1; // Boucler au début
+    }
+  }
+
+  function handleKeydown(e: KeyboardEvent) {
+    if (lightboxIndex === -1) return;
+    if (e.key === 'Escape') closeLightbox();
+    if (e.key === 'ArrowRight') nextPhoto();
+    if (e.key === 'ArrowLeft') prevPhoto();
+  }
 </script>
+
+<svelte:window on:keydown={handleKeydown} />
 
 <!-- Snippet réutilisable : Label avec tooltip natif au survol -->
 {#snippet optLabel(text: string, hint: string | undefined)}
@@ -549,8 +609,8 @@
         <div style="text-align: center; color: var(--text-tertiary); padding: 20px;">{$t('media.photo.no_photos')}</div>
       {:else}
         <div class="photo-grid">
-          {#each mediaFiles.screens.slice(0, visiblePhotos) as photo}
-            <div class="photo-card" onclick={() => lightboxImage = photo.path} oncontextmenu={(e) => { e.preventDefault(); openFolder(photo); }}>
+          {#each displayedPhotos as photo, index}
+            <div class="photo-card" onclick={() => openLightbox(index)} oncontextmenu={(e) => { e.preventDefault(); openFolder(photo); }}>
               <img src={convertFileSrc(photo.thumbnail_path)} alt={photo.name} loading="lazy" />
               <div class="photo-name" title={photo.name}>{photo.name}</div>
             </div>
@@ -772,9 +832,21 @@
   {/if}
 </div>
 
-{#if lightboxImage}
-  <div class="lightbox" onclick={() => lightboxImage = null}>
-    <img src={convertFileSrc(lightboxImage)} alt="Preview" />
+{#if lightboxIndex >= 0 && displayedPhotos[lightboxIndex]}
+  <div class="lightbox" onclick={closeLightbox}>
+    <!-- Bouton Précédent -->
+    <button class="lightbox-nav-btn prev" onclick={prevPhoto} title="Précédent (←)">‹</button>
+    
+    <div class="lightbox-content" onclick={(e) => e.stopPropagation()}>
+      <img src={convertFileSrc(displayedPhotos[lightboxIndex].path)} alt="Preview" />
+      <div class="lightbox-caption">
+        {displayedPhotos[lightboxIndex].name} 
+        <span style="opacity: 0.5; margin-left: 10px;">({lightboxIndex + 1} / {displayedPhotos.length})</span>
+      </div>
+    </div>
+
+    <!-- Bouton Suivant -->
+    <button class="lightbox-nav-btn next" onclick={nextPhoto} title="Suivant (→)">›</button>
   </div>
 {/if}
 
@@ -788,9 +860,44 @@
   .photo-card img { width: 100%; height: 130px; object-fit: cover; display: block; }
   .photo-name { padding: 8px; font-size: 0.72rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--bg-elevated); }
 
-  /* Lightbox */
-  .lightbox { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 9999; cursor: zoom-out; backdrop-filter: blur(5px); }
-  .lightbox img { max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 8px; box-shadow: 0 0 30px rgba(0,0,0,0.8); }
+  /* ⭐ NOUVEAUX STYLES POUR LA LIGHTBOX */
+  .lightbox {
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.92);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9999; backdrop-filter: blur(8px);
+    animation: fadeIn 0.2s ease-out;
+  }
+  
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  .lightbox-content {
+    display: flex; flex-direction: column; align-items: center;
+    max-width: 90vw; max-height: 90vh;
+  }
+
+  .lightbox-content img {
+    max-width: 90vw; max-height: 80vh; object-fit: contain;
+    border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+  }
+
+  .lightbox-caption {
+    color: #fff; font-size: 0.9rem; margin-top: 15px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+  }
+
+  .lightbox-nav-btn {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+    color: #fff; font-size: 3rem; width: 60px; height: 100px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; border-radius: 8px; transition: all 0.2s;
+    backdrop-filter: blur(4px);
+  }
+
+  .lightbox-nav-btn:hover { background: rgba(255,255,255,0.2); border-color: #fff; }
+  .lightbox-nav-btn.prev { left: 20px; padding-right: 5px; }
+  .lightbox-nav-btn.next { right: 20px; padding-left: 5px; }
 
   /* Liste replays Split View */
   .replay-split-layout {

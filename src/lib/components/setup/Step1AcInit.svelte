@@ -3,11 +3,13 @@
   import { invoke } from '@tauri-apps/api/core';
   import { onMount } from 'svelte';
   import { setupState } from '$lib/stores/setupState.svelte.js';
+  import { appState } from '$lib/stores/appState.svelte.js'; // ⭐ Import pour le chemin
 
   let { onContinue = () => {} } = $props();
 
   let status = $state<any>(null);
   let checking = $state(false);
+  let isLaunching = $state(false); // ⭐ Nouvel état pour le bouton
   let autoPoll: ReturnType<typeof setInterval> | null = null;
 
   async function checkStatus() {
@@ -31,10 +33,15 @@
   }
 
   async function launchAc() {
+    isLaunching = true;
     try {
       await invoke('launch_ac_only');
+      // On met le statut à null pour forcer un refresh visuel quand le jeu se ferme
+      status = null; 
     } catch (e) {
-      console.warn('Launch AC failed', e);
+      alert("Erreur lors du lancement d'AC via Steam : " + e);
+    } finally {
+      isLaunching = false;
     }
   }
 
@@ -85,8 +92,8 @@
   </div>
 
   <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
-    <button class="filter-btn" onclick={launchAc} style="padding: 10px 22px; background: var(--accent); color: #fff; border-color: var(--accent);">
-      {$t('setup.ac_init.launch_ac')}
+    <button class="filter-btn" onclick={launchAc} disabled={isLaunching} style="padding: 10px 22px; background: var(--accent); color: #fff; border-color: var(--accent); {isLaunching ? 'opacity: 0.5; cursor: wait;' : ''}">
+      {isLaunching ? '⏳ Lancement...' : $t('setup.ac_init.launch_ac')}
     </button>
     <button class="filter-btn" onclick={checkStatus} disabled={checking}>
       {checking ? '⏳' : $t('setup.ac_init.recheck')}

@@ -6,7 +6,7 @@
 
 <div class="titlebar" data-tauri-drag-region>
   <div class="titlebar-brand">
-    <img src="/favicon.png" alt="QARL" class="titlebar-logo" />
+    <img src="/assets/logo.png" alt="QARL" class="titlebar-logo" />
     <span class="titlebar-title">QARL - Quick Assetto Race Launcher</span>
   </div>
   <div class="titlebar-controls">

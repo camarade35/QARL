@@ -162,8 +162,8 @@
         if (cleanPlanName.startsWith('QARL_')) cleanPlanName = cleanPlanName.substring(5);
         cleanPlanName = cleanPlanName.replace(/_/g, ' ');
 
-        // On bascule en mode "Plan personnalisé" avec les données
-        appState.session.weather.mode = 'custom_plan';
+        // On bascule sur l'onglet "Créer un plan"
+        pureSubTab = 'custom';
         appState.session.weather.customPlanName = cleanPlanName + ' (Copie)';
         appState.session.weather.customPlanSteps = steps;
         
@@ -174,6 +174,7 @@
     }
   }
   let isSavingPlan = $state(false);
+  let pureSubTab = $state<'existing' | 'custom'>('existing'); // ⭐ Gère l'affichage interne
   
   // ⭐ NOUVEAU : Détection de ce qui est installé
   let capabilities = $state({ hasCsp: false, hasPure: false, hasSol: false });
@@ -184,24 +185,25 @@
     saveSession();
   });
 
-  onMount(async () => {
+  // ⭐ On extrait la logique dans une fonction réutilisable
+  async function loadWeatherData() {
     if (!appState.acPath) return;
+    
     try {
-      // ⭐ 1. Vérifier les capacités (CSP / Pure / Sol)
+      // 1. Vérifier les capacités (CSP / Pure / Sol)
       capabilities = await invoke('check_ac_capabilities', { acPath: appState.acPath });
 
       // 2. Charger les météos
       availableWeathers = await invoke<{ id: string, name: string }[]>('get_ac_weathers', { acPath: appState.acPath });
       
-      // 2. Charger les plans Pure (si existants)
+      // 3. Charger les plans Pure (si existants)
       availablePlans = await invoke<{ id: string, name: string }[]>('get_pure_plans', { acPath: appState.acPath });
 
-      // 3. Charger la config pureCtrl sauvegardée
+      // 4. Charger la config pureCtrl sauvegardée
       const pureCtrlSettings = await invoke<{
         autostart: boolean, last_used: boolean, live: boolean, start_wetness: number, start_puddles: number
-      }>('read_pure_ctrl', { acPath: appState.acPath });
+      }>('read_pure_ctrl', { documentsPath: appState.documentsPath });
 
-      // Si des paramètres existent, on les applique
       if (pureCtrlSettings) {
         appState.session.weather.pureCtrl = {
           autostart: pureCtrlSettings.autostart,
@@ -214,6 +216,21 @@
     } catch (e) {
       console.error("Error loading weather/plans:", e);
     }
+  }
+
+  // ⭐ NOUVEAU : On recharge les données dès que le chemin AC est disponible
+  // (utile après le SetupWizard au premier lancement)
+  $effect(() => {
+    if (appState.acPath) {
+      loadWeatherData();
+    }
+  });
+
+  // On garde l'appel au montage pour les lancements suivants (où le chemin est déjà là)
+  onMount(() => {
+    if (appState.acPath) {
+      loadWeatherData();
+    }
   });
 
   // ⭐ Sauvegarde de pureCtrl dans le disque AC
@@ -221,7 +238,7 @@
     if (!appState.acPath) return;
     try {
       await invoke('write_pure_ctrl', {
-        acPath: appState.acPath,
+        documentsPath: appState.documentsPath,
         settings: {
           autostart: appState.session.weather.pureCtrl.autostart,
           last_used: appState.session.weather.pureCtrl.lastUsed,
@@ -263,7 +280,7 @@
   function applyModeToPureCtrl() {
     const mode = appState.session.weather.mode;
     const ctrl = appState.session.weather.pureCtrl;
-    if (mode === 'existing_plan' || mode === 'custom_plan') {
+    if (mode === 'pure_plan') {
       ctrl.autostart = true;
       ctrl.lastUsed  = false;
       ctrl.live      = false;
@@ -310,8 +327,8 @@
       // On rafraîchit la liste des plans pour que le nouveau apparaisse
       availablePlans = await invoke<{ id: string, name: string }[]>('get_pure_plans', { acPath: appState.acPath });
 
-      // ⭐ On bascule immédiatement sur le mode "Plan existant" et on l'active
-      appState.session.weather.mode = 'existing_plan';
+      // ⭐ On bascule sur l'onglet "Mes plans" et on l'active
+      pureSubTab = 'existing';
       applyModeToPureCtrl();
       
       // On charge les détails pour la Sidebar
@@ -395,7 +412,7 @@
 
   async function loadSchedulePresets() {
     try {
-      schedulePresets = await invoke<string[]>('list_schedule_presets');
+      schedulePresets = await invoke<string[]>('list_schedule_presets', { documentsPath: appState.documentsPath });
     } catch (e) {
       console.warn("Error loading schedule presets", e);
     }
@@ -405,6 +422,7 @@
     if (!newSchedulePresetName.trim()) return;
     try {
       await invoke('save_schedule_preset', {
+        documentsPath: appState.documentsPath,
         name: newSchedulePresetName,
         data: {
           slots: appState.session.weather.scheduleSlots,
@@ -424,7 +442,7 @@
   async function loadSelectedSchedule() {
     if (!selectedSchedulePreset) return;
     try {
-      const data = await invoke<any>('load_schedule_preset', { name: selectedSchedulePreset });
+      const data = await invoke<any>('load_schedule_preset', { documentsPath: appState.documentsPath, name: selectedSchedulePreset });
       appState.session.weather.scheduleSlots = data.slots;
       appState.session.weather.scheduleTimePerSlot = data.time_per_slot;
       appState.session.weather.scheduleRandom = data.random;
@@ -439,7 +457,7 @@
     // ⭐ Ajout du await
     if (!selectedSchedulePreset || !await confirm($t('weather.schedule_presets.confirm_delete'), $t('common.delete'), 'warning')) return;
     try {
-      await invoke('delete_schedule_preset', { name: selectedSchedulePreset });
+      await invoke('delete_schedule_preset', { documentsPath: appState.documentsPath, name: selectedSchedulePreset });
       selectedSchedulePreset = '';
       await loadSchedulePresets();
     } catch (e) {
@@ -496,15 +514,18 @@
 
 <!-- ⭐ Conditions météo -->
 <div class="group">
-  <div class="group-title">{$t('weather.group_conditions')}</div>
+  <div class="group-title" style="display: flex; justify-content: space-between; align-items: center;">
+    <span>{$t('weather.group_conditions')}</span>
+    <button class="filter-btn" onclick={() => { loadWeatherData(); refreshPlans(); }} style="padding: 2px 8px; font-size: 0.7rem; height: auto;" title="Rafraîchir les météos et les plans">
+      🔄 Rafraîchir
+    </button>
+  </div>
   <div class="row">
-        <div class="field">
+    <div class="field">
       <label>{$t('weather.mode_label')}</label>
       <select bind:value={appState.session.weather.mode} onchange={applyModeToPureCtrl}>
         <option value="static">{$t('weather.mode_static')}</option>
-        <option value="schedule">{$t('weather.mode_schedule')}</option>
-        <option value="existing_plan">{$t('weather.mode_existing')}</option>
-        <option value="custom_plan">{$t('weather.mode_custom')}</option>
+        <option value="pure_plan">Plans Pure</option>
       </select>
     </div>
   </div>
@@ -522,7 +543,6 @@
                 <option value={weather.id}>{getWeatherIcon(weather.id)} {translateWeatherName(weather.id, weather.name, $locale)}</option>
               {/each}
             </optgroup>
-            
             {#if solWeathers.length > 0}
               <optgroup label={$t('weather.group_sol_pure')}>
                 {#each solWeathers as weather}
@@ -530,7 +550,6 @@
                 {/each}
               </optgroup>
             {/if}
-
             {#if otherWeathers.length > 0}
               <optgroup label={$t('weather.group_other')}>
                 {#each otherWeathers as weather}
@@ -544,7 +563,7 @@
     </div>
   {/if}
 
-  {#if appState.session.weather.mode === 'schedule'}
+  {#if false} <!-- ⭐ SCHEDULE DÉSACTIVÉ -->
     <div class="row">
       <div class="field">
         <label>{$t('weather.schedule.slots_count')}</label>
@@ -565,10 +584,7 @@
     {#each Array(appState.session.weather.scheduleSlots || 3) as _, i}
       <div class="row" style="align-items: center; gap: 10px; margin-top: 8px;">
         <label style="min-width: 60px;">{$t('weather.schedule.slot_label', { values: { n: i + 1 } })}</label>
-        <select 
-          bind:value={appState.session.weather.scheduleSlotValues[i]}
-          style="flex: 1;"
-        >
+        <select bind:value={appState.session.weather.scheduleSlotValues[i]} style="flex: 1;">
           {#each CSP_SCHEDULE_WEATHERS as weather}
             <option value={weather.index}>
               {getWeatherIcon(weather.id)} {translateWeatherName(weather.id, weather.id, $locale)}
@@ -578,25 +594,18 @@
       </div>
     {/each}
 
-    <!-- ⭐ Gestionnaire de presets de Schedule -->
+    <!-- Gestionnaire de presets de Schedule -->
     <div style="margin-top: 20px; padding: 14px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 6px;">
       <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 12px;">
         {$t('weather.schedule_presets.title')}
       </div>
       
       <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-        <input 
-          type="text" 
-          bind:value={newSchedulePresetName} 
-          placeholder={$t('weather.schedule_presets.placeholder')} 
-          style="flex: 1; min-width: 150px;"
-        />
+        <input type="text" bind:value={newSchedulePresetName} placeholder={$t('weather.schedule_presets.placeholder')} style="flex: 1; min-width: 150px;" />
         <button class="filter-btn" onclick={saveCurrentSchedule} disabled={!newSchedulePresetName.trim()} style="padding: 8px 16px; background: var(--accent); color: white; border-color: var(--accent);">
           {$t('weather.schedule_presets.save_btn')}
         </button>
-
         <div style="width: 1px; height: 20px; background: var(--border); margin: 0 4px;"></div>
-
         <select bind:value={selectedSchedulePreset} style="flex: 1; min-width: 150px; padding: 8px 12px;">
           <option value="">{$t('weather.schedule_presets.empty')}</option>
           {#each schedulePresets as p}
@@ -606,14 +615,65 @@
         <button class="filter-btn" onclick={loadSelectedSchedule} disabled={!selectedSchedulePreset} style="padding: 8px 16px;">
           {$t('weather.schedule_presets.load_btn')}
         </button>
-        <button class="filter-btn" onclick={deleteSelectedSchedule} disabled={!selectedSchedulePreset} title={$t('weather.schedule_presets.delete_title')} style="padding: 8px 12px; color: var(--danger); border-color: var(--border);">
+        <button class="filter-btn" onclick={deleteSelectedSchedule} disabled={!selectedSchedulePreset} style="padding: 8px 12px; color: var(--danger); border-color: var(--border);">
           🗑️
         </button>
       </div>
     </div>
   {/if}
+</div>
 
-  {#if appState.session.weather.mode === 'existing_plan'}
+<!-- ⭐ LE NOUVEAU GROUPE UNIFIÉ POUR PLANS PURE -->
+{#if appState.session.weather.mode === 'pure_plan'}
+<div class="group">
+  <div class="group-title">⚙️ Plans Pure & Paramètres</div>
+
+  <!-- 1. Paramètres PureCtrl -->
+  <div class="row" style="background: var(--bg-elevated); padding: 14px; border-radius: 8px; border: 1px solid var(--border-subtle);">
+    <div class="row">
+      <div class="field">
+        <label class="check">
+          <input type="checkbox" checked={appState.session.weather.pureCtrl.autostart} onclick={() => togglePureCtrl('autostart')} />
+          {$t('weather.pure_ctrl.autostart')}
+        </label>
+      </div>
+      <div class="field">
+        <label class="check">
+          <input type="checkbox" checked={appState.session.weather.pureCtrl.lastUsed} onclick={() => togglePureCtrl('lastUsed')} />
+          {$t('weather.pure_ctrl.last_used')}
+        </label>
+      </div>
+      <div class="field">
+        <label class="check">
+          <input type="checkbox" checked={appState.session.weather.pureCtrl.live} onclick={() => togglePureCtrl('live')} />
+          {$t('weather.pure_ctrl.live')}
+        </label>
+      </div>
+    </div>
+    <div class="row" style="margin-top: 14px;">
+      <div class="field">
+        <label>{$t('weather.pure_ctrl.start_wetness')}</label>
+        <input type="number" bind:value={appState.session.weather.pureCtrl.startWetness} min="1" max="10" />
+      </div>
+      <div class="field">
+        <label>{$t('weather.pure_ctrl.start_puddles')}</label>
+        <input type="number" bind:value={appState.session.weather.pureCtrl.startPuddles} min="1" max="10" />
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Séparateur / Onglets internes -->
+  <div style="display: flex; gap: 10px; margin-top: 10px; margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
+    <button class="filter-btn" class:active={pureSubTab === 'existing'} onclick={() => pureSubTab = 'existing'}>
+      📁 Mes plans existants
+    </button>
+    <button class="filter-btn" class:active={pureSubTab === 'custom'} onclick={() => pureSubTab = 'custom'}>
+      ➕ Créer un plan
+    </button>
+  </div>
+
+  <!-- 3. Affichage conditionnel -->
+  {#if pureSubTab === 'existing'}
     <div class="row" style="align-items: center; justify-content: space-between; margin-bottom: 10px;">
       <div class="field">
         <label class="check" style="margin-top: 0;">
@@ -643,8 +703,6 @@
                 {#if plan.start_time}
                   <span style="font-size: 0.75rem; font-weight: normal; color: var(--accent); background: var(--accent-muted); padding: 2px 6px; border-radius: 4px;">{$t('weather.existing.start_prefix', { values: { time: plan.start_time } })}</span>
                 {/if}
-                
-                <!-- ⭐ NOUVEAU : Badges Loop et TimeMult -->
                 {#if plan.time_mult && plan.time_mult > 1}
                   <span style="font-size: 0.75rem; font-weight: normal; color: var(--text-secondary); background: var(--bg-panel); border: 1px solid var(--border-subtle); padding: 2px 6px; border-radius: 4px;">⏱️ x{plan.time_mult}</span>
                 {/if}
@@ -653,11 +711,9 @@
                 {/if}
               </div>
               
-              <!-- ⭐ Affichage des étapes -->
               {#if plan.steps && plan.steps.length > 0}
                 <div style="display: flex; gap: 4px; flex-wrap: wrap;">
                   {#each plan.steps as step}
-                    <!-- ⭐ Même logique robuste que pour l'édition et la Sidebar -->
                     {@const index = step.weather_index}
                     {@const match = availableWeathers.find(w => w.id === step.weather_id) 
                                 || availableWeathers.find(w => w.id.startsWith(step.weather_id + "_"))
@@ -665,7 +721,6 @@
                                      w.id.startsWith(`sol_${index}_`) || w.id.startsWith(`pure_${index}_`) || 
                                      w.id.startsWith(`sfx_${index}_`) || w.id.startsWith(`${index}_`)
                                    ) : null)}
-                    <!-- ⭐ Fallback identique à la Sidebar si la météo n'est pas trouvée -->
                     {@const fallback = availableWeathers.length > 0 ? availableWeathers[0] : null}
                     {@const realId = match ? match.id : (fallback ? fallback.id : step.weather_id)}
                     {@const realName = match ? match.name : (fallback ? fallback.name : getWeatherNameFromIndex(step.weather_index))}
@@ -689,14 +744,12 @@
                 🗑️
               </button>
             </div>
-
           </div>
         {/each}
       </div>
     {/if}
-  {/if}
 
-  {#if appState.session.weather.mode === 'custom_plan'}
+  {:else if pureSubTab === 'custom'}
     <div class="row">
       <div class="field">
         <label>{$t('weather.custom.plan_name')}</label>
@@ -727,7 +780,6 @@
                   <option value={weather.id}>{getWeatherIcon(weather.id)} {translateWeatherName(weather.id, weather.name, $locale)}</option>
                 {/each}
               </optgroup>
-              
               {#if solWeathers.length > 0}
                 <optgroup label={$t('weather.group_sol_pure')}>
                   {#each solWeathers as weather}
@@ -735,7 +787,6 @@
                   {/each}
                 </optgroup>
               {/if}
-
               {#if otherWeathers.length > 0}
                 <optgroup label={$t('weather.group_other')}>
                   {#each otherWeathers as weather}
@@ -773,46 +824,6 @@
     </div>
   {/if}
 </div>
+{/if}<!-- Fermeture du groupe "Plans Pure" -->
 
-<!-- ⭐ Pure Ctrl (Affiché uniquement pour les modes qui l'utilisent) -->
-{#if appState.session.weather.mode === 'existing_plan' || appState.session.weather.mode === 'custom_plan'}
-<div class="group">
-  <div class="group-title">{$t('weather.pure_ctrl.group_title')}</div>
-  <div class="row">
-    <div class="field">
-      <label class="check">
-        <input type="checkbox"
-               checked={appState.session.weather.pureCtrl.autostart}
-               onclick={() => togglePureCtrl('autostart')} />
-        {$t('weather.pure_ctrl.autostart')}
-      </label>
-    </div>
-    <div class="field">
-      <label class="check">
-        <input type="checkbox"
-               checked={appState.session.weather.pureCtrl.lastUsed}
-               onclick={() => togglePureCtrl('lastUsed')} />
-        {$t('weather.pure_ctrl.last_used')}
-      </label>
-    </div>
-    <div class="field">
-      <label class="check">
-        <input type="checkbox"
-               checked={appState.session.weather.pureCtrl.live}
-               onclick={() => togglePureCtrl('live')} />
-        {$t('weather.pure_ctrl.live')}
-      </label>
-    </div>
-  </div>
-  <div class="row">
-    <div class="field">
-      <label>{$t('weather.pure_ctrl.start_wetness')}</label>
-      <input type="number" bind:value={appState.session.weather.pureCtrl.startWetness} min="1" max="10" />
-    </div>
-    <div class="field">
-      <label>{$t('weather.pure_ctrl.start_puddles')}</label>
-      <input type="number" bind:value={appState.session.weather.pureCtrl.startPuddles} min="1" max="10" />
-    </div>
-  </div>
-</div>
-{/if}
+<!-- Fin du fichier -->

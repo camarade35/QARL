@@ -44,6 +44,9 @@
   let capturingActionName = $state('');
   let isAssigning = false; // Verrou anti-double assignation
   
+  // ⭐ Nouveau : Option Hold Mode pour la modale
+  let capturingHoldMode = $state(false);
+  
   // ⭐ État pour basculer entre boîte en H et mode séquentiel
   let useHPattern = $state(true);
 
@@ -214,6 +217,14 @@
     capturingSection = sectionId;
     capturingActionName = actionName;
     isCapturing = true;
+
+    // ⭐ On lit si le Hold Mode est déjà actif dans le fichier INI
+    // (on vérifie aussi la section miroir pour les clignotants)
+    let targetSection = sectionId;
+    if (sectionId === '__EXT_TURNLIGHTS_LEFT') targetSection = '__EXT_TURNSIGNAL_LEFT';
+    if (sectionId === '__EXT_TURNLIGHTS_RIGHT') targetSection = '__EXT_TURNSIGNAL_RIGHT';
+    
+    capturingHoldMode = parsedIni[targetSection]?.['HOLD_MODE'] === '1';
   }
 
   function closeCapture() {
@@ -288,39 +299,47 @@
   function getAcJoyIndex(webviewIndex: number, gp: Gamepad | null): number {
     if (!gp || !parsedIni['CONTROLLERS']) return -1;
 
-    const pguid = getPguidFromGamepad(gp);
-    if (!pguid) return -1;
-
-    // ⭐ On utilise l'ordre DirectInput (dinputDevices) qui est fiable
-    const gamepads = navigator.getGamepads();
-    let occurrence = 0;
-    for (let i = 0; i < webviewIndex; i++) {
-      if (gamepads[i] && getPguidFromGamepad(gamepads[i]!) === pguid) {
-        occurrence++;
+    // Extraire le nom du gamepad sans les infos Vendor/Product
+    const gpName = gp.id.split(' (')[0].trim();
+    
+    // ⭐ 1. Fallback de sécurité : Recherche par nom du périphérique dans le fichier INI
+    const controllers = parsedIni['CONTROLLERS'];
+    for (const key in controllers) {
+      if (key.startsWith('CON')) {
+        const conIdx = parseInt(key.replace('CON', ''));
+        if (!isNaN(conIdx) && controllers[key] === gpName) {
+          return conIdx;
+        }
       }
     }
 
-    const matchingDevices = dinputDevices.filter(d => d.pguid.toUpperCase() === pguid.toUpperCase());
-    if (occurrence >= matchingDevices.length) return -1;
-
-    // ⭐ FIX FANATEC GHOST : Si Windows détecte un doublon (périphérique fantôme),
-    // la WebView a tendance à mettre le fantôme en premier. On inverse l'index de sélection
-    // pour que le "vrai" périphérique récupère le bon numéro de JOY attendu par le controls.ini.
-    let targetDevice = matchingDevices[occurrence];
-    if (matchingDevices.length > 1) {
-        targetDevice = matchingDevices[matchingDevices.length - 1 - occurrence];
+    // Trouver le device DirectInput correspondant par nom (plus fiable que le faux PGUID)
+    let targetDevice = dinputDevices.find(d => d.name === gpName);
+    if (!targetDevice) {
+      targetDevice = dinputDevices.find(d => d.name.includes(gpName));
     }
 
-    // Le dinput_index correspond à l'ordre dans Windows (et donc dans le fichier CM)
-    const targetDinputIndex = targetDevice.dinput_index;
+    if (!targetDevice) return -1;
 
-    // On cherche dans le fichier INI si un CON correspond à cet index
-    const controllers = parsedIni['CONTROLLERS'];
+    // ⭐ 2. Recherche par PGUID réel (celui lu par Rust dans Windows)
+    const dinputPguid = targetDevice.pguid.toUpperCase();
     for (const key in controllers) {
-      if (key.startsWith('__IGUID')) {
-        const conIdx = parseInt(key.replace('__IGUID', ''));
-        if (!isNaN(conIdx) && conIdx === targetDinputIndex) {
+      if (key.startsWith('PGUID')) {
+        const conIdx = parseInt(key.replace('PGUID', ''));
+        if (!isNaN(conIdx) && controllers[key].toUpperCase() === dinputPguid) {
           return conIdx;
+        }
+      }
+    }
+
+    // ⭐ 3. Recherche par __IGUID (si présent)
+    if (targetDevice.dinput_index !== undefined) {
+      for (const key in controllers) {
+        if (key.startsWith('__IGUID')) {
+          const conIdx = parseInt(key.replace('__IGUID', ''));
+          if (!isNaN(conIdx) && conIdx === targetDevice.dinput_index) {
+            return conIdx;
+          }
         }
       }
     }
@@ -538,10 +557,51 @@
       parsedIni[section][type] = finalIndex.toString();
       parsedIni[section]['JOY'] = realJoyIndex.toString();
       
+      // ⭐ NOUVEAU : On ajoute les modificateurs requis par CSP (comme le fait CM)
+      parsedIni[section]['BUTTON_MODIFICATOR'] = '-1';
+      parsedIni[section]['JOY_MODIFICATOR'] = '-1';
+
+      const holdValue = capturingHoldMode ? '1' : '0';
+
+      // ⭐ GESTION CLIGNOTANTS (Double assignation)
+      if (section === '__EXT_TURNLIGHTS_LEFT') {
+        if (!parsedIni['__EXT_TURNSIGNAL_LEFT']) parsedIni['__EXT_TURNSIGNAL_LEFT'] = { _raw: {} };
+        parsedIni['__EXT_TURNSIGNAL_LEFT']['BUTTON'] = finalIndex.toString();
+        parsedIni['__EXT_TURNSIGNAL_LEFT']['BUTTON_MODIFICATOR'] = '-1';
+        parsedIni['__EXT_TURNSIGNAL_LEFT']['HOLD_MODE'] = holdValue;
+        parsedIni['__EXT_TURNSIGNAL_LEFT']['JOY'] = realJoyIndex.toString();
+        parsedIni['__EXT_TURNSIGNAL_LEFT']['JOY_MODIFICATOR'] = '-1';
+        parsedIni['__EXT_TURNSIGNAL_LEFT']['__CM_POV'] = '-1';
+      } 
+      else if (section === '__EXT_TURNLIGHTS_RIGHT') {
+        if (!parsedIni['__EXT_TURNSIGNAL_RIGHT']) parsedIni['__EXT_TURNSIGNAL_RIGHT'] = { _raw: {} };
+        parsedIni['__EXT_TURNSIGNAL_RIGHT']['BUTTON'] = finalIndex.toString();
+        parsedIni['__EXT_TURNSIGNAL_RIGHT']['BUTTON_MODIFICATOR'] = '-1';
+        parsedIni['__EXT_TURNSIGNAL_RIGHT']['HOLD_MODE'] = holdValue;
+        parsedIni['__EXT_TURNSIGNAL_RIGHT']['JOY'] = realJoyIndex.toString();
+        parsedIni['__EXT_TURNSIGNAL_RIGHT']['JOY_MODIFICATOR'] = '-1';
+        parsedIni['__EXT_TURNSIGNAL_RIGHT']['__CM_POV'] = '-1';
+      }
+      // ⭐ GESTION DES FEUX (HIGH/LOW BEAM) : Double assignation pour CSP
+      else if (section === 'ACTION_HEADLIGHTS_HIGH_LOW') {
+        if (!parsedIni['__EXT_LOW_BEAM']) parsedIni['__EXT_LOW_BEAM'] = { _raw: {} };
+        parsedIni['__EXT_LOW_BEAM']['BUTTON'] = finalIndex.toString();
+        parsedIni['__EXT_LOW_BEAM']['BUTTON_MODIFICATOR'] = '-1';
+        parsedIni['__EXT_LOW_BEAM']['HOLD_MODE'] = holdValue;
+        parsedIni['__EXT_LOW_BEAM']['JOY'] = realJoyIndex.toString();
+        parsedIni['__EXT_LOW_BEAM']['JOY_MODIFICATOR'] = '-1';
+        parsedIni['__EXT_LOW_BEAM']['__CM_POV'] = '-1';
+      }
+
       if (type === 'BUTTON') {
         parsedIni[section]['KEY'] = '-1';
+        parsedIni[section]['AXLE'] = '-1'; // ⭐ On nettoie l'axe si on assigne un bouton
       } else { 
-        // ⭐ NOUVEAU : Auto-calibration pour les axes directionnels (Joystick Fanatec)
+        // ⭐ Si c'est un axe, on nettoie le bouton et la touche
+        parsedIni[section]['BUTTON'] = '-1';
+        parsedIni[section]['KEY'] = '-1';
+
+        // ⭐ Auto-calibration pour les axes directionnels (Joystick)
         if (section.startsWith('GLANCE')) {
           // On lit la valeur exacte de l'axe à l'instant où tu bouges le joystick
           const currentVal = gp.axes[webviewIndex];
@@ -556,6 +616,17 @@
 
           parsedIni[section]['MIN'] = calcMin.toFixed(2);
           parsedIni[section]['MAX'] = calcMax.toFixed(2);
+
+          // ⭐ LA LIGNE MAGIQUE POUR CSP : On dit que cet axe est un POV (chapeau)
+          parsedIni[section]['__CM_POV'] = '0';
+          
+          if (section === 'GLANCELEFT') {
+            parsedIni[section]['__CM_POV_DIR'] = '0'; // 0 = Gauche
+          } else if (section === 'GLANCERIGHT') {
+            parsedIni[section]['__CM_POV_DIR'] = '2'; // 2 = Droite
+          } else if (section === 'GLANCEBACK') {
+            parsedIni[section]['__CM_POV_DIR'] = '3'; // 3 = Arrière (Bas)
+          }
         } else {
           // Comportement normal pour les pédales, le volant et le frein à main
           if (isInverted) {
@@ -607,6 +678,18 @@
       parsedIni[baseSection]['AXLE'] = '-1';
       parsedIni[baseSection]['JOY'] = '-1';
       parsedIni[baseSection]['KEY'] = '-1';
+
+      // ⭐ Nettoyage des sections miroirs pour les clignotants
+      if (baseSection === '__EXT_TURNLIGHTS_LEFT') {
+        delete parsedIni['__EXT_TURNSIGNAL_LEFT'];
+      } else if (baseSection === '__EXT_TURNLIGHTS_RIGHT') {
+        delete parsedIni['__EXT_TURNSIGNAL_RIGHT'];
+      }
+
+      // ⭐ Nettoyage pour les feux (High/Low)
+      if (baseSection === 'ACTION_HEADLIGHTS_HIGH_LOW') {
+        delete parsedIni['__EXT_LOW_BEAM'];
+      }
       
       // Par sécurité, on reset aussi le Alt quand on unbind la pédale principale
       parsedIni[baseSection]['__CM_ALT_BUTTON'] = '-1';
@@ -851,8 +934,8 @@
     'ACTION_HEADLIGHTS': { label: 'settings.controls.actions.ACTION_HEADLIGHTS', cat: 'settings.controls.categories.lights', type: 'button' },
     'ACTION_HEADLIGHTS_HIGH_LOW': { label: 'settings.controls.actions.ACTION_HEADLIGHTS_HIGH_LOW', cat: 'settings.controls.categories.lights', type: 'button' },
     'ACTION_HEADLIGHTS_FLASH': { label: 'settings.controls.actions.ACTION_HEADLIGHTS_FLASH', cat: 'settings.controls.categories.lights', type: 'button' },
-    '__EXT_TURNLIGHTS_LEFT': { label: 'settings.controls.actions.__EXT_TURNSIGNAL_LEFT', cat: 'settings.controls.categories.lights', type: 'button' },
-    '__EXT_TURNLIGHTS_RIGHT': { label: 'settings.controls.actions.__EXT_TURNSIGNAL_RIGHT', cat: 'settings.controls.categories.lights', type: 'button' },
+    '__EXT_TURNSIGNAL_LEFT': { label: 'settings.controls.actions.__EXT_TURNSIGNAL_LEFT', cat: 'settings.controls.categories.lights', type: 'button' },
+    '__EXT_TURNSIGNAL_RIGHT': { label: 'settings.controls.actions.__EXT_TURNSIGNAL_RIGHT', cat: 'settings.controls.categories.lights', type: 'button' },
     '__EXT_HAZARDS': { label: 'settings.controls.actions.__EXT_HAZARDS', cat: 'settings.controls.categories.lights', type: 'button' },
     'ACTION_HORN': { label: 'settings.controls.actions.ACTION_HORN', cat: 'settings.controls.categories.lights', type: 'button' },
 
@@ -1204,7 +1287,7 @@
           <div style="display: grid; grid-template-columns: 1.3fr 1.6fr 1.2fr; gap: 20px; width: 100%; align-items: stretch;">
             
             <!-- Bloc Pédales -->
-            <div style="display: flex; flex-direction: column; gap: 10px; padding: 15px; background: var(--bg-elevated); border-radius: var(--r); justify-content: center; height: 100%;">
+            <div style="display: flex; flex-direction: column; gap: 10px; padding: 16px; background: var(--bg-panel); border-radius: var(--r); border: 1px solid var(--border); border-top: 3px solid var(--accent); box-shadow: var(--shadow); justify-content: center; height: 100%;">
               {@render pedalCard('THROTTLE', '/assets/pedals/throttle.png', 'settings.controls.actions.THROTTLE', '#6fc98a')}
               {@render pedalCard('BRAKES', '/assets/pedals/brake.png', 'settings.controls.actions.BRAKES', '#e57373')}
               {@render pedalCard('CLUTCH', '/assets/pedals/clutch.png', 'settings.controls.actions.CLUTCH', '#c58aff')}
@@ -1212,7 +1295,7 @@
             </div>
 
             <!-- Bloc Volant & Vitesses -->
-            <div style="display: flex; flex-direction: column; gap: 15px; align-items: center; height: 100%; justify-content: center; background: var(--bg-elevated); padding: 15px; border-radius: var(--r); position: relative;">
+            <div style="display: flex; flex-direction: column; gap: 15px; align-items: center; height: 100%; justify-content: center; background: var(--bg-panel); padding: 16px; border-radius: var(--r); border: 1px solid var(--border); border-top: 3px solid var(--accent); box-shadow: var(--shadow); position: relative;">
                             <!-- Volant Rotatif -->
               <div style="display: flex; flex-direction: column; align-items: center; width: 100%; position: relative;">
                 
@@ -1294,7 +1377,7 @@
             </div>
 
                               <!-- Bloc Boîte en H -->
-            <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; background: var(--bg-elevated); padding: 15px; border-radius: var(--r); height: 100%; justify-content: space-between;">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; background: var(--bg-panel); padding: 16px; border-radius: var(--r); border: 1px solid var(--border); border-top: 3px solid var(--accent); box-shadow: var(--shadow); height: 100%; justify-content: space-between;">
               
               <!-- En-tête avec le bouton toggle -->
               <div style="display: flex; flex-direction: column; gap: 10px; width: 100%; margin-bottom: 5px;">
@@ -1757,6 +1840,17 @@
         </div>
         <div class="qacrl-dialog-body" style="text-align: center; padding: 20px;">
           <p style="font-size: 1.1rem; font-weight: 600; color: var(--accent);">{$t('settings.controls.capture_hint')}</p>
+          
+          <!-- ⭐ NOUVELLE CASE À COCHER HOLD MODE -->
+          {#if capturingSection.includes('TURNSIGNAL') || capturingSection.includes('TURNLIGHTS') || capturingSection.includes('HEADLIGHTS') || capturingSection.includes('BEAM')}
+            <div style="margin: 15px 0; padding: 10px; background: var(--bg-elevated); border-radius: 8px; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; gap: 10px;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9rem; color: var(--text-primary);">
+                <input type="checkbox" bind:checked={capturingHoldMode} style="width: 18px; height: 18px; accent-color: var(--accent);" />
+                {$t('settings.controls.hold_mode', { default: 'Activer le Hold Mode (maintenir le bouton)' })}
+              </label>
+            </div>
+          {/if}
+
           <div style="text-align: left; background: var(--bg-panel); padding: 12px; border-radius: 8px; border: 1px solid var(--border); max-height: 180px; overflow-y: auto; margin-top: 15px;">
              {#each liveGamepadData as item}
                {@const gp = item.gp}
