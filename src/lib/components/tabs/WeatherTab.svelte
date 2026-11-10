@@ -525,6 +525,7 @@
       <label>{$t('weather.mode_label')}</label>
       <select bind:value={appState.session.weather.mode} onchange={applyModeToPureCtrl}>
         <option value="static">{$t('weather.mode_static')}</option>
+        <option value="schedule">Schedule (CSP)</option>
         <option value="pure_plan">Plans Pure</option>
       </select>
     </div>
@@ -563,7 +564,7 @@
     </div>
   {/if}
 
-  {#if false} <!-- ⭐ SCHEDULE DÉSACTIVÉ -->
+  {#if appState.session.weather.mode === 'schedule'}
     <div class="row">
       <div class="field">
         <label>{$t('weather.schedule.slots_count')}</label>

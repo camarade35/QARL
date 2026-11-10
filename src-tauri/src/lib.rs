@@ -1603,10 +1603,12 @@ fn launch_race(
     // ⭐ Si c'est le mode Schedule, on prépare la config
     if weather_mode == "schedule" {
         use_schedule = true;
-        let state_dir = cfg_dir.join("extension").join("state").join("lua").join("weather_controller");
+        
+        // ⭐ CORRECTION : Le bon chemin est wfx_controller et le bon nom est base-schedule__settings.ini
+        let state_dir = cfg_dir.join("extension").join("state").join("lua").join("wfx_controller");
         
         if !state_dir.exists() {
-            fs::create_dir_all(&state_dir).map_err(|e| format!("Erreur création dossier weather_controller: {}", e))?;
+            fs::create_dir_all(&state_dir).map_err(|e| format!("Erreur création dossier wfx_controller: {}", e))?;
         }
 
         let slots = session_data.weather["scheduleSlots"].as_i64().unwrap_or(3);
@@ -1624,8 +1626,8 @@ fn launch_race(
             ini_content.push_str(&format!("SLOT_{}={}\n", i, slot_val));
         }
 
-        let schedule_file = state_dir.join("base-schedule.ini");
-        fs::write(&schedule_file, ini_content).map_err(|e| format!("Erreur écriture base-schedule.ini: {}", e))?;
+        let schedule_file = state_dir.join("base-schedule__settings.ini");
+        fs::write(&schedule_file, ini_content).map_err(|e| format!("Erreur écriture base-schedule__settings.ini: {}", e))?;
         
         // On force l'index de la première météo pour l'icône de CM
         if let Some(first_slot) = session_data.weather["scheduleSlotValues"][0].as_i64() {
