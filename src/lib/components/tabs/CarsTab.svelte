@@ -6,7 +6,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { listen } from '@tauri-apps/api/event';
 
-  let cars = $state<any[]>([]);
+  let cars = $derived(appState.cars);
   let isLoading = $state(false);
   let searchQuery = $state('');
   let showTags = $state(false);
@@ -15,6 +15,8 @@
   let selectedBrand = $state('');
   let selectedCountry = $state('');
   let selectedClass = $state('');
+
+  // ⭐ (Scroll infini supprimé)
 
   // ⭐ Les catégories exactes de Content Manager avec des mots-clés pour le matching
   const CM_CATEGORIES = [
@@ -29,9 +31,12 @@
   ];
 
   $effect(() => {
-    if (appState.acPath) {
+    // ⭐ On ne recharge que si le chemin AC a changé (le chargement initial est fait par AppLoadingScreen)
+    if (appState.acPath && appState.dataLoadedForPath !== appState.acPath) {
       loadCars();
-      // ⭐ Démarrer la surveillance des dossiers
+    }
+    // ⭐ Démarrer la surveillance des dossiers
+    if (appState.acPath) {
       invoke('start_content_watcher', { acPath: appState.acPath }).catch(console.error);
     }
   });
@@ -57,8 +62,9 @@
   async function loadCars() {
     isLoading = true;
     try {
-      cars = await invoke<any[]>('get_ac_cars', { acPath: appState.acPath });
-      appState.cars = cars; // ⭐ On sauvegarde dans le store global pour la Sidebar
+      const result = await invoke<any[]>('get_ac_cars', { acPath: appState.acPath });
+      appState.cars = result;
+      appState.dataLoadedForPath = appState.acPath;
     } catch (e) {
       console.error("Loading error:", e);
     } finally {

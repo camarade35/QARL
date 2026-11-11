@@ -726,7 +726,7 @@
   // ⭐ TEMPS RÉEL POUR L'AFFICHAGE
   let demoValues = $state({ brake: 0, throttle: 0, clutch: 0, handbrake: 0, steer: 50 });
   let animationFrameId: number;
-  let gamepadStatus = $state('Recherche de périphérique... Appuie sur une pédale pour activer.');
+  let gamepadStatus = $state($t('settings.controls.status_searching'));
   let liveAxisValues = $state<Record<string, number>>({});
   let liveButtonStates = $state<Record<string, boolean>>({});
 
@@ -824,9 +824,9 @@
     }
     
     if (connectedDevice) {
-      gamepadStatus = `✅ Connecté : ${connectedDevice.id.substring(0, 30)}...`;
+      gamepadStatus = $t('settings.controls.status_connected', { values: { id: connectedDevice.id.substring(0, 30) } });
     } else {
-      gamepadStatus = '⚠️ Aucun périphérique détecté. Appuie sur une pédale ou tourne le volant.';
+      gamepadStatus = $t('settings.controls.status_no_device');
     }
 
     // ⭐ On ne continue la boucle que si le composant est actif
@@ -872,7 +872,7 @@
     }, 2000);
     
     window.addEventListener('gamepadconnected', (e) => {
-      gamepadStatus = `✅ Connecté : ${e.gamepad.id.substring(0, 30)}...`;
+      gamepadStatus = $t('settings.controls.status_connected', { values: { id: e.gamepad.id.substring(0, 30) } });
       loadMappingForGamepad(e.gamepad);
     });
 
@@ -881,7 +881,7 @@
       if (initialGamepads[i]) loadMappingForGamepad(initialGamepads[i]!);
     }
     window.addEventListener('gamepaddisconnected', () => {
-      gamepadStatus = '⚠️ Périphérique déconnecté.';
+      gamepadStatus = $t('settings.controls.status_disconnected');
     });
     
     return () => {
@@ -1309,7 +1309,7 @@
                   <div style="position: relative; width: 340px; height: 340px; display: flex; align-items: center; justify-content: center;">
                     <img 
                       src="/assets/volant.png" 
-                      alt="Volant" 
+                      alt={$t('settings.controls.wheel_alt')} 
                       style="
                         width: 100%; height: 100%; object-fit: contain;
                         transform: rotate({(demoValues.steer - 50) * 10.8}deg);
@@ -1339,7 +1339,7 @@
 
                 <!-- ⭐ Valeur LOCK du volant (Curseur + Saisie) -->
                 <div style="display: flex; align-items: center; gap: 12px; margin-top: 15px; width: 100%; max-width: 320px; background: var(--bg-elevated); padding: 8px 14px; border-radius: var(--r-sm); border: 1px solid var(--border-subtle);">
-                  <span style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600; white-space: nowrap;">Lock :</span>
+                  <span style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600; white-space: nowrap;">{$t('settings.controls.wheel_lock')}</span>
                   <input 
                     type="range" 
                     min="90" 
@@ -1401,7 +1401,7 @@
                   <div style="position: relative; width: 380px; height: 380px; background: transparent;">
                     
                     <!-- Image de fond (la base) -->
-                    <img src="/assets/base_levier.png" alt="Base Boîte en H" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;" />
+                    <img src="/assets/base_levier.png" alt={$t('settings.controls.gearbox_alt')} style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;" />
 
                     <!-- ⭐ Lumières de la boîte colorées dynamiquement selon le thème -->
                     <div style="
@@ -1455,7 +1455,7 @@
                       <!-- Image de base -->
                       <img 
                         src="/assets/pommeau_base.png" 
-                        alt="Pommeau" 
+                        alt={$t('settings.controls.knob_alt')} 
                         style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;" 
                       />
                       <!-- Lumières colorées dynamiquement -->
@@ -1713,13 +1713,13 @@
                 <div style="display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px;">
                   {#each gp.axes as ax, aIdx}
                     <span style="background: var(--bg-elevated); padding: 2px 6px; border-radius: 4px; font-family: monospace; border: 1px solid var(--border); color: {Math.abs(ax) > 0.1 && acIdx !== -1 ? 'var(--accent)' : 'inherit'};">
-                      Axe {aIdx}: {ax.toFixed(2)}
+                      {$t('settings.controls.debug_axis')} {aIdx}: {ax.toFixed(2)}
                     </span>
                   {/each}
                   {#each gp.buttons as btn, bIdx}
                     {#if btn.pressed}
                       <span style="background: #e57373; color: white; padding: 2px 6px; border-radius: 4px; font-family: monospace;">
-                        BTN {bIdx}
+                        {$t('settings.controls.debug_btn')} {bIdx}
                       </span>
                     {/if}
                   {/each}
@@ -1765,16 +1765,16 @@
                                 {#if action.type === 'mixed'}
                                   <option value="-1">{$t('settings.controls.select_no_axis')}</option>
                                 {/if}
-                                <option value="0">Axe X (0)</option>
-                                <option value="1">Axe Y (1)</option>
-                                <option value="2">Axe Z (2)</option>
-                                <option value="3">Axe RX (3)</option>
-                                <option value="4">Axe RY (4)</option>
-                                <option value="5">Axe RZ (5)</option>
-                                <option value="6">Axe Slider 1 (6)</option>
-                                <option value="7">Axe Slider 2 (7)</option>
-                                <option value="8">Axe Slider 3 (8)</option>
-                                <option value="9">Axe Slider 4 (9)</option>
+                                <option value="0">{$t('settings.controls.axis_label', { values: { name: 'X', id: 0 } })}</option>
+                                <option value="1">{$t('settings.controls.axis_label', { values: { name: 'Y', id: 1 } })}</option>
+                                <option value="2">{$t('settings.controls.axis_label', { values: { name: 'Z', id: 2 } })}</option>
+                                <option value="3">{$t('settings.controls.axis_label', { values: { name: 'RX', id: 3 } })}</option>
+                                <option value="4">{$t('settings.controls.axis_label', { values: { name: 'RY', id: 4 } })}</option>
+                                <option value="5">{$t('settings.controls.axis_label', { values: { name: 'RZ', id: 5 } })}</option>
+                                <option value="6">{$t('settings.controls.axis_slider', { values: { id: 1, num: 6 } })}</option>
+                                <option value="7">{$t('settings.controls.axis_slider', { values: { id: 2, num: 7 } })}</option>
+                                <option value="8">{$t('settings.controls.axis_slider', { values: { id: 3, num: 8 } })}</option>
+                                <option value="9">{$t('settings.controls.axis_slider', { values: { id: 4, num: 9 } })}</option>
                               </select>
                               {#if parsedIni[action.id]?.['AXLE'] !== '-1' && parsedIni[action.id]?.['AXLE'] !== undefined}
                                 <div style="display: flex; gap: 10px; align-items: center; background: var(--bg-elevated); padding: 4px 8px; border-radius: 4px;">
@@ -1846,7 +1846,7 @@
             <div style="margin: 15px 0; padding: 10px; background: var(--bg-elevated); border-radius: 8px; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; gap: 10px;">
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9rem; color: var(--text-primary);">
                 <input type="checkbox" bind:checked={capturingHoldMode} style="width: 18px; height: 18px; accent-color: var(--accent);" />
-                {$t('settings.controls.hold_mode', { default: 'Activer le Hold Mode (maintenir le bouton)' })}
+                {$t('settings.controls.hold_mode')}
               </label>
             </div>
           {/if}

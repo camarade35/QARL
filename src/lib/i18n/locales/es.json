@@ -1,6 +1,8 @@
 {
   "setup": {
     "title": "Configuración inicial",
+    "reboot_required_msg": "¡Configuración completada!\n\nPor favor, reinicia QARL para que todos los climas y filtros PP se carguen correctamente.",
+    "reboot_required_title": "Reinicio necesario",
     "warning_ac_required": "⚠️ Assetto Corsa debe estar instalado e iniciado al menos una vez, y tus controles asignados, antes de usar QARL.",
     "warning_close_blocked": "La configuración no está completa. Si sales ahora, QARL no funcionará correctamente. ¿Seguro que quieres salir?",
     "welcome": {
@@ -58,6 +60,9 @@
       "open_controls": "🎮 Abrir Controles",
       "skip": "⏭ Saltar",
       "continue": "Continuar →",
+      "loading": "⏳ Cargando dispositivos...",
+      "no_devices_title": "⚠️ {count} dispositivo(s) detectado(s)",
+      "no_devices_desc": "Ningún dispositivo DirectInput encontrado por Windows.\nSi conectas un volante, haz clic en \"Reverificar\".",
       "floating_banner": "🏗️ Configuración en curso",
       "floating_reopen": "Volver a la configuración",
       "floating_ignore": "Ignorar"
@@ -139,6 +144,7 @@
       "content": "Contenido",
       "content_value": "{cars} coches • {tracks} circuitos",
       "csp_weather": "CSP / Clima",
+      "csp_only": "Solo CSP",
       "start": "▶ Empezar a usar QARL",
       "missing": "⚠️ no configurado"
     },
@@ -173,6 +179,11 @@
     "unknown": "Desconocido",
     "minimize": "Minimizar",
     "maximize": "Maximizar"
+  },
+  "boot": {
+    "loading_cars": "Analizando tus coches...",
+    "loading_tracks": "Analizando circuitos...",
+    "ready": "¡Todo listo!"
   },
     "languages": {
     "fr": "Francés",
@@ -245,6 +256,7 @@
     "error_docs_path": "Por favor, configura la carpeta de Documentos (Assetto Corsa) en Ajustes.",
     "error_launch": "Error al iniciar:",
     "accent_color_tooltip": "Color de acento",
+    "accent_color_label": "Color de acento",
     "bg_color_tooltip": "Color de fondo",
     "reset_bg_tooltip": "Restablecer fondo",
     "toggle_theme_tooltip": "Cambiar claro/oscuro",
@@ -263,6 +275,17 @@
     "accent_intensity": "Intensidad",
     "accent_intensity_tooltip": "Ajusta la intensidad del brillo del color de acento",
     "bg_shade": "Fondo",
+    "bg_shade_auto": "Auto",
+    "bg_shade_g1": "Negro",
+    "bg_shade_g2": "Gris 1",
+    "bg_shade_g3": "Gris 2",
+    "bg_shade_g4": "Gris 3",
+    "bg_shade_g5": "Gris 4",
+    "bg_shade_g6": "Gris 5",
+    "bg_shade_g7": "Gris 6",
+    "bg_shade_g8": "Gris 7",
+    "bg_shade_g9": "Gris 8",
+    "bg_shade_g10": "Blanco",
     "toggle_advanced_settings": "Ajustes avanzados de color y fondo",
     "error_custom_plan_name": "Por favor, dale a tu plan personalizado un nombre de al menos 3 caracteres antes de iniciar la carrera."
   },
@@ -434,6 +457,8 @@
     "start_hour": "Hora de inicio de sesión",
     "time_mult": "Multiplicador de tiempo",
     "group_conditions": "Condiciones climáticas",
+    "refresh_btn": "Actualizar",
+    "refresh_title": "Actualizar climas y planes",
     "mode_label": "Modo de clima",
     "mode_static": "Clima fijo",
     "mode_schedule": "Horario (CSP Dinámico)",
@@ -497,6 +522,11 @@
       "edit_loaded": "El plan se ha cargado en el editor de abajo. Puedes modificarlo y guardarlo.",
       "edit_error": "Error al cargar para editar: {error}",
       "name_too_short": "El nombre del plan debe contener al menos 3 caracteres."
+    },
+    "pure_plans": {
+      "title": "Planes Pure y Ajustes",
+      "tab_existing": "Mis planes existentes",
+      "tab_custom": "Crear un plan"
     },
     "pure_ctrl": {
       "group_title": "Ajustes de pureCtrl",
@@ -653,6 +683,19 @@
       "device_changed_msg": "Se ha conectado o desconectado un dispositivo de control.\n\nLas asignaciones de botones pueden ser incorrectas. Reinicia QARL antes de asignar nuevos comandos.",
       "btn_restart": "Reiniciar QARL",
       "btn_ignore": "Ignorar",
+      "status_searching": "Buscando dispositivo... Pulsa un pedal para activar.",
+      "status_connected": "✅ Conectado: {id}...",
+      "status_no_device": "⚠️ Ningún dispositivo detectado. Pulsa un pedal o gira el volante.",
+      "status_disconnected": "⚠️ Dispositivo desconectado.",
+      "wheel_alt": "Volante",
+      "wheel_lock": "Bloqueo:",
+      "gearbox_alt": "Base de cambio en H",
+      "knob_alt": "Pomo",
+      "axis_label": "Eje {name} ({id})",
+      "axis_slider": "Eje Slider {id} ({num})",
+      "hold_mode": "Activar Hold Mode (mantener el botón)",
+      "debug_axis": "Eje",
+      "debug_btn": "BTN",
       "categories": {
         "axes": "Ejes principales",
         "gearbox": "Caja y Motor",
@@ -760,6 +803,8 @@
       },
       "guide": {
         "title": "Guía visual de QARL",
+        "shrink": "Reducir",
+        "enlarge": "Ampliar",
         "cards": {
           "setup_title": "Asistente de instalación",
           "setup_desc": "Instala fácilmente CSP, Sol o Pure en el primer inicio.",
@@ -864,6 +909,19 @@
       }
     },
             "general": {
+      "error_python_app": "No se puede modificar la app de Python.",
+      "error_ac_language": "Error al modificar el idioma del juego: ",
+      "appearance_title": "Apariencia",
+      "font_family": "Fuente de la interfaz",
+      "font_inter": "Inter (Moderna y Neutra)",
+      "font_roboto": "Roboto (Clásica y Legible)",
+      "font_montserrat": "Montserrat (Geométrica y Elegante)",
+      "font_poppins": "Poppins (Redonda y Amigable)",
+      "font_space_grotesk": "Space Grotesk (Tech y Deportiva)",
+      "font_hint": "Elige la fuente que se aplica a toda la aplicación.",
+      "wizard_title": "Asistente de instalación",
+      "wizard_desc": "Reinicia el asistente de configuración inicial para revisar los pasos de detección, identidad y módulos meteorológicos.",
+      "wizard_btn": "🏗️ Reiniciar asistente",
       "path_title": "Carpeta de Assetto Corsa",
       "path_invalid": "Carpeta inválida: No se puede encontrar acs.exe. Verifica la ruta.",
       "path_label": "Ruta de instalación del juego",
@@ -926,6 +984,10 @@
       "autosave_qualify": "Número máximo de clasificaciones a grabar (-1 = infinito)",
       "autosave_others": "Número máximo de otros tipos de sesiones a grabar (-1 = infinito)",
       "autosave_min_time": "Tiempo mínimo para guardar el replay (útil para evitar guardar sesiones saltadas)"
+    },
+    "lightbox": {
+      "prev": "Anterior (←)",
+      "next": "Siguiente (→)"
     },
     "photo": {
       "gallery_title": "Galería de capturas",
@@ -1000,6 +1062,8 @@
     "drop_desc": "Instalación 100% automática: coches, circuitos, apps y extensiones se clasifican. Puedes soltar varios archivos.",
     "extracting": "⏳ Extrayendo archivo {current} de {total}...",
     "history_title": "Historial de instalaciones",
+    "log_position_below": "↕️ Mover registro abajo",
+    "log_position_inside": "↕️ Integrar registro en la zona",
     "history_empty": "Ningún mod instalado a través de QARL.",
     "history_type": "Tipo: {type} • Instalado el: {date}",
     "history_view": "📁 Ver",
@@ -1028,6 +1092,9 @@
   },
   "online": {
     "paste_title": "🔗 Pegar enlace de servidor",
+    "dissociate_btn": "🔓 DESASOCIAR",
+    "associate_btn": "🔗 ASOCIAR",
+    "edit_btn_title": "Editar",
     "paste_placeholder": "https://acstuff.club/... o IP:PORT",
     "join_btn": "▶ Unirse",
     "add_manual_title": "Añadir un servidor manualmente",
@@ -1127,6 +1194,8 @@
     "no_common_cars": "❌ Ningún coche en común con el servidor. Instala uno a través de Gestión Mods."
   },
       "video": {
+    "refresh_filters": "Actualizar lista de filtros",
+    "res_native": "nativo",
     "presets": {
       "title": "Presets de Vídeo",
       "placeholder": "Elegir un preset",
@@ -1207,7 +1276,12 @@
     "camera_mode_orbit": "Órbita"
   },
       "csp": {
-    "title": "Custom Shaders Patch — Módulos",
+    "title": "Custom Shaders Patch — Modules",
+    "download_starting": "Iniciando...",
+    "download_error": "Error de descarga: ",
+    "btn_download_configs": "📥 Configs CSP",
+    "btn_download_configs_loading": "⏳ Cargando...",
+    "btn_download_configs_title": "Actualizar configs (intermitentes, luces, etc.)",
     "categories": {
       "graphics": "🎨 Gráficos y Renderizado",
       "camera": "🎥 Cámara y Vista",

@@ -63,14 +63,13 @@
 
 {#if loading}
   <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
-    ⏳ Chargement des périphériques…
+    {$t('setup.devices.loading')}
   </div>
 {:else if devices.length === 0}
   <div class="setup-warning">
-    <strong>⚠️ {devices.length} périphérique(s) détecté(s)</strong>
-    <p style="margin-top: 8px;">
-      Aucun périphérique DirectInput trouvé par Windows.
-      Si tu branches un volant, clique sur "Revérifier".
+    <strong>{$t('setup.devices.no_devices_title', { values: { count: devices.length } })}</strong>
+    <p style="margin-top: 8px; white-space: pre-line;">
+      {$t('setup.devices.no_devices_desc')}
     </p>
   </div>
 {:else}
@@ -111,7 +110,7 @@
 
 <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
   <button class="filter-btn" onclick={load} disabled={loading} style="padding: 10px 20px; margin-right: auto;">
-    {loading ? '⏳' : '↶ Revérifier'}
+    {loading ? '⏳' : $t('setup.ac_init.recheck')}
   </button>
   <button class="filter-btn" onclick={openControls} style="padding: 10px 20px;">
     {$t('setup.devices.open_controls')}

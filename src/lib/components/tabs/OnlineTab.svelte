@@ -710,7 +710,7 @@
   <div class="group-title" style="display: flex; justify-content: space-between; align-items: center;">
     <span>{$t('online.paste_title')}</span>
     <button class="btn-secondary" onclick={toggleAssociation} style="font-size: 0.75rem; padding: 4px 10px; height: auto;">
-      {isAssociated ? '🔓 DISSOCIER' : '🔗 ASSOCIER'}
+      {isAssociated ? $t('online.dissociate_btn') : $t('online.associate_btn')}
     </button>
   </div>
   <div class="row">
@@ -808,7 +808,7 @@
           <button class="server-fav-btn" class:active={isFavoriteServer(srv)} onclick={() => toggleFavoriteServer(srv)} title={$t('common.filter_favorites')}>
             {isFavoriteServer(srv) ? '★' : '☆'}
           </button>
-          <button class="server-action" style="background: var(--bg-hover); color: var(--text-primary); border: 1px solid var(--border);" onclick={() => openEditModal(srv)} title="Modifier">⚙️</button>
+          <button class="server-action" style="background: var(--bg-hover); color: var(--text-primary); border: 1px solid var(--border);" onclick={() => openEditModal(srv)} title={$t('online.edit_btn_title')}>⚙️</button>
           <button class="server-action" onclick={() => openJoinModal(srv)}>{$t('online.join_btn').replace('▶ ', '')}</button>
           <button class="server-action delete" onclick={() => { 
             appState.customServers = appState.customServers.filter((s: any) => s !== srv); 

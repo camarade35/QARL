@@ -1,6 +1,8 @@
 {
   "setup": {
     "title": "Initial Setup",
+    "reboot_required_msg": "Setup complete!\n\nPlease restart QARL so all weathers and PP filters are loaded correctly.",
+    "reboot_required_title": "Restart required",
     "warning_ac_required": "⚠️ Assetto Corsa must be installed and launched at least once, and your controls assigned, before using QARL.",
     "warning_close_blocked": "Configuration is not complete. If you quit now, QARL will not work properly. Do you really want to quit?",
     "welcome": {
@@ -58,6 +60,9 @@
       "open_controls": "🎮 Open Controls",
       "skip": "⏭ Skip",
       "continue": "Continue →",
+      "loading": "⏳ Loading devices...",
+      "no_devices_title": "⚠️ {count} device(s) detected",
+      "no_devices_desc": "No DirectInput device found by Windows.\nIf you plug in a wheel, click \"Recheck\".",
       "floating_banner": "🏗️ Setup in progress",
       "floating_reopen": "Return to setup",
       "floating_ignore": "Ignore"
@@ -139,6 +144,7 @@
       "content": "Content",
       "content_value": "{cars} cars • {tracks} tracks",
       "csp_weather": "CSP / Weather",
+      "csp_only": "CSP only",
       "start": "▶ Start using QARL",
       "missing": "⚠️ not set"
     },
@@ -173,6 +179,11 @@
     "unknown": "Unknown",
     "minimize": "Minimize",
     "maximize": "Maximize"
+  },
+  "boot": {
+    "loading_cars": "Scanning your cars...",
+    "loading_tracks": "Scanning tracks...",
+    "ready": "All set!"
   },
     "languages": {
     "fr": "French",
@@ -245,6 +256,7 @@
     "error_docs_path": "Please configure the Documents (Assetto Corsa) folder in Settings.",
     "error_launch": "Launch error:",
     "accent_color_tooltip": "Accent color",
+    "accent_color_label": "Accent color",
     "bg_color_tooltip": "Background color",
     "reset_bg_tooltip": "Reset background",
     "toggle_theme_tooltip": "Toggle light/dark",
@@ -263,6 +275,17 @@
     "accent_intensity": "Intensity",
     "accent_intensity_tooltip": "Adjust the glow intensity of the accent color",
     "bg_shade": "Background",
+    "bg_shade_auto": "Auto",
+    "bg_shade_g1": "Black",
+    "bg_shade_g2": "Gray 1",
+    "bg_shade_g3": "Gray 2",
+    "bg_shade_g4": "Gray 3",
+    "bg_shade_g5": "Gray 4",
+    "bg_shade_g6": "Gray 5",
+    "bg_shade_g7": "Gray 6",
+    "bg_shade_g8": "Gray 7",
+    "bg_shade_g9": "Gray 8",
+    "bg_shade_g10": "White",
     "toggle_advanced_settings": "Advanced color and background settings",
     "error_custom_plan_name": "Please give your custom plan a name of at least 3 characters before launching the race."
   },
@@ -498,6 +521,11 @@
       "edit_error": "Error while loading for editing: {error}",
       "name_too_short": "The plan name must contain at least 3 characters."
     },
+    "pure_plans": {
+      "title": "Pure Plans & Settings",
+      "tab_existing": "My existing plans",
+      "tab_custom": "Create a plan"
+    },
     "pure_ctrl": {
       "group_title": "pureCtrl settings",
       "autostart": "Autostart (starts the plan automatically)",
@@ -653,6 +681,19 @@
       "device_changed_msg": "A controller device has been connected or disconnected.\n\nButton mappings may be incorrect. Please restart QARL before assigning new commands.",
       "btn_restart": "Restart QARL",
       "btn_ignore": "Ignore",
+      "status_searching": "Searching for device... Press a pedal to activate.",
+      "status_connected": "✅ Connected: {id}...",
+      "status_no_device": "⚠️ No device detected. Press a pedal or turn the wheel.",
+      "status_disconnected": "⚠️ Device disconnected.",
+      "wheel_alt": "Wheel",
+      "wheel_lock": "Lock:",
+      "gearbox_alt": "H-Pattern Base",
+      "knob_alt": "Gear Knob",
+      "axis_label": "Axis {name} ({id})",
+      "axis_slider": "Slider Axis {id} ({num})",
+      "hold_mode": "Enable Hold Mode (hold the button)",
+      "debug_axis": "Axis",
+      "debug_btn": "BTN",
       "categories": {
       "axes": "Main Axes",
       "gearbox": "Gearbox & Engine",
@@ -760,6 +801,8 @@
       },
       "guide": {
         "title": "QARL Visual Guide",
+        "shrink": "Shrink",
+        "enlarge": "Enlarge",
         "cards": {
           "setup_title": "Installation Wizard",
           "setup_desc": "Easily install CSP, Sol or Pure on first launch.",
@@ -863,7 +906,20 @@
         "title": "Useful links"
       }
     },
-            "general": {
+      "general": {
+      "error_python_app": "Unable to modify Python app.",
+      "error_ac_language": "Error modifying game language: ",
+      "appearance_title": "Appearance",
+      "font_family": "Interface font",
+      "font_inter": "Inter (Modern & Neutral)",
+      "font_roboto": "Roboto (Classic & Readable)",
+      "font_montserrat": "Montserrat (Geometric & Elegant)",
+      "font_poppins": "Poppins (Round & Friendly)",
+      "font_space_grotesk": "Space Grotesk (Tech & Sport)",
+      "font_hint": "Choose the font that applies to the entire application.",
+      "wizard_title": "Setup Wizard",
+      "wizard_desc": "Restart the initial setup wizard to review the detection, identity and weather module steps.",
+      "wizard_btn": "🏗️ Restart wizard",
       "path_title": "Assetto Corsa Folder",
       "path_invalid": "Invalid folder: Cannot find acs.exe. Check the path.",
       "path_label": "Game installation path",
@@ -926,6 +982,10 @@
       "autosave_qualify": "Max number of qualify to be recorded (-1 = infinite)",
       "autosave_others": "Max number of all other sessions type to be recorded (-1 = infinite)",
       "autosave_min_time": "Min time to save the replay (useful to avoid the replay for skipped session)"
+    },
+    "lightbox": {
+      "prev": "Previous (←)",
+      "next": "Next (→)"
     },
     "photo": {
       "gallery_title": "Screenshot Gallery",
@@ -1000,6 +1060,8 @@
     "drop_desc": "100% automatic installation: cars, tracks, apps and extensions are sorted. You can drop multiple files.",
     "extracting": "⏳ Extracting archive {current} of {total}...",
     "history_title": "Installation History",
+    "log_position_below": "↕️ Move journal below",
+    "log_position_inside": "↕️ Embed journal in zone",
     "history_empty": "No mod installed via QARL.",
     "history_type": "Type: {type} • Installed on: {date}",
     "history_view": "📁 View",
@@ -1028,6 +1090,9 @@
   },
     "online": {
     "paste_title": "🔗 Paste a server link",
+    "dissociate_btn": "🔓 DISSOCIATE",
+    "associate_btn": "🔗 ASSOCIATE",
+    "edit_btn_title": "Edit",
     "paste_placeholder": "https://acstuff.club/... or IP:PORT",
     "join_btn": "▶ Join",
     "add_manual_title": "Add a server manually",
@@ -1127,6 +1192,8 @@
     "no_common_cars": "❌ No common car with this server. Install one via Mod Manager."
   },
       "video": {
+    "refresh_filters": "Refresh filter list",
+    "res_native": "native",
     "presets": {
       "title": "Video Presets",
       "placeholder": "Choose a preset",
@@ -1208,6 +1275,11 @@
   },
       "csp": {
     "title": "Custom Shaders Patch — Modules",
+    "download_starting": "Starting...",
+    "download_error": "Download error: ",
+    "btn_download_configs": "📥 CSP Configs",
+    "btn_download_configs_loading": "⏳ Loading...",
+    "btn_download_configs_title": "Update configs (turn signals, lights, etc.)",
     "categories": {
       "graphics": "🎨 Graphics & Rendering",
       "camera": "🎥 Camera & View",

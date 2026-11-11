@@ -1,6 +1,8 @@
 {
   "setup": {
     "title": "Configurazione iniziale",
+    "reboot_required_msg": "Configurazione completata!\n\nRiavvia QARL per caricare correttamente tutti i meteo e i filtri PP.",
+    "reboot_required_title": "Riavvio necessario",
     "warning_ac_required": "⚠️ Assetto Corsa deve essere installato e avviato almeno una volta, e i tuoi controlli assegnati, prima di usare QARL.",
     "warning_close_blocked": "La configurazione non è completa. Se esci ora, QARL non funzionerà correttamente. Vuoi davvero uscire?",
     "welcome": {
@@ -58,6 +60,9 @@
       "open_controls": "🎮 Apri Controlli",
       "skip": "⏭ Salta",
       "continue": "Continua →",
+      "loading": "⏳ Caricamento dispositivi...",
+      "no_devices_title": "⚠️ {count} dispositivo/i rilevato/i",
+      "no_devices_desc": "Nessun dispositivo DirectInput trovato da Windows.\nSe colleghi un volante, clicca su \"Riverifica\".",
       "floating_banner": "🏗️ Configurazione in corso",
       "floating_reopen": "Torna alla configurazione",
       "floating_ignore": "Ignora"
@@ -139,6 +144,7 @@
       "content": "Contenuto",
       "content_value": "{cars} auto • {tracks} circuiti",
       "csp_weather": "CSP / Meteo",
+      "csp_only": "Solo CSP",
       "start": "▶ Inizia a usare QARL",
       "missing": "⚠️ non impostato"
     },
@@ -173,6 +179,11 @@
     "unknown": "Sconosciuto",
     "minimize": "Riduci",
     "maximize": "Ingrandisci"
+  },
+  "boot": {
+    "loading_cars": "Analisi delle tue auto...",
+    "loading_tracks": "Analisi dei circuiti...",
+    "ready": "Tutto pronto!"
   },
     "languages": {
     "fr": "Francese",
@@ -245,6 +256,7 @@
     "error_docs_path": "Configura la cartella Documenti (Assetto Corsa) nelle Impostazioni.",
     "error_launch": "Errore di avvio:",
     "accent_color_tooltip": "Colore d'accento",
+    "accent_color_label": "Colore d'accento",
     "bg_color_tooltip": "Colore di sfondo",
     "reset_bg_tooltip": "Ripristina sfondo",
     "toggle_theme_tooltip": "Attiva/disattiva chiaro/scuro",
@@ -263,6 +275,17 @@
     "accent_intensity": "Intensità",
     "accent_intensity_tooltip": "Regola l'intensità del bagliore del colore d'accento",
     "bg_shade": "Sfondo",
+    "bg_shade_auto": "Auto",
+    "bg_shade_g1": "Nero",
+    "bg_shade_g2": "Grigio 1",
+    "bg_shade_g3": "Grigio 2",
+    "bg_shade_g4": "Grigio 3",
+    "bg_shade_g5": "Grigio 4",
+    "bg_shade_g6": "Grigio 5",
+    "bg_shade_g7": "Grigio 6",
+    "bg_shade_g8": "Grigio 7",
+    "bg_shade_g9": "Grigio 8",
+    "bg_shade_g10": "Bianco",
     "toggle_advanced_settings": "Impostazioni avanzate di colore e sfondo",
     "error_custom_plan_name": "Dai al tuo piano personalizzato un nome di almeno 3 caratteri prima di avviare la gara."
   },
@@ -434,6 +457,8 @@
     "start_hour": "Ora di inizio sessione",
     "time_mult": "Moltiplicatore temporale",
     "group_conditions": "Condizioni meteo",
+    "refresh_btn": "Aggiorna",
+    "refresh_title": "Aggiorna meteo e piani",
     "mode_label": "Modalità meteo",
     "mode_static": "Meteo fisso",
     "mode_schedule": "Programmazione (CSP Dinamico)",
@@ -497,6 +522,11 @@
       "edit_loaded": "Il piano è stato caricato nell'editor qui sotto. Puoi modificarlo e salvarlo.",
       "edit_error": "Errore durante il caricamento per la modifica: {error}",
       "name_too_short": "Il nome del piano deve contenere almeno 3 caratteri."
+    },
+    "pure_plans": {
+      "title": "Piani Pure e Impostazioni",
+      "tab_existing": "I miei piani esistenti",
+      "tab_custom": "Crea un piano"
     },
     "pure_ctrl": {
       "group_title": "Impostazioni pureCtrl",
@@ -653,6 +683,19 @@
       "device_changed_msg": "Un dispositivo di controllo è stato collegato o scollegato.\n\nLe assegnazioni dei pulsanti potrebbero essere errate. Riavvia QARL prima di assegnare nuovi comandi.",
       "btn_restart": "Riavvia QARL",
       "btn_ignore": "Ignora",
+      "status_searching": "Ricerca dispositivo... Premi un pedale per attivare.",
+      "status_connected": "✅ Connesso: {id}...",
+      "status_no_device": "⚠️ Nessun dispositivo rilevato. Premi un pedale o gira il volante.",
+      "status_disconnected": "⚠️ Dispositivo disconnesso.",
+      "wheel_alt": "Volante",
+      "wheel_lock": "Blocco:",
+      "gearbox_alt": "Base cambio a H",
+      "knob_alt": "Pomello",
+      "axis_label": "Asse {name} ({id})",
+      "axis_slider": "Asse Slider {id} ({num})",
+      "hold_mode": "Attiva Hold Mode (tieni premuto il pulsante)",
+      "debug_axis": "Asse",
+      "debug_btn": "BTN",
       "categories": {
         "axes": "Assi principali",
         "gearbox": "Cambio e Motore",
@@ -759,6 +802,8 @@
       },
       "guide": {
         "title": "Guida visiva di QARL",
+        "shrink": "Riduci",
+        "enlarge": "Ingrandisci",
         "cards": {
           "setup_title": "Procedura guidata",
           "setup_desc": "Installa facilmente CSP, Sol o Pure al primo avvio.",
@@ -863,6 +908,19 @@
       }
     },
     "general": {
+      "error_python_app": "Impossibile modificare l'app Python.",
+      "error_ac_language": "Errore durante la modifica della lingua del gioco: ",
+      "appearance_title": "Aspetto",
+      "font_family": "Font dell'interfaccia",
+      "font_inter": "Inter (Moderna e Neutra)",
+      "font_roboto": "Roboto (Classico e Leggibile)",
+      "font_montserrat": "Montserrat (Geometrico ed Elegante)",
+      "font_poppins": "Poppins (Arrotondato e Amichevole)",
+      "font_space_grotesk": "Space Grotesk (Tech e Sport)",
+      "font_hint": "Scegli il font che si applica all'intera applicazione.",
+      "wizard_title": "Procedura guidata",
+      "wizard_desc": "Riavvia la procedura guidata di configurazione iniziale per rivedere i passaggi di rilevamento, identità e moduli meteo.",
+      "wizard_btn": "🏗️ Riavvia procedura guidata",
       "path_title": "Cartella Assetto Corsa",
       "path_invalid": "Cartella non valida: impossibile trovare acs.exe. Controlla il percorso.",
       "path_label": "Percorso di installazione del gioco",
@@ -925,6 +983,10 @@
       "autosave_qualify": "Numero massimo di qualifiche da registrare (-1 = infinito)",
       "autosave_others": "Numero massimo di altri tipi di sessione da registrare (-1 = infinito)",
       "autosave_min_time": "Tempo minimo per salvare il replay (utile per evitare il replay di sessioni saltate)"
+    },
+    "lightbox": {
+      "prev": "Precedente (←)",
+      "next": "Successivo (→)"
     },
     "photo": {
       "gallery_title": "Galleria screenshot",
@@ -999,6 +1061,8 @@
     "drop_desc": "Installazione 100% automatica: auto, circuiti, app ed estensioni vengono ordinati. Puoi rilasciare più file contemporaneamente.",
     "extracting": "⏳ Estrazione archivio {current} di {total}...",
     "history_title": "Cronologia installazioni",
+    "log_position_below": "↕️ Sposta registro in basso",
+    "log_position_inside": "↕️ Integra registro nella zona",
     "history_empty": "Nessun mod installato tramite QARL.",
     "history_type": "Tipo: {type} • Installato il: {date}",
     "history_view": "📁 Visualizza",
@@ -1027,6 +1091,9 @@
   },
   "online": {
     "paste_title": "🔗 Incolla un link del server",
+    "dissociate_btn": "🔓 DISSOCIA",
+    "associate_btn": "🔗 ASSOCIA",
+    "edit_btn_title": "Modifica",
     "paste_placeholder": "https://acstuff.club/... o IP:PORT",
     "join_btn": "▶ Unisciti",
     "add_manual_title": "Aggiungi un server manualmente",
@@ -1126,6 +1193,8 @@
     "no_common_cars": "❌ Nessuna auto in comune con questo server. Installane una tramite Gestione Mod."
   },
   "video": {
+    "refresh_filters": "Aggiorna elenco filtri",
+    "res_native": "nativo",
     "presets": {
       "title": "Preset Video",
       "placeholder": "Scegli un preset",
@@ -1207,6 +1276,11 @@
   },
   "csp": {
     "title": "Custom Shaders Patch — Moduli",
+    "download_starting": "Avvio...",
+    "download_error": "Errore di download: ",
+    "btn_download_configs": "📥 Config CSP",
+    "btn_download_configs_loading": "⏳ Caricamento...",
+    "btn_download_configs_title": "Aggiorna configs (frecce, luci, ecc.)",
     "categories": {
       "graphics": "🎨 Grafica e Rendering",
       "camera": "🎥 Telecamera e Vista",

@@ -835,7 +835,7 @@
 {#if lightboxIndex >= 0 && displayedPhotos[lightboxIndex]}
   <div class="lightbox" onclick={closeLightbox}>
     <!-- Bouton Précédent -->
-    <button class="lightbox-nav-btn prev" onclick={prevPhoto} title="Précédent (←)">‹</button>
+    <button class="lightbox-nav-btn prev" onclick={prevPhoto} title={$t('media.lightbox.prev')}>‹</button>
     
     <div class="lightbox-content" onclick={(e) => e.stopPropagation()}>
       <img src={convertFileSrc(displayedPhotos[lightboxIndex].path)} alt="Preview" />
@@ -846,7 +846,7 @@
     </div>
 
     <!-- Bouton Suivant -->
-    <button class="lightbox-nav-btn next" onclick={nextPhoto} title="Suivant (→)">›</button>
+    <button class="lightbox-nav-btn next" onclick={nextPhoto} title={$t('media.lightbox.next')}>›</button>
   </div>
 {/if}
 

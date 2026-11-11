@@ -70,7 +70,7 @@
   {#if isOpen}
     <div class="color-popover" style="left: {popoverX}px; top: {popoverY}px;">
       <div class="color-popover-header">
-        <span>Couleur</span>
+        <span>{$t('sidebar.accent_color_label')}</span>
         <button class="color-popover-close" onclick={() => isOpen = false}>✕</button>
       </div>
       

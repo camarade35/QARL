@@ -6,16 +6,21 @@
   import { onMount } from 'svelte';
   import { listen } from '@tauri-apps/api/event';
 
-  let tracks = $state<any[]>([]);
+  let tracks = $derived(appState.tracks);
   let loading = $state(false);
   let searchQuery = $state('');
   let showTags = $state(false);
   let selectedCountry = $state('');
 
+  // ⭐ (Scroll infini supprimé)
+
   $effect(() => {
-    if (appState.acPath) {
+    // ⭐ On ne recharge que si le chemin AC a changé (le chargement initial est fait par AppLoadingScreen)
+    if (appState.acPath && appState.dataLoadedForPath !== appState.acPath) {
       loadTracks();
-      // ⭐ Démarrer la surveillance des dossiers
+    }
+    // ⭐ Démarrer la surveillance des dossiers
+    if (appState.acPath) {
       invoke('start_content_watcher', { acPath: appState.acPath }).catch(console.error);
     }
   });
@@ -41,10 +46,9 @@
   async function loadTracks() {
     loading = true;
     try {
-      tracks = await invoke<any[]>('get_ac_tracks', { acPath: appState.acPath });
-
-      appState.tracks = tracks;
-      
+      const result = await invoke<any[]>('get_ac_tracks', { acPath: appState.acPath });
+      appState.tracks = result;
+      appState.dataLoadedForPath = appState.acPath;
     } catch (e) {
       console.error("Error loading tracks:", e);
     } finally {

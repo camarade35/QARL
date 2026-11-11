@@ -14,12 +14,20 @@
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { alert, confirm } from '$lib/stores/dialog.svelte';
   import { t, locale } from 'svelte-i18n';
+  import { check } from '@tauri-apps/plugin-updater';
+  import { relaunch } from '@tauri-apps/plugin-process';
 
   let activeSubTab = $state('subtab-general');
   let isDetectingSteam = $state(false);
   let selectedPath = $state(appState.acPath || '');
   let capabilities = $state<{ has_csp: boolean; has_pure: boolean; has_pure_weather: boolean; has_sol: boolean; has_acs: boolean; csp_version: string; sol_version: string; pure_version: string; pure_planner_version: string } | null>(null);
   let isChecking = $state(false);
+  
+  // ⭐ États pour le système de mise à jour
+  let updateStatus = $state<'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error'>('idle');
+  let updateVersion = $state('');
+  let updateProgress = $state(0);
+  let updateErrorMsg = $state('');
   
   // ⭐ Applications Python
   let pythonApps = $state<Array<{name: string, active: boolean}>>([]);
@@ -119,7 +127,7 @@
   });
 
     // Constante pour la version (à modifier lors du push Github)
-  const APP_VERSION = "v1.0.0";
+  const APP_VERSION = "v1.0.1";
 
   async function detectSteamId() {
     isDetectingSteam = true;
@@ -202,6 +210,56 @@
     if (appState.acPath) {
       verifierCapacites();
     }
+  });
+
+  // ⭐ Fonctions de mise à jour
+  async function checkForUpdates(silent = false) {
+    if (updateStatus === 'checking' || updateStatus === 'downloading') return;
+    updateStatus = 'checking';
+    updateErrorMsg = '';
+    
+    try {
+      const update = await check();
+      if (update) {
+        updateVersion = update.version;
+        updateStatus = 'available';
+      } else {
+        updateStatus = 'idle';
+        if (!silent) alert("QARL est déjà à jour ! (v" + APP_VERSION + ")");
+      }
+    } catch (e) {
+      console.error("Erreur de MAJ:", e);
+      updateStatus = 'error';
+      updateErrorMsg = String(e);
+      if (!silent) alert("Impossible de vérifier les mises à jour :\n" + e);
+    }
+  }
+
+  async function installUpdate() {
+    updateStatus = 'downloading';
+    updateProgress = 0;
+    try {
+      const update = await check();
+      if (!update) { updateStatus = 'idle'; return; }
+      
+      await update.downloadAndInstall((event) => {
+        if (event.event === 'Progress') {
+          updateProgress = (event.data.chunkLength / (event.data.contentLength || 1)) * 100;
+        } else if (event.event === 'Finished') {
+          updateStatus = 'ready';
+        }
+      });
+      await relaunch();
+    } catch (e) {
+      console.error("Erreur installation MAJ:", e);
+      updateStatus = 'error';
+      updateErrorMsg = String(e);
+    }
+  }
+
+  // Vérification silencieuse au démarrage (2s après l'ouverture)
+  onMount(() => {
+    setTimeout(() => checkForUpdates(true), 2000);
   });
 
   // ⭐ Navigation depuis la recherche globale
@@ -390,12 +448,12 @@
   <!-- LIGNE 3 : Assistant + Données + Config -->
   <div class="settings-row">
     <div class="group">
-      <div class="group-title">Assistant d'installation</div>
+      <div class="group-title">{$t('settings.general.wizard_title')}</div>
       <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 10px;">
-        Relance l'assistant de configuration initiale pour revoir les étapes de détection, identité et modules météo.
+        {$t('settings.general.wizard_desc')}
       </p>
       <button class="btn-secondary" onclick={() => resetSetup()} style="align-self: flex-start;">
-        🏗️ Relancer l'assistant
+        {$t('settings.general.wizard_btn')}
       </button>
     </div>
 
@@ -423,9 +481,26 @@
   <!-- LIGNE 4 : À propos (Pleine largeur) -->
   <div class="group full-width">
     <div class="group-title">{$t('settings.general.about_title')}</div>
-    <div class="row" style="align-items: center; justify-content: space-between;">
+    <div class="row" style="align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
       <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-primary);">
         QACRL Custom Launcher <span style="color: var(--accent); margin-left: 8px;">{APP_VERSION}</span>
+      </div>
+      
+      <!-- ⭐ Bouton de MAJ -->
+      <div style="display: flex; align-items: center; gap: 12px;">
+        {#if updateStatus === 'checking'}
+          <span style="color: var(--text-secondary); font-size: 0.85rem;">Vérification...</span>
+        {:else if updateStatus === 'available'}
+          <span style="color: var(--accent); font-size: 0.85rem; font-weight: 600;">Version {updateVersion} disponible !</span>
+          <button class="btn-launch" onclick={installUpdate} style="padding: 6px 12px; height: auto; font-size: 0.85rem;">⬇ Installer</button>
+        {:else if updateStatus === 'downloading'}
+          <span style="color: var(--text-secondary); font-size: 0.85rem;">Téléchargement... {updateProgress.toFixed(0)}%</span>
+        {:else if updateStatus === 'error'}
+          <span style="color: #e57373; font-size: 0.85rem;" title={updateErrorMsg}>Erreur de MAJ</span>
+          <button class="btn-secondary" onclick={() => checkForUpdates(false)} style="padding: 6px 12px; height: auto; font-size: 0.85rem;">Réessayer</button>
+        {:else}
+          <button class="btn-secondary" onclick={() => checkForUpdates(false)} style="padding: 6px 12px; height: auto; font-size: 0.85rem;">🔄 Vérifier les MAJ</button>
+        {/if}
       </div>
     </div>
     

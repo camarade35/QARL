@@ -38,7 +38,7 @@
     try {
       await invoke('launch_ac_only');
     } catch (e) {
-      alert("Erreur lors du lancement d'AC via Steam : " + e);
+      alert($t('setup.paths.ac_launch_error') + e);
     } finally {
       isLaunching = false;
     }
@@ -103,10 +103,10 @@
 <!-- ⭐ NOUVEAU : Bloc d'aide avec lancement d'AC -->
 {#if !documentsPath}
   <div class="setup-warning" style="margin-top: 15px; background: rgba(230, 163, 59, 0.1); border: 1px solid rgba(230, 163, 59, 0.3);">
-    <strong style="color: #e6a33b;">💡 Besoin de générer les fichiers AC ?</strong>
-    <p style="margin-top: 8px; font-size: 0.85rem;">Lancez Assetto Corsa une première fois pour créer les dossiers nécessaires, assignez vos contrôles, puis fermez le jeu. QARL détectera tout automatiquement.</p>
+    <strong style="color: #e6a33b;">{$t('setup.paths.help_generate_title')}</strong>
+    <p style="margin-top: 8px; font-size: 0.85rem;">{$t('setup.paths.help_generate_desc')}</p>
     <button class="filter-btn" onclick={launchAc} disabled={isLaunching} style="margin-top: 10px; background: var(--accent); color: #fff; border-color: var(--accent);">
-      {isLaunching ? '⏳ Lancement...' : $t('setup.ac_init.launch_ac')}
+      {isLaunching ? $t('setup.paths.launching') : $t('setup.ac_init.launch_ac')}
     </button>
   </div>
 {/if}

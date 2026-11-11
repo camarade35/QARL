@@ -516,8 +516,8 @@
 <div class="group">
   <div class="group-title" style="display: flex; justify-content: space-between; align-items: center;">
     <span>{$t('weather.group_conditions')}</span>
-    <button class="filter-btn" onclick={() => { loadWeatherData(); refreshPlans(); }} style="padding: 2px 8px; font-size: 0.7rem; height: auto;" title="Rafraîchir les météos et les plans">
-      🔄 Rafraîchir
+    <button class="filter-btn" onclick={() => { loadWeatherData(); refreshPlans(); }} style="padding: 2px 8px; font-size: 0.7rem; height: auto;" title={$t('weather.refresh_title')}>
+      🔄 {$t('weather.refresh_btn')}
     </button>
   </div>
   <div class="row">
@@ -627,7 +627,7 @@
 <!-- ⭐ LE NOUVEAU GROUPE UNIFIÉ POUR PLANS PURE -->
 {#if appState.session.weather.mode === 'pure_plan'}
 <div class="group">
-  <div class="group-title">⚙️ Plans Pure & Paramètres</div>
+  <div class="group-title">⚙️ {$t('weather.pure_plans.title')}</div>
 
   <!-- 1. Paramètres PureCtrl -->
   <div class="row" style="background: var(--bg-elevated); padding: 14px; border-radius: 8px; border: 1px solid var(--border-subtle);">
@@ -666,10 +666,10 @@
   <!-- 2. Séparateur / Onglets internes -->
   <div style="display: flex; gap: 10px; margin-top: 10px; margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
     <button class="filter-btn" class:active={pureSubTab === 'existing'} onclick={() => pureSubTab = 'existing'}>
-      📁 Mes plans existants
+      📁 {$t('weather.pure_plans.tab_existing')}
     </button>
     <button class="filter-btn" class:active={pureSubTab === 'custom'} onclick={() => pureSubTab = 'custom'}>
-      ➕ Créer un plan
+      ➕ {$t('weather.pure_plans.tab_custom')}
     </button>
   </div>
 

@@ -6364,6 +6364,8 @@ async fn download_csp_configs(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build()) // ⭐ Updater
+        .plugin(tauri_plugin_process::init())                 // ⭐ Relance après MAJ
         .manage(WatcherState::default())
         // ⭐ LOT 3 : Le Watchdog des périphériques
         .setup(|app| {

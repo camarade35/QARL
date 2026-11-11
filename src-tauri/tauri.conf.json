@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "QARL",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "identifier": "com.plays.qarl",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -13,6 +13,7 @@
     "windows": [
       {
         "title": "QARL",
+        "backgroundColor": "#0f1219",
         "width": 1200,
         "height": 800,
         "decorations": false
@@ -27,6 +28,15 @@
     }
   },
   "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ5MDIyRUEzODBEQjE4RUMKUldUc0dOdUFveTRDU1cyb3dPMHBWSThYU3RuUFVhOGMrUFJ4K1gvQTVBa3NVbjduSzg3L01LYWcK",
+      "endpoints": [
+        "https://github.com/camarade35/QARL/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    },
     "deep-link": {
       "desktop": {
         "schemes": ["qarl", "acmanager"]

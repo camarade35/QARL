@@ -143,6 +143,7 @@ export const appState = $state({
   activeTab: 'tab-cars',
   cars: [], // ⭐ Stocke toutes les voitures pour la génération de la grille
   tracks: [], // ⭐ AJOUT : On initialise le tableau des circuits
+  dataLoadedForPath: '', // ⭐ NOUVEAU : chemin AC pour lequel cars/tracks ont été chargés
   selectedCar: null,
   selectedCarSkin: null,
   selectedTrack: null,

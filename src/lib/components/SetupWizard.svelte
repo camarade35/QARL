@@ -31,8 +31,8 @@
   // ⭐ NOUVELLE FONCTION : Appelée par Step6Recap ET par handleContinue
   async function finishSetup() {
     await alert(
-      $t('setup.reboot_required_msg', { default: "L'installation est terminée !\n\nVeuillez redémarrer QARL pour que toutes les météos et les filtres PP soient correctement chargés." }),
-      $t('setup.reboot_required_title', { default: "Redémarrage nécessaire" }),
+      $t('setup.reboot_required_msg'),
+      $t('setup.reboot_required_title'),
       "info"
     );
     

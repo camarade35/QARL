@@ -44,7 +44,7 @@
       {#if setupState.data.hasCsp && (setupState.data.hasSol || setupState.data.hasPure)}
         ✅ CSP + {setupState.data.hasPure ? 'Pure' : 'Sol'}
       {:else if setupState.data.hasCsp}
-        ⚠️ CSP seul
+        ⚠️ {$t('setup.recap.csp_only')}
       {:else}
         ❌ {$t('setup.recap.missing')}
       {/if}

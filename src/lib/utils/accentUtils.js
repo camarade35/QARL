@@ -67,17 +67,17 @@ export function loadAccentState() {
 // ⭐ NOUVEAU : Gestion du fond d'écran personnalisé (Nuances de gris)
 
 export const GRAYSCALE_SHADES = [
-  { id: 'auto', hex: 'auto', label: 'Auto' },
-  { id: 'g1', hex: '#0a0a0a', label: 'Noir' },
-  { id: 'g2', hex: '#1a1a1a', label: 'Gris 1' },
-  { id: 'g3', hex: '#2b2b2b', label: 'Gris 2' },
-  { id: 'g4', hex: '#404040', label: 'Gris 3' },
-  { id: 'g5', hex: '#595959', label: 'Gris 4' },
-  { id: 'g6', hex: '#737373', label: 'Gris 5' },
-  { id: 'g7', hex: '#999999', label: 'Gris 6' },
-  { id: 'g8', hex: '#c0c0c0', label: 'Gris 7' },
-  { id: 'g9', hex: '#e6e6e6', label: 'Gris 8' },
-  { id: 'g10', hex: '#ffffff', label: 'Blanc' }
+  { id: 'auto', hex: 'auto', label: 'sidebar.bg_shade_auto' },
+  { id: 'g1', hex: '#0a0a0a', label: 'sidebar.bg_shade_g1' },
+  { id: 'g2', hex: '#1a1a1a', label: 'sidebar.bg_shade_g2' },
+  { id: 'g3', hex: '#2b2b2b', label: 'sidebar.bg_shade_g3' },
+  { id: 'g4', hex: '#404040', label: 'sidebar.bg_shade_g4' },
+  { id: 'g5', hex: '#595959', label: 'sidebar.bg_shade_g5' },
+  { id: 'g6', hex: '#737373', label: 'sidebar.bg_shade_g6' },
+  { id: 'g7', hex: '#999999', label: 'sidebar.bg_shade_g7' },
+  { id: 'g8', hex: '#c0c0c0', label: 'sidebar.bg_shade_g8' },
+  { id: 'g9', hex: '#e6e6e6', label: 'sidebar.bg_shade_g9' },
+  { id: 'g10', hex: '#ffffff', label: 'sidebar.bg_shade_g10' }
 ];
 
 export function applyBackgroundShade(shadeId) {

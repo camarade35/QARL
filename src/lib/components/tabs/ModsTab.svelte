@@ -169,7 +169,7 @@
       style="font-size: 0.7rem; padding: 4px 8px; display: flex; align-items: center; gap: 5px;"
       onclick={() => journalPosition = journalPosition === 'inside' ? 'below' : 'inside'}
     >
-      {journalPosition === 'inside' ? '↕️ Déplacer le journal en dessous' : '↕️ Intégrer le journal dans la zone'}
+      {journalPosition === 'inside' ? $t('mods.log_position_below') : $t('mods.log_position_inside')}
     </button>
   </div>
 </div>

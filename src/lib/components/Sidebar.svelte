@@ -256,9 +256,9 @@
                   class:active={currentBgShade === shade.id}
                   style={shade.hex !== 'auto' ? `background-color: ${shade.hex};` : ''}
                   onclick={() => currentBgShade = shade.id}
-                  title={shade.label}
+                  title={$t(shade.label)}
                 >
-                  {#if shade.id === 'auto'}Auto{/if}
+                  {#if shade.id === 'auto'}{$t('sidebar.bg_shade_auto')}{/if}
                 </button>
               {/each}
             </div>

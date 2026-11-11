@@ -1,6 +1,8 @@
 {
   "setup": {
     "title": "Configuration initiale",
+    "reboot_required_msg": "L'installation est terminée !\n\nVeuillez redémarrer QARL pour que toutes les météos et les filtres PP soient correctement chargés.",
+    "reboot_required_title": "Redémarrage nécessaire",
     "warning_ac_required": "⚠️ Assetto Corsa doit être installé et lancé au moins une fois, et vos touches assignées, pour pouvoir utiliser QARL.",
     "warning_close_blocked": "La configuration n'est pas terminée. Si vous quittez maintenant, QARL ne pourra pas fonctionner correctement. Voulez-vous vraiment quitter ?",
     "welcome": {
@@ -58,6 +60,9 @@
       "open_controls": "🎮 Ouvrir les Contrôles",
       "skip": "⏭ Passer",
       "continue": "Continuer →",
+      "loading": "⏳ Chargement des périphériques…",
+      "no_devices_title": "⚠️ {count} périphérique(s) détecté(s)",
+      "no_devices_desc": "Aucun périphérique DirectInput trouvé par Windows.\nSi tu branches un volant, clique sur \"Revérifier\".",
       "floating_banner": "🏗️ Assistant en cours",
       "floating_reopen": "Revenir à l'assistant",
       "floating_ignore": "Ignorer"
@@ -139,6 +144,7 @@
       "content": "Contenu",
       "content_value": "{cars} voitures • {tracks} circuits",
       "csp_weather": "CSP / Météo",
+      "csp_only": "CSP seul",
       "start": "▶ Commencer à utiliser QARL",
       "missing": "⚠️ non renseigné"
     },
@@ -173,6 +179,11 @@
     "unknown": "Inconnue",
     "minimize": "Réduire",
     "maximize": "Agrandir"
+  },
+  "boot": {
+    "loading_cars": "Analyse de vos voitures...",
+    "loading_tracks": "Analyse des circuits...",
+    "ready": "Tout est prêt !"
   },
     "languages": {
     "fr": "Français",
@@ -245,6 +256,7 @@
     "error_docs_path": "Veuillez configurer le dossier Documents (Assetto Corsa) dans les Paramètres.",
     "error_launch": "Erreur au lancement :",
     "accent_color_tooltip": "Couleur d'accentuation",
+    "accent_color_label": "Couleur d'accentuation",
     "bg_color_tooltip": "Couleur de fond",
     "reset_bg_tooltip": "Réinitialiser le fond",
     "toggle_theme_tooltip": "Basculer clair/sombre",
@@ -263,6 +275,17 @@
     "accent_intensity": "Intensité",
     "accent_intensity_tooltip": "Ajuste l'intensité du halo de la couleur d'accentuation",
     "bg_shade": "Fond",
+    "bg_shade_auto": "Auto",
+    "bg_shade_g1": "Noir",
+    "bg_shade_g2": "Gris 1",
+    "bg_shade_g3": "Gris 2",
+    "bg_shade_g4": "Gris 3",
+    "bg_shade_g5": "Gris 4",
+    "bg_shade_g6": "Gris 5",
+    "bg_shade_g7": "Gris 6",
+    "bg_shade_g8": "Gris 7",
+    "bg_shade_g9": "Gris 8",
+    "bg_shade_g10": "Blanc",
     "toggle_advanced_settings": "Réglages avancés de couleur et de fond",
     "error_custom_plan_name": "Veuillez donner un nom d'au moins 3 caractères à votre plan personnalisé avant de lancer la course."
   },
@@ -434,6 +457,8 @@
     "start_hour": "Heure de début de session",
     "time_mult": "Multiplicateur de temps",
     "group_conditions": "Conditions météo",
+    "refresh_btn": "Rafraîchir",
+    "refresh_title": "Rafraîchir les météos et les plans",
     "mode_label": "Mode météo",
     "mode_static": "Météo fixe",
     "mode_schedule": "Schedule (Dynamique CSP)",
@@ -497,6 +522,11 @@
       "edit_loaded": "Le plan a été chargé dans l'éditeur ci-dessous. Tu peux le modifier et l'enregistrer.",
       "edit_error": "Erreur lors du chargement pour édition : {error}",
       "name_too_short": "Le nom du plan doit contenir au moins 3 caractères."
+    },
+    "pure_plans": {
+      "title": "Plans Pure & Paramètres",
+      "tab_existing": "Mes plans existants",
+      "tab_custom": "Créer un plan"
     },
     "pure_ctrl": {
       "group_title": "Paramètres pureCtrl",
@@ -653,6 +683,19 @@
       "device_changed_msg": "Un périphérique de contrôle a été connecté ou déconnecté.\n\nLes correspondances de boutons risquent d'être incorrectes. Veuillez redémarrer QARL avant d'assigner de nouvelles commandes.",
       "btn_restart": "Redémarrer QARL",
       "btn_ignore": "Ignorer",
+      "status_searching": "Recherche de périphérique... Appuie sur une pédale pour activer.",
+      "status_connected": "✅ Connecté : {id}...",
+      "status_no_device": "⚠️ Aucun périphérique détecté. Appuie sur une pédale ou tourne le volant.",
+      "status_disconnected": "⚠️ Périphérique déconnecté.",
+      "wheel_alt": "Volant",
+      "wheel_lock": "Lock :",
+      "gearbox_alt": "Base Boîte en H",
+      "knob_alt": "Pommeau",
+      "axis_label": "Axe {name} ({id})",
+      "axis_slider": "Axe Slider {id} ({num})",
+      "hold_mode": "Activer le Hold Mode (maintenir le bouton)",
+      "debug_axis": "Axe",
+      "debug_btn": "BTN",
       "categories": {
         "axes": "Axes principaux",
         "gearbox": "Boîte & Moteur",
@@ -759,6 +802,8 @@
       },
       "guide": {
         "title": "Guide visuel de QARL",
+        "shrink": "Réduire",
+        "enlarge": "Agrandir",
         "cards": {
           "setup_title": "L'Assistant d'installation",
           "setup_desc": "Installez facilement CSP, Sol ou Pure dès le premier lancement.",
@@ -865,6 +910,19 @@
       }
     },
     "general": {
+      "error_python_app": "Impossible de modifier l'application Python.",
+      "error_ac_language": "Erreur lors de la modification de la langue du jeu : ",
+      "appearance_title": "Apparence",
+      "font_family": "Police de l'interface",
+      "font_inter": "Inter (Moderne & Neutre)",
+      "font_roboto": "Roboto (Classique & Lisible)",
+      "font_montserrat": "Montserrat (Géométrique & Élégant)",
+      "font_poppins": "Poppins (Rond & Amical)",
+      "font_space_grotesk": "Space Grotesk (Tech & Sport)",
+      "font_hint": "Choisissez la police qui s'applique à l'ensemble de l'application.",
+      "wizard_title": "Assistant d'installation",
+      "wizard_desc": "Relance l'assistant de configuration initiale pour revoir les étapes de détection, identité et modules météo.",
+      "wizard_btn": "🏗️ Relancer l'assistant",
       "path_title": "Dossier Assetto Corsa",
       "path_invalid": "Dossier invalide : Impossible de trouver acs.exe. Vérifie le chemin.",
       "path_label": "Chemin d'installation du jeu",
@@ -927,6 +985,10 @@
       "autosave_qualify": "Nombre max de qualifications à enregistrer (-1 = infini)",
       "autosave_others": "Nombre max d'autres types de sessions à enregistrer (-1 = infini)",
       "autosave_min_time": "Temps minimum pour sauvegarder le replay (utile pour éviter les replays de sessions sautées)"
+    },
+    "lightbox": {
+      "prev": "Précédent (←)",
+      "next": "Suivant (→)"
     },
     "photo": {
       "gallery_title": "Galerie de captures d'écran",
@@ -1001,6 +1063,8 @@
     "drop_desc": "Installation 100% automatique : voitures, circuits, apps et extensions sont triés. Vous pouvez déposer plusieurs fichiers.",
     "extracting": "⏳ Extraction de l'archive {current} sur {total}...",
     "history_title": "Historique des installations",
+    "log_position_below": "↕️ Déplacer le journal en dessous",
+    "log_position_inside": "↕️ Intégrer le journal dans la zone",
     "history_empty": "Aucun mod installé via QARL.",
     "history_type": "Type: {type} • Installé le: {date}",
     "history_view": "📁 Voir",
@@ -1031,6 +1095,9 @@
   },
     "online": {
     "paste_title": "🔗 Coller un lien de serveur",
+    "dissociate_btn": "🔓 DISSOCIER",
+    "associate_btn": "🔗 ASSOCIER",
+    "edit_btn_title": "Modifier",
     "paste_placeholder": "https://acstuff.club/... ou IP:PORT",
     "join_btn": "▶ Rejoindre",
     "add_manual_title": "Ajouter un serveur manuellement",
@@ -1128,6 +1195,8 @@
     "no_common_cars": "❌ Aucune voiture en commun avec le serveur. Installe-en une via Gestion Mods."
   },
     "video": {
+    "refresh_filters": "Rafraîchir la liste des filtres",
+    "res_native": "native",
     "presets": {
       "title": "Presets Vidéo",
       "placeholder": "Choisir un preset",
@@ -1209,6 +1278,11 @@
   },
       "csp": {
     "title": "Custom Shaders Patch — Modules",
+    "download_starting": "Démarrage...",
+    "download_error": "Erreur lors du téléchargement : ",
+    "btn_download_configs": "📥 Configs CSP",
+    "btn_download_configs_loading": "⏳ Chargement...",
+    "btn_download_configs_title": "Mettre à jour les configs (clignotants, feux, etc.)",
     "categories": {
       "graphics": "🎨 Graphismes & Rendu",
       "camera": "🎥 Caméra & Vue",
