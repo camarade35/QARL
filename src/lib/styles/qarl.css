@@ -7567,3 +7567,23 @@ select:disabled, input:disabled {
   transform: scale(1.1);
   box-shadow: 0 0 0 2px var(--bg-panel), 0 0 0 4px var(--accent);
 }
+
+.car-preview {
+  opacity: 0;
+  transition: opacity 0.4s ease-in-out;
+}
+.car-preview.loaded {
+  opacity: 1;
+}
+
+/* ⭐ Effet de fondu pour les images des circuits */
+.track-bg,
+.track-outline {
+  opacity: 0;
+  transition: opacity 0.4s ease-in-out;
+}
+
+.track-bg.loaded,
+.track-outline.loaded {
+  opacity: 1;
+}

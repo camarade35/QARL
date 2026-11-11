@@ -197,11 +197,21 @@
       >
         <div class="track-preview-box" style="background: #0f1219; display: flex; align-items: center; justify-content: center;">
           {#if bgImage}
-            <img class="track-bg" src={convertFileSrc(bgImage)} alt="" />
+            <img 
+              class="track-bg" 
+              src={convertFileSrc(bgImage)} 
+              alt="" 
+              onload={(e) => e.currentTarget.classList.add('loaded')} 
+            />
           {/if}
           
           {#if outlineImage}
-            <img class="track-outline" src={convertFileSrc(outlineImage)} alt="" />
+            <img 
+              class="track-outline" 
+              src={convertFileSrc(outlineImage)} 
+              alt="" 
+              onload={(e) => e.currentTarget.classList.add('loaded')} 
+            />
           {:else if !bgImage}
             <!-- Fallback si le circuit n'a AUCUNE image -->
             <div style="position: relative; z-index: 2; color: var(--text-tertiary); font-size: 0.8rem; text-align: center; padding: 10px;">

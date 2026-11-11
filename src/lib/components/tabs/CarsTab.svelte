@@ -278,7 +278,12 @@
       {/if}
 
       {#if car.image_path}
-        <img src={convertFileSrc(car.image_path)} class="car-preview" loading="lazy" />
+        <img 
+          src={convertFileSrc(car.image_path)} 
+          class="car-preview" 
+          loading="lazy" 
+          onload={(e) => e.currentTarget.classList.add('loaded')} 
+        />
       {:else}
         <div class="car-preview" style="display: flex; align-items: center; justify-content: center; color: var(--text-tertiary);">{$t('cars.no_image')}</div>
       {/if}
