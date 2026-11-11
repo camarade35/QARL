@@ -34,7 +34,7 @@ C'est un outil pour la communauté, pour qu'on puisse tous continuer à profiter
 
 | **L'interface principale** | **Le guide visuel intégré** |
 | :---: | :---: |
-| <img src="docs/screenshots/interface.png" width="400" alt="Interface" /> | <img src="docs/screenshots/help.png" width="400" alt="Onglet Aide" /> |
+| <img src="docs/screenshots/interface.png" width="400" alt="Interface" /> | <img src="static/assets/help/settings/settings_8_help.png" width="400" alt="Onglet Aide" /> |
 | *Sélectionnez vos voitures et circuits en un éclair.* | *Un onglet Aide complet pour tout comprendre.* |
 
 | **Gestion des Mods (Drag & Drop)** | **Météo Dynamique (Pure/Sol)** |
@@ -90,7 +90,7 @@ It's a tool for the community, so we can all keep enjoying this incredible game.
 ### 📸 Screenshots
 | **Main Interface** | **Built-in Visual Guide** |
 | :---: | :---: |
-| <img src="docs/screenshots/interface.png" width="400" /> | <img src="docs/screenshots/help.png" width="400" /> |
+| <img src="docs/screenshots/interface.png" width="400" /> | <img src="static/assets/help/settings/settings_8_help.png" width="400" /> |
 
 | **Mod Manager (Drag & Drop)** | **Dynamic Weather (Pure/Sol)** |
 | :---: | :---: |
