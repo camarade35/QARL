@@ -389,14 +389,17 @@ fn get_ac_tracks(ac_path: String) -> Result<Vec<TrackInfo>, String> {
                                     }
                                 }
 
-                                // ⭐ On cherche les images
+                                // ⭐ On cherche les images (en testant TOUS les emplacements possibles)
                                 let sub_outline = get_exact_image(&sub_path, "outline")
-                                    .or_else(|| get_exact_image(&sub_path.join("ui"), "outline"));
+                                    .or_else(|| get_exact_image(&sub_path.join("ui"), "outline"))
+                                    .or_else(|| get_exact_image(&ui_dir.join(&folder_name), "outline")); // ⭐ Ajout ici
                                     
                                 let sub_preview = get_exact_image(&sub_path, "preview")
                                     .or_else(|| get_exact_image(&sub_path.join("ui"), "preview"))
+                                    .or_else(|| get_exact_image(&ui_dir.join(&folder_name), "preview")) // ⭐ Ajout ici
                                     .or_else(|| get_exact_image(&sub_path, "dlc_preview"))
-                                    .or_else(|| get_exact_image(&sub_path.join("ui"), "dlc_preview"));
+                                    .or_else(|| get_exact_image(&sub_path.join("ui"), "dlc_preview"))
+                                    .or_else(|| get_exact_image(&ui_dir.join(&folder_name), "dlc_preview")); // ⭐ Ajout ici
 
                                 if sub_outline.is_some() || sub_preview.is_some() {
                                     layouts.push(TrackLayoutInfo {
@@ -2397,11 +2400,19 @@ async fn install_mod_from_archive(
                         continue;
                     }
 
-                    // Cas C : C'est un circuit brut (cherche ui/ui_track.json)
+                    // Cas C : C'est un circuit brut
+                    // ⭐ On cherche ui/ui_track.json OU la présence conjointe d'un dossier "ui" et de fichiers ".kn5"
                     let track_json = path.join("ui").join("ui_track.json");
-                    if track_json.exists() {
+                    let has_ui_dir = path.join("ui").is_dir();
+                    let has_kn5 = if let Ok(entries) = std::fs::read_dir(&path) {
+                        entries.flatten().any(|e| e.path().extension().map_or(false, |ext| ext == "kn5"))
+                    } else {
+                        false
+                    };
+
+                    if track_json.exists() || (has_ui_dir && has_kn5) {
                         tracks.push((entry.file_name().to_string_lossy().to_string(), path.clone()));
-                        continue;
+                        continue; // ⭐ On s'arrête là, on ne fouille pas dans les sous-dossiers (layouts)
                     }
 
                     // Si c'est un dossier racine (ex: "MonMod"), on continue de chercher à l'intérieur

@@ -44,10 +44,10 @@
             >
               <div class="track-preview-box" style="height: 100px; background: #0f1219;">
                 {#if layout.preview_path}
-                  <img class="track-bg" src={convertFileSrc(layout.preview_path)} alt="" />
+                  <img class="track-bg" src={convertFileSrc(layout.preview_path)} alt="" onload={(e) => e.currentTarget.classList.add('loaded')} />
                 {/if}
                 {#if layout.outline_path}
-                  <img class="track-outline" src={convertFileSrc(layout.outline_path)} alt="" />
+                  <img class="track-outline" src={convertFileSrc(layout.outline_path)} alt="" onload={(e) => e.currentTarget.classList.add('loaded')} />
                 {/if}
               </div>
               <!-- ⭐ Texte sur 2 lignes max, centré -->
