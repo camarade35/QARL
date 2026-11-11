@@ -1,8 +1,9 @@
 [package]
 name = "qarl"
 version = "1.0.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "QARL - Quick Assetto Race Launcher"
+authors = ["camarade35"]
+license = "GPL-3.0"
 edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
