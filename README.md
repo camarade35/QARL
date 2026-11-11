@@ -1,6 +1,6 @@
 <div align="center">
   <img src="docs/screenshots/logo.png" alt="QARL Logo" width="200" />
-  <h1>QARL - Quick Assetto Racing Launcher</h1>
+  <h1>QARL - Quick Assetto Race Launcher</h1>
   <p><i>Un launcher moderne, rapide et simple. Fait par passion, pour la communauté.</i></p>
 
   [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
