@@ -225,7 +225,7 @@
         updateStatus = 'available';
       } else {
         updateStatus = 'idle';
-        if (!silent) alert("QARL est déjà à jour ! (v" + APP_VERSION + ")");
+        if (!silent) alert($t('settings.general.update_uptodate') + " (" + APP_VERSION + ")");
       }
     } catch (e) {
       console.error("Erreur de MAJ:", e);
@@ -489,17 +489,17 @@
       <!-- ⭐ Bouton de MAJ -->
       <div style="display: flex; align-items: center; gap: 12px;">
         {#if updateStatus === 'checking'}
-          <span style="color: var(--text-secondary); font-size: 0.85rem;">Vérification...</span>
+          <span style="color: var(--text-secondary); font-size: 0.85rem;">{$t('common.loading')}</span>
         {:else if updateStatus === 'available'}
-          <span style="color: var(--accent); font-size: 0.85rem; font-weight: 600;">Version {updateVersion} disponible !</span>
-          <button class="btn-launch" onclick={installUpdate} style="padding: 6px 12px; height: auto; font-size: 0.85rem;">⬇ Installer</button>
+          <span style="color: var(--accent); font-size: 0.85rem; font-weight: 600;">{$t('settings.general.update_available', { values: { version: updateVersion } })}</span>
+          <button class="btn-launch" onclick={installUpdate} style="padding: 6px 12px; height: auto; font-size: 0.85rem;">{$t('settings.general.update_install')}</button>
         {:else if updateStatus === 'downloading'}
-          <span style="color: var(--text-secondary); font-size: 0.85rem;">Téléchargement... {updateProgress.toFixed(0)}%</span>
+          <span style="color: var(--text-secondary); font-size: 0.85rem;">{$t('settings.general.update_downloading', { values: { percent: updateProgress.toFixed(0) } })}</span>
         {:else if updateStatus === 'error'}
-          <span style="color: #e57373; font-size: 0.85rem;" title={updateErrorMsg}>Erreur de MAJ</span>
-          <button class="btn-secondary" onclick={() => checkForUpdates(false)} style="padding: 6px 12px; height: auto; font-size: 0.85rem;">Réessayer</button>
+          <span style="color: #e57373; font-size: 0.85rem;" title={updateErrorMsg}>{$t('settings.general.update_error')}</span>
+          <button class="btn-secondary" onclick={() => checkForUpdates(false)} style="padding: 6px 12px; height: auto; font-size: 0.85rem;">{$t('settings.general.update_retry')}</button>
         {:else}
-          <button class="btn-secondary" onclick={() => checkForUpdates(false)} style="padding: 6px 12px; height: auto; font-size: 0.85rem;">🔄 Vérifier les MAJ</button>
+          <button class="btn-secondary" onclick={() => checkForUpdates(false)} style="padding: 6px 12px; height: auto; font-size: 0.85rem;">{$t('settings.general.update_check')}</button>
         {/if}
       </div>
     </div>

@@ -961,7 +961,14 @@
       "data_confirm_title": "Zurücksetzen",
       "modules_checking": "Module werden geprüft...",
       "python_apps_title": "Python-Apps",
-      "python_apps_desc": "Aktiviere oder deaktiviere deine installierten Python-Apps (erfordert einen Neustart des Spiels, um wirksam zu werden)."
+      "python_apps_desc": "Aktiviere oder deaktiviere deine installierten Python-Apps (erfordert einen Neustart des Spiels, um wirksam zu werden).",
+      "update_check": "🔄 Auf Updates prüfen",
+      "update_install": "⬇ Installieren",
+      "update_uptodate": "QARL ist bereits aktuell!",
+      "update_available": "Version {version} verfügbar!",
+      "update_downloading": "Herunterladen... {percent}%",
+      "update_error": "Update-Fehler",
+      "update_retry": "Erneut versuchen"
     }
   },
   "media": {

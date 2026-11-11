@@ -58,10 +58,10 @@ const KUNOS_TRACKS: &[&str] = &[
 ];
 
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, serde::Deserialize, Clone)]
 struct SkinInfo { name: String, image_path: String }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, serde::Deserialize, Clone)]
 struct CarInfo {
     id: String, name: String, brand: String, image_path: String,
     flag_path: Option<String>, brand_logo_path: Option<String>,
@@ -72,14 +72,14 @@ struct CarInfo {
     year: i32,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, serde::Deserialize, Clone)]
 struct TrackLayoutInfo {
     id: String, name: String,
     outline_path: Option<String>,
     preview_path: Option<String>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, serde::Deserialize, Clone)]
 struct TrackInfo {
     id: String, name: String, city: String, country: String,
     flag_path: Option<String>, preview_path: Option<String>,
@@ -170,6 +170,19 @@ fn clean_track_id(id: &str) -> String {
 fn get_ac_cars(ac_path: String) -> Result<Vec<CarInfo>, String> {
     let cars_dir = Path::new(&ac_path).join("content").join("cars");
     if !cars_dir.exists() { return Err("Dossier introuvable".into()); }
+    
+    // ⭐ CACHE DE DÉMARRAGE RAPIDE
+    let cache_dir = dirs::data_dir().unwrap_or_default().join("QARL");
+    let _ = fs::create_dir_all(&cache_dir);
+    let cache_file = cache_dir.join("cars_cache.json");
+    if cache_file.exists() {
+        if let Ok(content) = fs::read_to_string(&cache_file) {
+            if let Ok(cached_cars) = serde_json::from_str::<Vec<CarInfo>>(&content) {
+                return Ok(cached_cars);
+            }
+        }
+    }
+
     let mut cars = Vec::new();
     
     if let Ok(entries) = fs::read_dir(cars_dir) {
@@ -246,6 +259,9 @@ fn get_ac_cars(ac_path: String) -> Result<Vec<CarInfo>, String> {
         }
     }
     cars.sort_by(|a, b| a.name.cmp(&b.name));
+    if let Ok(json) = serde_json::to_string(&cars) {
+        let _ = fs::write(&cache_file, json);
+    }
     Ok(cars)
 }
 
@@ -253,6 +269,19 @@ fn get_ac_cars(ac_path: String) -> Result<Vec<CarInfo>, String> {
 fn get_ac_tracks(ac_path: String) -> Result<Vec<TrackInfo>, String> {
     let tracks_dir = Path::new(&ac_path).join("content").join("tracks");
     if !tracks_dir.exists() { return Err("Dossier content/tracks introuvable".into()); }
+    
+    // ⭐ CACHE DE DÉMARRAGE RAPIDE
+    let cache_dir = dirs::data_dir().unwrap_or_default().join("QARL");
+    let _ = fs::create_dir_all(&cache_dir);
+    let cache_file = cache_dir.join("tracks_cache.json");
+    if cache_file.exists() {
+        if let Ok(content) = fs::read_to_string(&cache_file) {
+            if let Ok(cached_tracks) = serde_json::from_str::<Vec<TrackInfo>>(&content) {
+                return Ok(cached_tracks);
+            }
+        }
+    }
+
     let mut tracks = Vec::new();
 
     if let Ok(entries) = fs::read_dir(tracks_dir) {
@@ -402,6 +431,9 @@ fn get_ac_tracks(ac_path: String) -> Result<Vec<TrackInfo>, String> {
     }
 
     tracks.sort_by(|a, b| a.name.cmp(&b.name));
+    if let Ok(json) = serde_json::to_string(&tracks) {
+        let _ = fs::write(&cache_file, json);
+    }
     Ok(tracks)
 }
 
@@ -2452,6 +2484,11 @@ async fn install_mod_from_archive(
 
     // 8. Nettoyage du dossier temporaire
     let _ = std::fs::remove_dir_all(&temp_dir);
+    
+    // ⭐ VIDER LE CACHE CAR LE CONTENU A CHANGÉ
+    let cache_dir = dirs::data_dir().unwrap_or_default().join("QARL");
+    let _ = std::fs::remove_file(cache_dir.join("cars_cache.json"));
+    let _ = std::fs::remove_file(cache_dir.join("tracks_cache.json"));
 
     // 9. Vérification de sécurité : a-t-on vraiment copié quelque chose ?
     if total_copied == 0 {

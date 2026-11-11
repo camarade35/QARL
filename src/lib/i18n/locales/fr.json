@@ -963,7 +963,14 @@
       "data_confirm_title": "Réinitialisation",
       "modules_checking": "Vérification des modules en cours...",
       "python_apps_title": "Applications Python",
-      "python_apps_desc": "Activez ou désactivez vos applications Python installées (nécessite un redémarrage du jeu pour prendre effet)."
+      "python_apps_desc": "Activez ou désactivez vos applications Python installées (nécessite un redémarrage du jeu pour prendre effet).",
+      "update_check": "🔄 Vérifier les MAJ",
+      "update_install": "⬇ Installer",
+      "update_uptodate": "QARL est déjà à jour !",
+      "update_available": "Version {version} disponible !",
+      "update_downloading": "Téléchargement... {percent}%",
+      "update_error": "Erreur de MAJ",
+      "update_retry": "Réessayer"
     }
   },
   "media": {

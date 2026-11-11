@@ -960,7 +960,14 @@
       "data_confirm_title": "Reset",
       "modules_checking": "Checking modules...",
       "python_apps_title": "Python Apps",
-      "python_apps_desc": "Enable or disable your installed Python apps (requires a game restart to take effect)."
+      "python_apps_desc": "Enable or disable your installed Python apps (requires a game restart to take effect).",
+      "update_check": "🔄 Check for Updates",
+      "update_install": "⬇ Install",
+      "update_uptodate": "QARL is already up to date!",
+      "update_available": "Version {version} available!",
+      "update_downloading": "Downloading... {percent}%",
+      "update_error": "Update error",
+      "update_retry": "Retry"
     }
   },
   "media": {
