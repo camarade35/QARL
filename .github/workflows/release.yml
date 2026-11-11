@@ -1,6 +1,6 @@
 name: 'Release'
 
-on:
+'on':
   push:
     tags:
       - 'v*'
@@ -35,7 +35,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'QARL ${{ github.ref_name }}'
-          releaseBody: 'Mise à jour de QARL.'
+          releaseBody: 'Mise à jour automatique de QARL.'
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
