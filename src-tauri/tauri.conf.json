@@ -57,7 +57,8 @@
     "resources": [
       "resources/controllers/*",
       "resources/track_ext_config.ini",
-      "resources/7za.exe"
+      "resources/7z.exe",
+      "resources/7z.dll"
     ],
     "windows": {
       "nsis": {

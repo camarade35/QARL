@@ -1,5 +1,8 @@
 use std::fs;
 use std::path::Path;
+
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use std::sync::Mutex;
 use serde::Serialize;
 use tauri::Emitter;
@@ -2285,20 +2288,25 @@ async fn install_mod_from_archive(
     std::fs::create_dir_all(&temp_dir).map_err(|e| format!("Erreur création dossier temp: {}", e))?;
 
     // 2. Trouver l'exécutable 7za.exe dans les ressources de Tauri
-    let seven_zip_path = app_handle.path().resolve("resources/7za.exe", tauri::path::BaseDirectory::Resource)
-        .map_err(|e| format!("7za.exe introuvable dans les ressources: {}", e))?;
+    let seven_zip_path = app_handle.path().resolve("resources/7z.exe", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| format!("7z.exe introuvable dans les ressources: {}", e))?;
 
     let _ = on_event.send(serde_json::json!({ "type": "start", "total": 100.0 }));
 
-    // 3. Lancer 7za.exe pour extraire dans le dossier temporaire
-    let mut child = Command::new(seven_zip_path)
-        .args(["x", &archive_path, &format!("-o{}", temp_dir.to_string_lossy()), "-y", "-bsp1"])
+    // 3. Lancer 7z.exe pour extraire dans le dossier temporaire
+    let mut cmd = Command::new(seven_zip_path);
+    cmd.args(["x", &archive_path, &format!("-o{}", temp_dir.to_string_lossy()), "-y", "-bsp1"])
         .stdout(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("Erreur lors du lancement de 7za.exe: {}", e))?;
+        .stderr(Stdio::null()); // ⭐ Redirige stderr pour empêcher Windows de créer une console
 
-        let mut stdout = child.stdout.take().ok_or("Impossible de lire la sortie de 7za.exe")?;
-    let mut stderr = child.stderr.take(); // ⭐ On capture aussi les erreurs pour éviter les deadlocks
+    // ⭐ LA LIGNE MAGIQUE POUR CACHER LA FENÊTRE NOIRE
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+
+    let mut child = cmd.spawn()
+        .map_err(|e| format!("Erreur lors du lancement de 7z.exe: {}", e))?;
+
+        let mut stdout = child.stdout.take().ok_or("Impossible de lire la sortie de 7z.exe")?;
     let mut last_percent = 0.0;
     let mut current_str = String::new();
     let mut buffer = [0u8; 1024];
@@ -2351,11 +2359,7 @@ async fn install_mod_from_archive(
         }
     }
     
-    // ⭐ On vide stderr à la fin pour éviter que le processus ne bloque s'il y a eu beaucoup d'erreurs
-    if let Some(mut err) = stderr.take() {
-        let mut err_buf = Vec::new();
-        let _ = err.read_to_end(&mut err_buf);
-    }
+    // stderr est redirigé vers null, pas besoin de le lire
 
     let status = child.wait().map_err(|e| format!("Erreur d'attente de 7za.exe: {}", e))?;
     if !status.success() {
