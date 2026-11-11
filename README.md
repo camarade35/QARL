@@ -57,8 +57,8 @@ C'est un outil pour la communauté, pour qu'on puisse tous continuer à profiter
 3. Suivez l'assistant pour configurer votre jeu et installer vos modules (CSP/Pure).
 4. C'est prêt. Bonne course.
 
-**Crédits et Remerciements :**
-Un immense merci à **Kunos Simulazioni** pour Assetto Corsa, à **Peter Boese** (Pure), **Ilja Jusupov** (CSP) et **Sol**. Et une pensée spéciale à la communauté d'**Overtake.gg** et aux créateurs de **Content Manager** sans qui rien de tout cela ne serait possible. 
+**Remerciements :**
+Un immense merci à la communauté dans son ensemble. Merci à **Kunos Simulazioni** pour Assetto Corsa, à **Ilja Jusupov** pour Content Manager et CSP, à **Peter Boese** pour Pure, et à toute l'équipe derrière **Sol**. Et une pensée spéciale à la communauté d'**Overtake.gg** sans qui rien de tout cela ne serait possible.
 
 *Licence : GPLv3*
 
@@ -102,7 +102,7 @@ It's a tool for the community, so we can all keep enjoying this incredible game.
 </div>
 
 **Credits & Thanks:**
-A huge thank you to **Kunos Simulazioni** for Assetto Corsa, to **Peter Boese** (Pure), **Ilja Jusupov** (CSP) and **Sol**. And a special thought to the **Overtake.gg** community and the creators of **Content Manager**, without whom none of this would be possible.
+A huge thank you to the entire community. Thanks to **Kunos Simulazioni** for Assetto Corsa, to **Ilja Jusupov** for Content Manager and CSP, to **Peter Boese** for Pure, and the entire team behind **Sol**. And a special thought to the **Overtake.gg** community, without whom none of this would be possible.
 
 *License: GPLv3*
 </details>
@@ -127,14 +127,14 @@ Es una herramienta para la comunidad, para que todos podamos seguir disfrutando 
 ### 📸 Capturas de pantalla
 | **Interfaz principal** | **Guía visual integrada** |
 | :---: | :---: |
-| <img src="docs/screenshots/interface.png" width="400" /> | <img src="docs/screenshots/help.png" width="400" /> |
+| <img src="docs/screenshots/interface.png" width="400" /> | <img src="static/assets/help/settings/settings_8_help.png" width="400" /> |
 
 | **Gestor de Mods** | **Clima Dinámico** |
 | :---: | :---: |
 | <img src="docs/screenshots/mods.png" width="400" /> | <img src="docs/screenshots/weather.png" width="400" /> |
 
 **Créditos y Agradecimientos:**
-Un enorme agradecimiento a **Kunos Simulazioni** por Assetto Corsa, a **Peter Boese** (Pure), **Ilja Jusupov** (CSP) y **Sol**. Y un pensamiento especial a la comunidad de **Overtake.gg** y a los creadores de **Content Manager**, sin quienes nada de esto sería posible.
+Un enorme agradecimiento a toda la comunidad. Gracias a **Kunos Simulazioni** por Assetto Corsa, a **Ilja Jusupov** por Content Manager y CSP, a **Peter Boese** por Pure y a todo el equipo detrás de **Sol**. Y un pensamiento especial a la comunidad de **Overtake.gg**, sin quienes nada de esto sería posible.
 
 *Licencia: GPLv3*
 </details>
@@ -159,14 +159,14 @@ Es ist ein Werkzeug für die Community, damit wir alle weiterhin dieses unglaubl
 ### 📸 Screenshots
 | **Hauptoberfläche** | **Integrierter visueller Leitfaden** |
 | :---: | :---: |
-| <img src="docs/screenshots/interface.png" width="400" /> | <img src="docs/screenshots/help.png" width="400" /> |
+| <img src="docs/screenshots/interface.png" width="400" /> | <img src="static/assets/help/settings/settings_8_help.png" width="400" /> |
 
 | **Mod-Manager** | **Dynamisches Wetter** |
 | :---: | :---: |
 | <img src="docs/screenshots/mods.png" width="400" /> | <img src="docs/screenshots/weather.png" width="400" /> |
 
 **Credits & Dank:**
-Ein riesiges Dankeschön an **Kunos Simulazioni** für Assetto Corsa, an **Peter Boese** (Pure), **Ilja Jusupov** (CSP) und **Sol**. Und ein besonderer Gedanke an die **Overtake.gg**-Community und die Macher von **Content Manager**, ohne die all dies nicht möglich wäre.
+Ein riesiges Dankeschön an die gesamte Community. Danke an **Kunos Simulazioni** für Assetto Corsa, an **Ilja Jusupov** für Content Manager und CSP, an **Peter Boese** für Pure und das gesamte Team hinter **Sol**. Und ein besonderer Gedanke an die **Overtake.gg**-Community, ohne die all dies nicht möglich wäre.
 
 *Lizenz: GPLv3*
 </details>
@@ -191,14 +191,14 @@ Il punto di partenza è la **Procedura Guidata di Primo Avvio**. Rileva il tuo g
 ### 📸 Screenshot
 | **Interfaccia principale** | **Guida visiva integrata** |
 | :---: | :---: |
-| <img src="docs/screenshots/interface.png" width="400" /> | <img src="docs/screenshots/help.png" width="400" /> |
+| <img src="docs/screenshots/interface.png" width="400" /> | <img src="static/assets/help/settings/settings_8_help.png" width="400" /> |
 
 | **Gestore Mod** | **Meteo Dinamico** |
 | :---: | :---: |
 | <img src="docs/screenshots/mods.png" width="400" /> | <img src="docs/screenshots/weather.png" width="400" /> |
 
 **Crediti e Ringraziamenti:**
-Un enorme ringraziamento a **Kunos Simulazioni** per Assetto Corsa, a **Peter Boese** (Pure), **Ilja Jusupov** (CSP) e **Sol**. E un pensiero speciale alla community di **Overtake.gg** e ai creatori di **Content Manager**, senza i quali nulla di tutto ciò sarebbe possibile.
+Un enorme ringraziamento a tutta la community. Grazie a **Kunos Simulazioni** per Assetto Corsa, a **Ilja Jusupov** per Content Manager e CSP, a **Peter Boese** per Pure e a tutto il team dietro **Sol**. E un pensiero speciale alla community di **Overtake.gg**, senza i quali nulla di tutto ciò sarebbe possibile.
 
 *Licenza: GPLv3*
 </details>
