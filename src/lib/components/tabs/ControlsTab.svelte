@@ -11,7 +11,7 @@
     import { 
     Lightbulb, Zap, Megaphone, CloudRain, CloudDrizzle, Sun, 
     BatteryCharging, Wind, Timer, Power, Camera, 
-    ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ScanEye,
+    ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ScanEye, ArrowLeftRight,
     ChevronUp, ChevronDown, ArrowLeftCircle, ArrowRightCircle, TriangleAlert,
     Plus, Minus, UserCheck, Settings, FastForward, RotateCcw, ShieldAlert, ShieldCheck, 
     Disc, ChevronsUp, ChevronsDown, PauseCircle, RefreshCcw, Flag, PlayCircle, 
@@ -31,6 +31,10 @@
   let hasChanges = $state(false);
   let lastSavedIniContent = '';
   let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
+  // ⭐ Pour le clavier : savoir si on assigne Gauche ou Droite
+  let keyboardDirCapture = $state<'LEFT' | 'RIGHT' | null>(null);
+  // ⭐ NOUVEAU : État en direct des touches du clavier
+  let liveKeyStates = $state<Record<string, boolean>>({});
 
   // Profils
   let profiles = $state<{name: string, path: string, profile_type: string}[]>([]);
@@ -106,6 +110,46 @@
       profiles = await invoke('get_controller_profiles', { documentsPath: appState.documentsPath });
     } catch (e) {
       console.error("Erreur chargement profils:", e);
+    }
+  }
+
+  // ⭐ NOUVEAU : Gestion du changement d'onglet avec Auto-save
+  async function changeDeviceType(newType: 'wheel' | 'x360' | 'keyboard') {
+    if (deviceType === newType) return;
+    
+    // 1. On sauvegarde le profil actuel SANS l'appliquer au jeu (applyToGame: false)
+    if (appState.documentsPath && iniContent) {
+      try {
+        await invoke('write_controls_ini', {
+          documentsPath: appState.documentsPath,
+          deviceType: deviceType,
+          content: iniContent,
+          saveAsName: null,
+          applyToGame: false // ⭐ On ne touche pas au controls.ini global ici
+        });
+      } catch (e) {
+        console.warn("Erreur auto-save:", e);
+      }
+    }
+    
+    // 2. On change l'onglet et on charge le nouveau
+    deviceType = newType;
+    selectedProfilePath = '';
+    await loadIni();
+
+    // 3. ⭐ On applique le NOUVEAU profil au jeu pour que controls.ini soit synchronisé
+    if (appState.documentsPath && iniContent) {
+      try {
+        await invoke('write_controls_ini', {
+          documentsPath: appState.documentsPath,
+          deviceType: deviceType,
+          content: iniContent,
+          saveAsName: null,
+          applyToGame: true // ⭐ Le nouveau périphérique devient actif
+        });
+      } catch (e) {
+        console.warn("Erreur application profil:", e);
+      }
     }
   }
 
@@ -235,6 +279,19 @@
   }
 
   function handleKeyDown(e: KeyboardEvent) {
+    // ⭐ Cas spécial : Capture direction clavier
+    if (keyboardDirCapture) {
+      e.preventDefault();
+      e.stopPropagation();
+      const hexCode = '0x' + e.keyCode.toString(16).toUpperCase();
+      if (!parsedIni['KEYBOARD']) parsedIni['KEYBOARD'] = { _raw: {} };
+      parsedIni['KEYBOARD'][keyboardDirCapture] = hexCode;
+      iniContent = stringifyIni(parsedIni);
+      hasChanges = true;
+      keyboardDirCapture = null;
+      return;
+    }
+
     if (!isCapturing || !capturingSection) return;
     e.preventDefault();
     e.stopPropagation();
@@ -347,50 +404,81 @@
     return -1;
   }
 
-  // ⭐ RÉSOLUTION INFaillible : On demande à Rust qui a bougé
-  async function resolveAcJoyFromGamepad(webviewIndex: number, gp: Gamepad | null): Promise<number> {
+  // ⭐ RÉSOLUTION INFaillible : On matche par index direct !
+  async function resolveAcJoyFromGamepad(webviewIndex: number, gp: Gamepad | null, isButton: boolean = false): Promise<number> {
     if (!gp) return -1;
+
+    // ⭐ 1. On cherche TOUJOURS par nom en priorité
+    const gpName = gp.id.split(' (')[0].trim().toLowerCase();
+    let targetDev = dinputDevices.find(d => d.name.toLowerCase() === gpName);
     
+    // ⭐ 2. Recherche par inclusion
+    if (!targetDev) {
+      targetDev = dinputDevices.find(d => {
+        const dName = d.name.toLowerCase();
+        return dName.includes(gpName) || gpName.includes(dName);
+      });
+    }
+
+    // ⭐ 3. Sécurité spéciale Xbox (si "Controller (XBOX...)" vs "Xbox 360 Controller")
+    if (!targetDev && gpName.includes('xbox')) {
+      targetDev = dinputDevices.find(d => d.name.toLowerCase().includes('xbox'));
+    }
+
+    // ⭐ 4. En DERNIER RECOURS seulement, on utilise l'index WebView
+    if (!targetDev) {
+      targetDev = dinputDevices[webviewIndex];
+    }
+
+    // ⭐ 3. Si on a trouvé le périphérique, on l'enregistre dans controls.ini et on renvoie son index AC
+    if (targetDev && appState.documentsPath) {
+      try {
+        const idx = await invoke<number>('ensure_controller_registered', {
+          documentsPath: appState.documentsPath,
+          pguid: targetDev.pguid,
+          iguid: targetDev.iguid,
+          name: targetDev.name
+        });
+        if (!parsedIni['CONTROLLERS']) parsedIni['CONTROLLERS'] = { _raw: {} };
+        parsedIni['CONTROLLERS'][`CON${idx}`] = targetDev.name;
+        parsedIni['CONTROLLERS'][`__IGUID${idx}`] = targetDev.iguid;
+        parsedIni['CONTROLLERS'][`PGUID${idx}`] = targetDev.pguid;
+        return idx;
+      } catch (e) {
+        console.error("Erreur enregistrement device:", e);
+      }
+    }
+
+    // ⭐ 4. En dernier recours, on tente la vieille méthode
     try {
       const currentStates = await invoke<any[]>('get_directinput_states');
       let bestMatchIndex = -1;
-      let maxDelta = 0;
-
-      for (let i = 0; i < currentStates.length; i++) {
-        const state = currentStates[i];
-        let delta = 0;
-
-        for (let a = 0; a < state.axes.length; a++) {
-          const normVal = state.axes[a] / 32768.0;
-          if (Math.abs(normVal) > 0.15) {
-             delta += Math.abs(normVal);
+      if (isButton) {
+        for (let i = 0; i < currentStates.length; i++) {
+          if (currentStates[i].buttons && currentStates[i].buttons.some((b: boolean) => b)) {
+            bestMatchIndex = i; break;
           }
         }
-
-        if (delta > maxDelta) {
-          maxDelta = delta;
-          bestMatchIndex = i;
-        }
       }
-
       if (bestMatchIndex !== -1) {
-        return bestMatchIndex;
-      }
-
-      const pguid = getPguidFromGamepad(gp);
-      if (pguid && dinputDevices.length > 0) {
-        const matchingDevices = dinputDevices.filter(d => d.pguid.toUpperCase() === pguid.toUpperCase());
-        if (matchingDevices.length > 0) {
-          return matchingDevices[0].dinput_index; 
+        const dev = dinputDevices[bestMatchIndex];
+        if (dev && appState.documentsPath) {
+          const idx = await invoke<number>('ensure_controller_registered', {
+            documentsPath: appState.documentsPath,
+            pguid: dev.pguid,
+            iguid: dev.iguid,
+            name: dev.name
+          });
+          if (!parsedIni['CONTROLLERS']) parsedIni['CONTROLLERS'] = { _raw: {} };
+          parsedIni['CONTROLLERS'][`CON${idx}`] = dev.name;
+          parsedIni['CONTROLLERS'][`__IGUID${idx}`] = dev.iguid;
+          parsedIni['CONTROLLERS'][`PGUID${idx}`] = dev.pguid;
+          return idx;
         }
       }
-      
-      return getAcJoyIndex(webviewIndex, gp);
+    } catch (e) {}
 
-    } catch (e) {
-      console.warn("Erreur lecture DirectInput states:", e);
-      return getAcJoyIndex(webviewIndex, gp);
-    }
+    return getAcJoyIndex(webviewIndex, gp);
   }
 
   // ⭐ LOGIQUE DE TRADUCTION DES AXES (JSON)
@@ -510,7 +598,8 @@
     async function assignGamepadInput(section: string, type: 'BUTTON'|'AXLE', webviewIndex: number, joyIndex: number, gp: Gamepad, isInverted: boolean = false) {
     
     // ⭐ On utilise la version asynchrone qui enregistre le device s'il est absent
-    const realJoyIndex = await resolveAcJoyFromGamepad(joyIndex, gp);
+    // ⭐ On passe l'info si c'est un bouton ou un axe
+    const realJoyIndex = await resolveAcJoyFromGamepad(joyIndex, gp, type === 'BUTTON');
     
     // ⭐ GARDE-FOU ULTIME : Si même l'enregistrement automatique échoue (périphérique exotique DirectInput)
     if (realJoyIndex === -1) {
@@ -523,6 +612,35 @@
     
     let finalIndex = webviewIndex;
     if (type === 'AXLE') finalIndex = getAcAxis(webviewIndex, gp);
+
+    // ⭐ NOUVEAU : Conversion des boutons Thumb pour Assetto Corsa (XInput)
+    if (deviceType === 'x360' && type === 'BUTTON') {
+      const acThumbMap: Record<number, number> = { 10: 8, 11: 9 }; // 10(LS) -> 8, 11(RS) -> 9
+      if (acThumbMap[webviewIndex] !== undefined) {
+        finalIndex = acThumbMap[webviewIndex];
+      }
+    }
+
+    // ⭐ NOUVEAU : GESTION DU XBOXBUTTON POUR LA MANETTE
+    if (deviceType === 'x360') {
+      if (type === 'BUTTON') {
+        const xboxMap: Record<number, string> = {
+          0: 'A', 1: 'B', 2: 'X', 3: 'Y',
+          4: 'LSHOULDER', 5: 'RSHOULDER',
+          6: 'LTRIGGER', 7: 'RTRIGGER',
+          8: 'BACK', 9: 'START',
+          10: 'LEFT_THUMB', 11: 'RIGHT_THUMB',
+          12: 'DPAD_UP', 13: 'DPAD_DOWN', 14: 'DPAD_LEFT', 15: 'DPAD_RIGHT',
+          16: 'GUIDE'
+        };
+        if (xboxMap[webviewIndex]) {
+          parsedIni[section]['XBOXBUTTON'] = xboxMap[webviewIndex];
+        }
+      } else if (type === 'AXLE') {
+        // Si c'est un axe, on supprime XBOXBUTTON pour empêcher AC de lire le bouton
+        delete parsedIni[section]['XBOXBUTTON'];
+      }
+    }
 
     // ⭐ GESTION SPECIALE SHIFTER (Boîte en H) - CORRIGÉ
     if (section.startsWith('GEAR_') && type === 'BUTTON') {
@@ -738,17 +856,29 @@
       .map((gp, idx) => ({ gp, originalIndex: idx }))
       .filter(item => item.gp !== null) as { gp: Gamepad, originalIndex: number }[];
 
-    for (let i = 0; i < currentGamepads.length; i++) {
+        for (let i = 0; i < currentGamepads.length; i++) {
       const gp = currentGamepads[i];
       if (!gp) continue;
       
       if (!connectedDevice) connectedDevice = gp;
       const acJoyIdx = getAcJoyIndex(i, gp);
 
+      // ⭐ On filtre le bon périphérique selon l'onglet actif
+      const gpLower = gp.id.toLowerCase();
+      const isWheelName = gpLower.includes('wheel') || gpLower.includes('fanatec') || gpLower.includes('logitech') || gpLower.includes('thrustmaster');
+      const isPadName = gpLower.includes('xbox') || gpLower.includes('gamepad') || gpLower.includes('controller') || gpLower.includes('dualshock');
+
+      if (deviceType === 'x360' && isWheelName) continue;
+      if (deviceType === 'wheel' && isPadName && !gpLower.includes('wheel')) continue;
+      if (deviceType === 'keyboard') continue; // Le clavier n'a pas de Gamepad
+
+      // Si acJoyIdx est -1 (nom différent), on lit quand même car on a filtré le bon périphérique au-dessus
+      const targetJoyIdx = acJoyIdx !== -1 ? acJoyIdx.toString() : null;
+
       Object.keys(actionDefinitions).forEach(actionId => {
         const section = parsedIni[actionId];
-        if (section && section['AXLE'] !== undefined && section['AXLE'] !== '-1' && section['JOY'] !== undefined) {
-          if (section['JOY'] === acJoyIdx.toString()) {
+        if (section && section['AXLE'] !== undefined && section['AXLE'] !== '-1') {
+          if (targetJoyIdx === null || section['JOY'] === targetJoyIdx) {
             const webviewAxis = getWebviewAxis(parseInt(section['AXLE']), gp);
             if (gp.axes[webviewAxis] !== undefined) {
               liveAxisValues[actionId] = gp.axes[webviewAxis];
@@ -757,26 +887,25 @@
         }
       });
 
-                Object.keys(parsedIni).forEach(sectionId => {
-            const section = parsedIni[sectionId];
-            if (section && section['BUTTON'] !== undefined && section['BUTTON'] !== '-1') {
-              if (section['JOY'] !== undefined && section['JOY'] === acJoyIdx.toString()) {
-                const btnIdx = parseInt(section['BUTTON']);
-                if (gp.buttons[btnIdx] !== undefined) {
-                  liveButtonStates[sectionId] = gp.buttons[btnIdx].pressed;
-                }
-              }
+      Object.keys(parsedIni).forEach(sectionId => {
+        const section = parsedIni[sectionId];
+        if (section && section['BUTTON'] !== undefined && section['BUTTON'] !== '-1') {
+          if (targetJoyIdx === null || section['JOY'] === targetJoyIdx) {
+            const btnIdx = parseInt(section['BUTTON']);
+            if (gp.buttons[btnIdx] !== undefined) {
+              liveButtonStates[sectionId] = gp.buttons[btnIdx].pressed;
             }
-            if (section && section['__CM_ALT_BUTTON'] !== undefined && section['__CM_ALT_BUTTON'] !== '-1') {
-              const altJoy = section['__CM_ALT_JOY'] !== undefined ? section['__CM_ALT_JOY'] : section['JOY'];
-              if (altJoy !== undefined && altJoy === acJoyIdx.toString()) {
-                const btnIdx = parseInt(section['__CM_ALT_BUTTON']);
-                if (gp.buttons[btnIdx] !== undefined) {
-                  liveButtonStates[sectionId + '_ALT'] = gp.buttons[btnIdx].pressed;
-                }
-              }
+          }
+        }
+        if (section && section['__CM_ALT_BUTTON'] !== undefined && section['__CM_ALT_BUTTON'] !== '-1') {
+          if (targetJoyIdx === null || section['__CM_ALT_JOY'] === targetJoyIdx) {
+            const btnIdx = parseInt(section['__CM_ALT_BUTTON']);
+            if (gp.buttons[btnIdx] !== undefined) {
+              liveButtonStates[sectionId + '_ALT'] = gp.buttons[btnIdx].pressed;
             }
-          });
+          }
+        }
+      });
 
           // ⭐ NOUVEAU : Gestion visuelle de la Boîte en H via la section [SHIFTER] d'Assetto Corsa
           const shifter = parsedIni['SHIFTER'];
@@ -793,9 +922,9 @@
           }
 
       if (currentMode === 'simple' && !isCapturing) {
-        const mapAxis = (val: number, invert: boolean) => {
-          if (val === undefined) return 0;
-          let mapped = invert ? ((-val + 1) / 2) * 100 : ((val + 1) / 2) * 100;
+        const mapAxis = (val: number, min: number, max: number) => {
+          if (val === undefined || min === max) return 0;
+          let mapped = ((val - min) / (max - min)) * 100;
           return Math.max(0, Math.min(100, Math.round(mapped)));
         };
 
@@ -806,10 +935,9 @@
           if (section['JOY'] !== undefined && section['JOY'] === acJoyIdx.toString()) {
             const webviewAxis = getWebviewAxis(parseInt(section['AXLE']), gp);
             if (gp.axes[webviewAxis] !== undefined) {
-              const min = parseFloat(section['MIN'] || '0');
+              const min = parseFloat(section['MIN'] || '-1');
               const max = parseFloat(section['MAX'] || '1');
-              const isInverted = min > max; 
-              return mapAxis(gp.axes[webviewAxis], isInverted);
+              return mapAxis(gp.axes[webviewAxis], min, max);
             }
           }
           return null;
@@ -865,6 +993,20 @@
     }
     
     window.addEventListener('keydown', handleKeyDown);
+    
+    // ⭐ NOUVEAU : Écoute en direct pour l'affichage des touches
+    const handleLiveKeyDown = (e: KeyboardEvent) => {
+      if (!isCapturing && !keyboardDirCapture) {
+        const hex = '0x' + e.keyCode.toString(16).toUpperCase();
+        liveKeyStates[hex] = true;
+      }
+    };
+    const handleLiveKeyUp = (e: KeyboardEvent) => {
+      const hex = '0x' + e.keyCode.toString(16).toUpperCase();
+      liveKeyStates[hex] = false;
+    };
+    window.addEventListener('keydown', handleLiveKeyDown);
+    window.addEventListener('keyup', handleLiveKeyUp);
 
     // ⭐ Rafraîchissement automatique toutes les 2 secondes
     refreshInterval = setInterval(() => {
@@ -886,6 +1028,8 @@
     
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', handleLiveKeyDown);
+      window.removeEventListener('keyup', handleLiveKeyUp);
       if (animationFrameId) cancelAnimationFrame(animationFrameId);
       if (refreshInterval) clearInterval(refreshInterval);
       if (unlistenControllers) unlistenControllers(); // ⭐ Nettoyage du Watchdog
@@ -1035,13 +1179,13 @@
 <div class="qacrl-ctrl-root">
   <div class="qacrl-ctrl-section-bare">
     <div class="qacrl-ctrl-method-picker">
-      <button class="qacrl-ctrl-method-btn" class:active={deviceType === 'wheel' && !selectedProfilePath} onclick={() => { deviceType = 'wheel'; selectedProfilePath = ''; }}>
+      <button class="qacrl-ctrl-method-btn" class:active={deviceType === 'wheel' && !selectedProfilePath} onclick={() => changeDeviceType('wheel')}>
         <span class="qacrl-ctrl-method-icon">🏎️</span><span class="qacrl-ctrl-method-label">{$t('settings.controls.device_wheel')}</span>
       </button>
-      <button class="qacrl-ctrl-method-btn" class:active={deviceType === 'x360' && !selectedProfilePath} onclick={() => { deviceType = 'x360'; selectedProfilePath = ''; }}>
+      <button class="qacrl-ctrl-method-btn" class:active={deviceType === 'x360' && !selectedProfilePath} onclick={() => changeDeviceType('x360')}>
         <span class="qacrl-ctrl-method-icon">🎮</span><span class="qacrl-ctrl-method-label">{$t('settings.controls.device_gamepad')}</span>
       </button>
-      <button class="qacrl-ctrl-method-btn" class:active={deviceType === 'keyboard' && !selectedProfilePath} onclick={() => { deviceType = 'keyboard'; selectedProfilePath = ''; }}>
+      <button class="qacrl-ctrl-method-btn" class:active={deviceType === 'keyboard' && !selectedProfilePath} onclick={() => changeDeviceType('keyboard')}>
         <span class="qacrl-ctrl-method-icon">⌨️</span><span class="qacrl-ctrl-method-label">{$t('settings.controls.device_keyboard')}</span>
       </button>
     </div>
@@ -1055,7 +1199,7 @@
     </div>
 
     <select class="ini-select" style="min-width: 200px; flex: 1;" bind:value={selectedProfilePath} onchange={() => loadIni(selectedProfilePath)}>
-      <option value="">{$t('settings.controls.active_file', { values: { type: deviceType === 'wheel' ? 'controls.ini' : deviceType === 'x360' ? 'x360.ini' : 'keyboard.ini' } })}</option>
+      <option value="">{$t('settings.controls.active_file', { values: { type: 'controls.ini' } })}</option>
       <optgroup label={$t('settings.controls.profiles_saved')}>
         {#each profiles.filter(p => p.profile_type === 'savedsetup') as p}
           <option value={p.path}>{p.name}</option>
@@ -1096,7 +1240,13 @@
         {#if currentMode === 'simple'}
       <div class="group" style="margin-top: 15px; background: var(--bg-panel);">
         <div style="display: flex; justify-content: space-between; align-items: baseline;">
-          <div class="group-title">{$t('settings.controls.cockpit_overview')}</div>
+          <div class="group-title">
+            {#if deviceType === 'wheel'}
+              {$t('settings.controls.cockpit_overview')}
+            {:else}
+              {$t('settings.controls.categories.axes')} & {$t('settings.controls.categories.extras')}
+            {/if}
+          </div>
           <span style="font-size: 0.7rem; color: var(--text-tertiary);">{$t('settings.controls.hint_click')}</span>
         </div>
 
@@ -1108,8 +1258,26 @@
             {@const axisVal = liveAxisValues[section]}
             {@const min = parseFloat(parsedIni[section]?.['MIN'] || '-1')}
             {@const max = parseFloat(parsedIni[section]?.['MAX'] || '1')}
-            {@const isAxisActive = axisVal !== undefined && parsedIni[section]?.['AXLE'] !== '-1' && Math.abs(axisVal) > 0.1 && axisVal >= Math.min(min, max) && axisVal <= Math.max(min, max)}
-            {@const isPressed = liveButtonStates[section] === true || isAxisActive}
+            {@const isInverted = min > max}
+            {@const isDpad = parsedIni[section]?.['__CM_POV'] !== undefined && parsedIni[section]?.['__CM_POV'] !== '-1'}
+            
+            <!-- ⭐ NOUVEAU : Calcul du pourcentage basé sur MIN et MAX (Option A) -->
+            {@const mappedVal = (axisVal !== undefined && min !== max)
+                ? Math.max(0, Math.min(100, ((axisVal - min) / (max - min)) * 100)) 
+                : 0}
+
+            <!-- ⭐ NOUVEAU : Gestion spéciale pour le D-Pad (__CM_POV) -->
+            {@const isAxisActive = axisVal !== undefined && parsedIni[section]?.['AXLE'] !== '-1' && (
+                isDpad 
+                    ? (axisVal >= Math.min(min, max) && axisVal <= Math.max(min, max))
+                    : (section === 'STEER' ? Math.abs(mappedVal - 50) > 5 : mappedVal > 5)
+            )}
+            
+            <!-- ⭐ On vérifie aussi si la touche clavier est pressée -->
+            {@const assignedKey = parsedIni[section]?.['KEY']}
+            {@const isKeyPressed = deviceType === 'keyboard' && assignedKey && assignedKey !== '-1' && liveKeyStates[assignedKey] === true}
+            
+            {@const isPressed = liveButtonStates[section] === true || isAxisActive || isKeyPressed}
             
             {@const val = parsedIni[section]?.['BUTTON'] !== '-1' && parsedIni[section]?.['BUTTON'] 
               ? $t('settings.controls.btn_prefix') + ' ' + parsedIni[section]?.['BUTTON'] 
@@ -1283,7 +1451,8 @@
             </div>
           {/snippet}
           
-          <!-- ⭐ LIGNE DU HAUT : Matériel (Pédales, Volant, Boîte) -->
+          <!-- ⭐ LIGNE DU HAUT : Matériel (Pédales, Volant, Boîte) - SEULEMENT POUR LE VOLANT -->
+          {#if deviceType === 'wheel'}
           <div style="display: grid; grid-template-columns: 1.3fr 1.6fr 1.2fr; gap: 20px; width: 100%; align-items: stretch;">
             
             <!-- Bloc Pédales -->
@@ -1527,7 +1696,162 @@
                 </div>
               </div>
           </div>
-                    <!-- ⭐ LIGNE DU BAS : 6 Cartes Harmonieuses avec Pastille de Couleur -->
+          
+          <!-- ⭐ NOUVEAU : Option Combiner avec le clavier pour le volant -->
+          <div style="margin-top: 10px; padding: 16px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--r); display: flex; align-items: center; justify-content: space-between; box-shadow: var(--shadow);">
+            <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">{$t('settings.controls.combine_keyboard')}</span>
+            <label style="display: flex; align-items: center; cursor: pointer;">
+              <div style="position: relative; width: 36px; height: 20px; background: {parsedIni['ADVANCED']?.['COMBINE_WITH_KEYBOARD_CONTROL'] === '1' ? 'var(--accent)' : 'var(--border-strong)'}; border-radius: 10px; transition: background 0.2s;">
+                <div style="position: absolute; top: 2px; left: {parsedIni['ADVANCED']?.['COMBINE_WITH_KEYBOARD_CONTROL'] === '1' ? '18px' : '2px'}; width: 16px; height: 16px; background: #fff; border-radius: 50%; transition: left 0.2s;"></div>
+              </div>
+              <input type="checkbox" checked={parsedIni['ADVANCED']?.['COMBINE_WITH_KEYBOARD_CONTROL'] === '1'} onchange={(e) => {
+                if (!parsedIni['ADVANCED']) parsedIni['ADVANCED'] = { _raw: {} };
+                updateIniValue('ADVANCED', 'COMBINE_WITH_KEYBOARD_CONTROL', e.currentTarget.checked ? '1' : '0');
+              }} style="display: none;" />
+            </label>
+          </div>
+
+          {:else}
+            <!-- ⭐ NOUVEAU : Vue simplifiée pour Manette / Clavier avec les commandes de base -->
+            <div style="background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--r); padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; border-top: 3px solid var(--accent); box-shadow: var(--shadow);">
+              
+              <div style="text-align: center;">
+                <div style="font-size: 2.5rem; margin-bottom: 10px;">{deviceType === 'x360' ? '🎮' : '⌨️'}</div>
+                <div style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin-bottom: 5px;">
+                  {deviceType === 'x360' ? $t('settings.controls.device_gamepad') : $t('settings.controls.device_keyboard')}
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.85rem;">
+                  {deviceType === 'x360' 
+                    ? "Cliquez sur un bouton pour assigner une commande. Pour les axes (joystick, gâchettes), cliquez et bougez l'axe." 
+                    : "Cliquez sur un bouton et appuyez sur une touche de votre clavier pour l'assigner."}
+                </p>
+              </div>
+
+              <!-- Grille des commandes essentielles -->
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 15px; width: 100%; max-width: 900px; justify-items: center;">
+                
+                <!-- ⭐ Bouton Direction -->
+                {#if deviceType === 'x360'}
+                  {@render cockpitBtn('STEER', ArrowLeftRight, 'settings.controls.actions.STEER')}
+                {:else}
+                  <!-- Bouton Gauche -->
+                  {@const leftKey = parsedIni['KEYBOARD']?.['LEFT']}
+                  {@const isLeftPressed = leftKey && liveKeyStates[leftKey] === true}
+                  <button 
+                    class="filter-btn" 
+                    onclick={() => keyboardDirCapture = 'LEFT'}
+                    style="width: 100%; max-width: 95px; height: 95px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: {isLeftPressed ? 'var(--accent-muted)' : 'var(--bg-elevated)'}; border: 1px solid {isLeftPressed ? 'var(--accent)' : 'var(--border)'}; padding: 8px 4px; margin: 0 auto; cursor: pointer; transition: all 0.15s ease;"
+                  >
+                    <div style="color: {isLeftPressed ? 'var(--accent)' : 'var(--text-secondary)'}; transition: all 0.15s;"><ArrowLeft size={22} strokeWidth={1.8} /></div>
+                    <span style="font-size: 0.65rem; font-weight: 600; text-align: center; margin-top: 6px; color: {isLeftPressed ? 'var(--accent)' : 'var(--text-primary)'};">Gauche</span>
+                    <span style="font-size: 0.55rem; color: var(--text-tertiary); margin-top: auto;">
+                      {leftKey && leftKey !== '-1' ? leftKey : ''}
+                    </span>
+                  </button>
+                  
+                  <!-- Bouton Droite -->
+                  {@const rightKey = parsedIni['KEYBOARD']?.['RIGHT']}
+                  {@const isRightPressed = rightKey && liveKeyStates[rightKey] === true}
+                  <button 
+                    class="filter-btn" 
+                    onclick={() => keyboardDirCapture = 'RIGHT'}
+                    style="width: 100%; max-width: 95px; height: 95px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: {isRightPressed ? 'var(--accent-muted)' : 'var(--bg-elevated)'}; border: 1px solid {isRightPressed ? 'var(--accent)' : 'var(--border)'}; padding: 8px 4px; margin: 0 auto; cursor: pointer; transition: all 0.15s ease;"
+                  >
+                    <div style="color: {isRightPressed ? 'var(--accent)' : 'var(--text-secondary)'}; transition: all 0.15s;"><ArrowRight size={22} strokeWidth={1.8} /></div>
+                    <span style="font-size: 0.65rem; font-weight: 600; text-align: center; margin-top: 6px; color: {isRightPressed ? 'var(--accent)' : 'var(--text-primary)'};">Droite</span>
+                    <span style="font-size: 0.55rem; color: var(--text-tertiary); margin-top: auto;">
+                      {rightKey && rightKey !== '-1' ? rightKey : ''}
+                    </span>
+                  </button>
+                {/if}
+
+                {@render cockpitBtn('__CM_PAUSE', PauseCircle, 'settings.controls.actions.__CM_PAUSE')}
+                {@render cockpitBtn('ACTION_HEADLIGHTS_FLASH', Sun, 'settings.controls.actions.ACTION_HEADLIGHTS_FLASH')}
+                {@render cockpitBtn('THROTTLE', Zap, 'settings.controls.actions.THROTTLE')}
+                {@render cockpitBtn('BRAKES', Disc, 'settings.controls.actions.BRAKES')}
+                {@render cockpitBtn('GEARUP', ChevronUp, 'settings.controls.actions.GEARUP')}
+                {@render cockpitBtn('GEARDN', ChevronDown, 'settings.controls.actions.GEARDN')}
+                {@render cockpitBtn('HANDBRAKE', ShieldAlert, 'settings.controls.actions.HANDBRAKE')}
+                {@render cockpitBtn('ACTION_HEADLIGHTS', Lightbulb, 'settings.controls.actions.ACTION_HEADLIGHTS')}
+                {@render cockpitBtn('ACTION_HORN', Megaphone, 'settings.controls.actions.ACTION_HORN')}
+                {@render cockpitBtn('GLANCELEFT', ArrowLeft, 'settings.controls.actions.GLANCELEFT')}
+                {@render cockpitBtn('GLANCERIGHT', ArrowRight, 'settings.controls.actions.GLANCERIGHT')}
+                {@render cockpitBtn('GLANCEBACK', ArrowDown, 'settings.controls.actions.GLANCEBACK')}
+                {@render cockpitBtn('ACTION_CHANGE_CAMERA', Camera, 'settings.controls.actions.ACTION_CHANGE_CAMERA')}
+              </div>
+
+
+
+              <!-- ⭐ NOUVEAU : Réglages de la direction (Steering Settings) Uniquement pour la manette -->
+              {#if deviceType === 'x360'}
+              <div style="width: 100%; max-width: 600px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 16px; margin-top: 10px;">
+                <div style="font-weight: 800; font-size: 0.85rem; color: var(--text-primary); margin-bottom: 16px; text-align: center; text-transform: uppercase; letter-spacing: 1px;">
+                  {$t('settings.controls.steering_settings')}
+                </div>
+                
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                  
+                  {#if deviceType !== 'keyboard'}
+                    {@const section = deviceType === 'x360' ? 'X360' : 'STEER'}
+                    {@const gamma = parseFloat(parsedIni[section]?.['STEER_GAMMA'] || (deviceType === 'x360' ? '3.01' : '1.0'))}
+                    {@const filter = parseFloat(parsedIni[section]?.['STEER_FILTER'] || (deviceType === 'x360' ? '0.60' : '0.0'))}
+                    {@const speed = Math.round(parseFloat(parsedIni['X360']?.['STEER_SPEED'] || '0.2') * 100)}
+                    {@const deadzone = parseFloat(parsedIni['X360']?.['STEER_DEADZONE'] || '0.05')}
+
+                    <!-- Gamma (X360 et Volant) -->
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                      <span style="font-size: 0.75rem; color: var(--text-secondary); width: 100px;">{$t('settings.controls.steer_gamma')}</span>
+                      <input type="range" min="0.5" max="5.0" step="0.01" class="ini-range" style="flex: 1;" value={gamma} oninput={(e) => updateIniValue(section, 'STEER_GAMMA', e.currentTarget.value)} />
+                      <span style="font-size: 0.75rem; color: var(--accent); width: 40px; text-align: right; font-weight: 700;">{gamma.toFixed(2)}</span>
+                    </div>
+
+                    <!-- Filtre (X360 et Volant) -->
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                      <span style="font-size: 0.75rem; color: var(--text-secondary); width: 100px;">{$t('settings.controls.steer_filter')}</span>
+                      <input type="range" min="0" max="1.0" step="0.01" class="ini-range" style="flex: 1;" value={filter} oninput={(e) => updateIniValue(section, 'STEER_FILTER', e.currentTarget.value)} />
+                      <span style="font-size: 0.75rem; color: var(--accent); width: 40px; text-align: right; font-weight: 700;">{Math.round(filter * 100)}%</span>
+                    </div>
+
+                    <!-- Vitesse de direction (X360 uniquement) -->
+                    {#if deviceType === 'x360'}
+                      <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 0.75rem; color: var(--text-secondary); width: 100px;">{$t('settings.controls.steer_speed')}</span>
+                        <input type="range" min="1" max="100" step="1" class="ini-range" style="flex: 1;" value={speed} oninput={(e) => updateIniValue('X360', 'STEER_SPEED', (parseInt(e.currentTarget.value) / 100).toFixed(2))} />
+                        <span style="font-size: 0.75rem; color: var(--accent); width: 40px; text-align: right; font-weight: 700;">{speed}%</span>
+                      </div>
+
+                      <!-- Zone morte (X360 uniquement) -->
+                      <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 0.75rem; color: var(--text-secondary); width: 100px;">{$t('settings.controls.steer_deadzone')}</span>
+                        <input type="range" min="0" max="0.5" step="0.01" class="ini-range" style="flex: 1;" value={deadzone} oninput={(e) => updateIniValue('X360', 'STEER_DEADZONE', e.currentTarget.value)} />
+                        <span style="font-size: 0.75rem; color: var(--accent); width: 40px; text-align: right; font-weight: 700;">{Math.round(deadzone * 100)}%</span>
+                      </div>
+                    {/if}
+                  {/if}
+                </div>
+
+                <!-- Option Combiner avec le clavier (Volant et Manette) -->
+                {#if deviceType !== 'keyboard'}
+                  <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;">
+                    <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary);">{$t('settings.controls.combine_keyboard')}</span>
+                    <label style="display: flex; align-items: center; cursor: pointer;">
+                      <div style="position: relative; width: 36px; height: 20px; background: {parsedIni['ADVANCED']?.['COMBINE_WITH_KEYBOARD_CONTROL'] === '1' ? 'var(--accent)' : 'var(--border-strong)'}; border-radius: 10px; transition: background 0.2s;">
+                        <div style="position: absolute; top: 2px; left: {parsedIni['ADVANCED']?.['COMBINE_WITH_KEYBOARD_CONTROL'] === '1' ? '18px' : '2px'}; width: 16px; height: 16px; background: #fff; border-radius: 50%; transition: left 0.2s;"></div>
+                      </div>
+                      <input type="checkbox" checked={parsedIni['ADVANCED']?.['COMBINE_WITH_KEYBOARD_CONTROL'] === '1'} onchange={(e) => {
+                        if (!parsedIni['ADVANCED']) parsedIni['ADVANCED'] = { _raw: {} };
+                        updateIniValue('ADVANCED', 'COMBINE_WITH_KEYBOARD_CONTROL', e.currentTarget.checked ? '1' : '0');
+                      }} style="display: none;" />
+                    </label>
+                  </div>
+                {/if}
+              </div>
+              {/if}
+
+            </div>
+          {/if}
+                    {#if deviceType === 'wheel'}
+          <!-- ⭐ LIGNE DU BAS : 6 Cartes Harmonieuses avec Pastille de Couleur (Uniquement pour le volant) -->
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; width: 100%; align-items: stretch;">
             
             {#snippet cardHeader(titleKey, dotColor)}
@@ -1650,6 +1974,7 @@
             </div>
 
           </div>
+          {/if}
           <!-- ⭐ FIN DE LA LIGNE DU BAS -->
 
         </div>
@@ -1761,7 +2086,8 @@
                           
                           <div style="display: flex; flex-direction: column; gap: 8px;">
                             {#if action.type === 'mixed' || action.type === 'axis'}
-                              <select class="ini-select" style="width: 100%;" value={parsedIni[action.id]?.['AXLE'] || '-1'} onchange={(e) => updateIniValue(action.id, 'AXLE', e.currentTarget.value)}>
+                              <div style="display: flex; gap: 5px;">
+                                <select class="ini-select" style="flex: 1;" value={parsedIni[action.id]?.['AXLE'] || '-1'} onchange={(e) => updateIniValue(action.id, 'AXLE', e.currentTarget.value)}>
                                 {#if action.type === 'mixed'}
                                   <option value="-1">{$t('settings.controls.select_no_axis')}</option>
                                 {/if}
@@ -1775,7 +2101,12 @@
                                 <option value="7">{$t('settings.controls.axis_slider', { values: { id: 2, num: 7 } })}</option>
                                 <option value="8">{$t('settings.controls.axis_slider', { values: { id: 3, num: 8 } })}</option>
                                 <option value="9">{$t('settings.controls.axis_slider', { values: { id: 4, num: 9 } })}</option>
-                              </select>
+                                </select>
+                                <!-- ⭐ NOUVEAU : Bouton d'apprentissage d'axe -->
+                                <button class="filter-btn" onclick={() => openCapture(action.id, $t(action.label))} title="Apprendre l'axe" style="padding: 0 10px; background: var(--accent); color: #fff;">
+                                  🎯
+                                </button>
+                              </div>
                               {#if parsedIni[action.id]?.['AXLE'] !== '-1' && parsedIni[action.id]?.['AXLE'] !== undefined}
                                 <div style="display: flex; gap: 10px; align-items: center; background: var(--bg-elevated); padding: 4px 8px; border-radius: 4px;">
                                   <span style="font-family: monospace; font-size: 0.75rem; color: var(--accent);">{liveAxisValues[action.id]?.toFixed(2) || '0.00'}</span>
@@ -1829,6 +2160,29 @@
         <textarea class="ini-expert" bind:value={iniContent} oninput={() => hasChanges = true} spellcheck="false"></textarea>
       </div>
     {/if}
+  {/if}
+
+  <!-- ⭐ MODALE SPÉCIALE DIRECTION CLAVIER -->
+  {#if keyboardDirCapture}
+    <div class="qacrl-dialog-overlay visible">
+      <div class="qacrl-dialog">
+        <div class="qacrl-dialog-header">
+          <span class="qacrl-dialog-icon">⌨️</span>
+          <span class="qacrl-dialog-title">Assigner la direction : {keyboardDirCapture === 'LEFT' ? 'Gauche' : 'Droite'}</span>
+        </div>
+        <div class="qacrl-dialog-body" style="text-align: center; padding: 20px;">
+          <p style="font-size: 1.1rem; font-weight: 600; color: var(--accent);">Appuyez sur une touche...</p>
+        </div>
+        <div class="qacrl-dialog-footer">
+          <button class="btn-secondary" onclick={() => {
+            if (keyboardDirCapture === 'LEFT') keyboardDirCapture = 'RIGHT';
+            else keyboardDirCapture = null;
+          }}>
+            {keyboardDirCapture === 'LEFT' ? 'Passer à Droite →' : 'Annuler'}
+          </button>
+        </div>
+      </div>
+    </div>
   {/if}
 
   {#if isCapturing}

@@ -33,6 +33,8 @@
       "docs_not_found": "⚠️ Carpeta Documentos/AC no detectada. Inicia AC una vez.",
       "ac_path_invalid": "❌ acs.exe no encontrado en esta carpeta.",
       "docs_path_invalid": "❌ Carpeta 'cfg' no encontrada en esta carpeta.",
+      "help_generate_title": "¿Necesitas generar la carpeta?",
+      "help_generate_desc": "Assetto Corsa debe iniciarse al menos una vez para crear la carpeta Documentos/Assetto Corsa.",
       "continue": "Continuar →"
     },
     "ac_init": {
@@ -50,6 +52,9 @@
     },
     "devices": {
       "title": "Dispositivos detectados",
+      "input_method_title": "¿Cuál es tu dispositivo principal de juego?",
+      "btn_gamepad": "🎮 Juego con mando",
+      "btn_keyboard": "⌨️ Juego con teclado",
       "intro": "{count} dispositivo(s) registrado(s) en AC.",
       "with_preset": "✅ {name} (plantilla AC encontrada)",
       "no_preset": "⚠️ {name} (sin plantilla AC)",
@@ -111,12 +116,22 @@
       "install_error": "❌ Error de instalación: ",
       "continue": "Continuar →"
     },
-    "tour": {
+        "tour": {
       "title": "Descubre QARL",
+      "floating_banner": "Visita guiada en curso",
+      "floating_reopen": "Volver a la visita",
+      "floating_ignore": "Ignorar",
+      "open_tab": "Abrir pestaña",
       "disable_tutorial": "No mostrar al inicio",
       "finish": "✓ Terminar",
       "next": "Siguiente →",
       "prev": "← Anterior",
+      "titles": {
+        "cars": "Coches", "tracks": "Circuitos", "session": "Sesión", "weather": "Clima",
+        "mods": "Gestión Mods", "online": "En línea", "settings_general": "General",
+        "settings_controls": "Controles", "settings_video": "Vídeo", "settings_audio": "Audio",
+        "settings_csp": "CSP", "settings_help": "Ayuda", "customization": "Personalización"
+      },
       "slides": {
         "cars": "🏎️ Coches: Elige tu vehículo y librea. Filtra por marca, país, categoría.",
         "tracks": "🏁 Circuitos: Selecciona tu trazado entre los circuitos instalados.",
@@ -694,6 +709,12 @@
       "axis_label": "Eje {name} ({id})",
       "axis_slider": "Eje Slider {id} ({num})",
       "hold_mode": "Activar Hold Mode (mantener el botón)",
+      "steering_settings": "Ajustes de dirección",
+      "combine_keyboard": "Permitir teclado simultáneamente",
+      "steer_speed": "Velocidad de dirección",
+      "steer_gamma": "Gamma",
+      "steer_filter": "Filtro (suavizado)",
+      "steer_deadzone": "Zona muerta",
       "debug_axis": "Eje",
       "debug_btn": "BTN",
       "categories": {

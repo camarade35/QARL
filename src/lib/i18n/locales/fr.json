@@ -33,6 +33,8 @@
       "docs_not_found": "⚠️ Dossier Documents/AC non détecté. Lance AC une première fois.",
       "ac_path_invalid": "❌ acs.exe introuvable dans ce dossier.",
       "docs_path_invalid": "❌ Dossier 'cfg' introuvable dans ce dossier.",
+      "help_generate_title": "Besoin de générer le dossier ?",
+      "help_generate_desc": "Assetto Corsa doit être lancé au moins une fois pour créer le dossier Documents/Assetto Corsa.",
       "continue": "Continuer →"
     },
     "ac_init": {
@@ -50,6 +52,9 @@
     },
     "devices": {
       "title": "Périphériques détectés",
+      "input_method_title": "Quel est votre principal périphérique de jeu ?",
+      "btn_gamepad": "🎮 Je joue à la manette",
+      "btn_keyboard": "⌨️ Je joue au clavier",
       "intro": "{count} périphérique(s) enregistré(s) dans AC.",
       "with_preset": "✅ {name} (template AC trouvé)",
       "no_preset": "⚠️ {name} (pas de template AC)",
@@ -111,12 +116,22 @@
       "install_error": "❌ Erreur lors de l'installation : ",
       "continue": "Continuer →"
     },
-    "tour": {
+        "tour": {
       "title": "Découvre QARL",
+      "floating_banner": "Visite guidée en cours",
+      "floating_reopen": "Revenir à la visite",
+      "floating_ignore": "Ignorer",
+      "open_tab": "Ouvrir l'onglet",
       "disable_tutorial": "Ne plus afficher au démarrage",
       "finish": "✓ Terminer",
       "next": "Suivant →",
       "prev": "← Précédent",
+      "titles": {
+        "cars": "Voitures", "tracks": "Circuits", "session": "Session", "weather": "Météo",
+        "mods": "Gestion Mods", "online": "En ligne", "settings_general": "Général",
+        "settings_controls": "Contrôles", "settings_video": "Vidéo", "settings_audio": "Audio",
+        "settings_csp": "CSP", "settings_help": "Aide", "customization": "Personnalisation"
+      },
       "slides": {
         "cars": "🏎️ Voitures : Choisis ton véhicule et sa livrée. Filtre par marque, pays, catégorie.",
         "tracks": "🏁 Circuits : Sélectionne ton tracé parmi tes circuits installés.",
@@ -694,6 +709,12 @@
       "axis_label": "Axe {name} ({id})",
       "axis_slider": "Axe Slider {id} ({num})",
       "hold_mode": "Activer le Hold Mode (maintenir le bouton)",
+      "steering_settings": "Réglages de la direction",
+      "combine_keyboard": "Autoriser le clavier en même temps",
+      "steer_speed": "Vitesse de direction",
+      "steer_gamma": "Gamma",
+      "steer_filter": "Filtre (lissage)",
+      "steer_deadzone": "Zone morte",
       "debug_axis": "Axe",
       "debug_btn": "BTN",
       "categories": {

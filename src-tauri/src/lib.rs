@@ -1223,7 +1223,8 @@ fn check_ac_initialized(documents_path: Option<String>) -> Result<serde_json::Va
 
     Ok(serde_json::json!({
         "success": true,
-        "initialized": has_race && has_controls && has_controllers,
+        // ⭐ On ne bloque QUE sur race.ini. Si AC n'a pas créé controls.ini, QARL le fera à l'étape 3.
+        "initialized": has_race,
         "hasRace": has_race,
         "hasControls": has_controls,
         "hasControllers": has_controllers,
@@ -3075,29 +3076,22 @@ fn write_ini_file(documents_path: String, filename: String, content: String) -> 
 
 #[tauri::command]
 fn read_controls_ini(documents_path: String, device_type: String) -> Result<String, String> {
+    // ⭐ On s'assure que le bootstrap est fait
+    let _ = initialize_controls_presets(&documents_path);
+    
+    let presets_dir = get_controls_presets_dir(&documents_path)?;
     let filename = match device_type.as_str() {
         "x360" => "x360.ini",
         "keyboard" => "keyboard.ini",
-        _ => "controls.ini",
+        _ => "wheel.ini",
     };
     
-    let base_path = Path::new(&documents_path);
-    
-    // ⭐ On teste plusieurs chemins possibles pour être robuste
-    let paths_to_try = vec![
-        base_path.join(filename), // Si tu as choisi le dossier .../cfg
-        base_path.join("cfg").join(filename), // Si tu as choisi le dossier .../Assetto Corsa
-        base_path.join("Assetto Corsa").join("cfg").join(filename), // Si tu as choisi .../Documents
-    ];
-
-    for file_path in paths_to_try {
-        if file_path.exists() {
-            return fs::read_to_string(&file_path).map_err(|e| format!("Erreur de lecture: {}", e));
-        }
+    let file_path = presets_dir.join(filename);
+    if file_path.exists() {
+        fs::read_to_string(&file_path).map_err(|e| e.to_string())
+    } else {
+        Ok(String::new())
     }
-
-    // Si on ne trouve vraiment rien
-    Ok(String::new())
 }
 
 #[tauri::command]
@@ -3111,13 +3105,12 @@ fn read_specific_ini(file_path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn save_auto_profile(documents_path: String, device_type: String, content: String) -> Result<(), String> {
+    write_controls_ini(documents_path, device_type, content, None, true)
+}
+
+#[tauri::command]
 fn write_controls_ini(documents_path: String, device_type: String, content: String, save_as_name: Option<String>, apply_to_game: bool) -> Result<(), String> {
-    let filename = match device_type.as_str() {
-        "x360" => "x360.ini",
-        "keyboard" => "keyboard.ini",
-        _ => "controls.ini",
-    };
-    
     let base_path = Path::new(&documents_path);
     let mut cfg_dir = base_path.join("cfg");
     if !cfg_dir.exists() {
@@ -3130,7 +3123,6 @@ fn write_controls_ini(documents_path: String, device_type: String, content: Stri
     // On sauvegarde dans savedsetups si un nom est fourni
     if let Some(name) = save_as_name {
         if !name.is_empty() {
-            // ⭐ CORRECTION : Le bon chemin est controllers/savedsetups
             let setups_dir = cfg_dir.join("controllers").join("savedsetups");
             if !setups_dir.exists() {
                 fs::create_dir_all(&setups_dir).map_err(|e| e.to_string())?;
@@ -3140,10 +3132,47 @@ fn write_controls_ini(documents_path: String, device_type: String, content: Stri
         }
     }
 
-    // On écrit dans le fichier actif UNIQUEMENT si apply_to_game est vrai
+    // On prépare le contenu avec le bon INPUT_METHOD
+    let target_method = match device_type.as_str() {
+        "x360" => "X360",
+        "keyboard" => "KEYBOARD",
+        _ => "WHEEL",
+    };
+    
+    let eol = if content.contains("\r\n") { "\r\n" } else { "\n" };
+    let mut lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
+    
+    let mut in_header = false;
+    let mut found = false;
+    for line in lines.iter_mut() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            in_header = trimmed.eq_ignore_ascii_case("[HEADER]");
+        } else if in_header && trimmed.to_uppercase().starts_with("INPUT_METHOD=") {
+            *line = format!("INPUT_METHOD={}", target_method);
+            found = true;
+            break;
+        }
+    }
+    if !found {
+        lines.insert(0, format!("[HEADER]{eol}INPUT_METHOD={}{eol}", target_method));
+    }
+    let final_content = lines.join(eol) + eol;
+
+    // 1. On écrit dans le profil spécifique (wheel.ini, x360.ini, keyboard.ini)
+    let presets_dir = get_controls_presets_dir(&documents_path)?;
+    let profile_filename = match device_type.as_str() {
+        "x360" => "x360.ini",
+        "keyboard" => "keyboard.ini",
+        _ => "wheel.ini",
+    };
+    let profile_path = presets_dir.join(profile_filename);
+    fs::write(&profile_path, &final_content).map_err(|e| format!("Erreur écriture profil: {}", e))?;
+
+    // 2. On écrit dans controls.ini global (pour que le jeu fonctionne)
     if apply_to_game {
-        let file_path = cfg_dir.join(filename);
-        fs::write(&file_path, content).map_err(|e| format!("Erreur d'écriture: {}", e))?;
+        let file_path = cfg_dir.join("controls.ini");
+        fs::write(&file_path, &final_content).map_err(|e| format!("Erreur d'écriture controls.ini: {}", e))?;
     }
     
     Ok(())
@@ -3324,6 +3353,203 @@ fn get_directinput_devices() -> Result<Vec<DInputDeviceInfo>, String> {
     Ok(devices)
 }
 
+// ⭐ NOUVEAU : Crée le fichier controls.ini s'il n'existe pas, avec une structure minimale
+fn ensure_controls_ini_exists(documents_path: &str) -> Result<std::path::PathBuf, String> {
+    if let Some(path) = resolve_controls_ini_path(documents_path) {
+        return Ok(path);
+    }
+
+    // Le fichier n'existe pas, on détermine où le créer
+    let base = Path::new(documents_path);
+    let cfg_dir = if base.join("cfg").exists() {
+        base.join("cfg")
+    } else if base.file_name().unwrap_or_default().to_string_lossy().eq_ignore_ascii_case("cfg") {
+        base.to_path_buf()
+    } else {
+        base.join("Assetto Corsa").join("cfg")
+    };
+
+    if !cfg_dir.exists() {
+        fs::create_dir_all(&cfg_dir).map_err(|e| format!("Erreur création dossier cfg: {}", e))?;
+    }
+
+    let file_path = cfg_dir.join("controls.ini");
+
+    // On crée un fichier squelette basique et valide pour AC
+    let skeleton = r#"[HEADER]
+INPUT_METHOD=X360
+
+[ADVANCED]
+COMBINE_WITH_KEYBOARD_CONTROL=0
+
+[CONTROLLERS]
+
+[STEER]
+JOY=-1
+AXLE=-1
+SCALE=1
+LOCK=900
+FF_GAIN=1
+FILTER_FF=0
+STEER_GAMMA=1
+STEER_FILTER=0
+SPEED_SENSITIVITY=0
+DEBOUNCING_MS=50
+
+[THROTTLE]
+JOY=-1
+AXLE=-1
+MIN=-1
+MAX=1
+
+[BRAKES]
+JOY=-1
+AXLE=-1
+MIN=-1
+MAX=1
+GAMMA=2.4
+
+[GEARUP]
+JOY=-1
+BUTTON=-1
+KEY=0x20
+XBOXBUTTON=A
+
+[GEARDN]
+JOY=-1
+BUTTON=-1
+KEY=0xA2
+XBOXBUTTON=X
+"#;
+
+    fs::write(&file_path, skeleton).map_err(|e| format!("Erreur écriture controls.ini: {}", e))?;
+    Ok(file_path)
+}
+
+// ⭐ NOUVEAU : Modifie le INPUT_METHOD et remplit [CONTROLLERS]
+#[tauri::command]
+fn set_input_method(documents_path: String, method: String) -> Result<(), String> {
+    let path = ensure_controls_ini_exists(&documents_path)?;
+    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let eol = if content.contains("\r\n") { "\r\n" } else { "\n" };
+    let mut lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
+
+    // 1. Modification du HEADER
+    let mut in_header = false;
+    let mut found = false;
+    for line in lines.iter_mut() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            in_header = trimmed.eq_ignore_ascii_case("[HEADER]");
+        } else if in_header && trimmed.to_uppercase().starts_with("INPUT_METHOD=") {
+            *line = format!("INPUT_METHOD={}", method);
+            found = true;
+            break;
+        }
+    }
+    if !found {
+        lines.insert(0, format!("[HEADER]{eol}INPUT_METHOD={method}{eol}"));
+    }
+
+    // 2. Remplissage de [CONTROLLERS]
+    if let Ok(devices) = get_directinput_devices() {
+        // On cherche la section [CONTROLLERS] existante
+        let mut start_idx = None;
+        let mut end_idx = lines.len();
+        
+        for (i, line) in lines.iter().enumerate() {
+            let trimmed = line.trim();
+            if trimmed.eq_ignore_ascii_case("[CONTROLLERS]") {
+                start_idx = Some(i);
+            } else if start_idx.is_some() && trimmed.starts_with('[') && trimmed.ends_with(']') {
+                end_idx = i;
+                break;
+            }
+        }
+
+        let mut controllers_block = vec!["[CONTROLLERS]".to_string()];
+        for (i, dev) in devices.iter().enumerate() {
+            controllers_block.push(format!("CON{}={}", i, dev.name));
+            controllers_block.push(format!("__IGUID{}={}", i, dev.iguid));
+            controllers_block.push(format!("PGUID{}={}", i, dev.pguid));
+        }
+        controllers_block.push("".to_string()); // Ligne vide à la fin
+
+        if let Some(start) = start_idx {
+            // On remplace l'ancienne section
+            lines.splice(start..end_idx, controllers_block);
+        } else {
+            // Si la section n'existe pas, on l'ajoute à la fin
+            lines.extend(controllers_block);
+        }
+    }
+
+    let new_content = lines.join(eol) + eol;
+    fs::write(&path, new_content).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ⭐ Dossier des profils de contrôles QARL
+fn get_controls_presets_dir(documents_path: &str) -> Result<std::path::PathBuf, String> {
+    let cfg_dir = resolve_cfg_dir(Path::new(documents_path));
+    let dir = cfg_dir.join("QARL_Presets").join("Controls");
+    if !dir.exists() {
+        fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    }
+    Ok(dir)
+}
+
+// ⭐ Bootstrap : Crée les profils à partir de controls.ini s'ils n'existent pas
+fn initialize_controls_presets(documents_path: &str) -> Result<(), String> {
+    let presets_dir = get_controls_presets_dir(documents_path)?;
+    
+    // Si on a déjà les 3 fichiers, pas besoin de bootstrap
+    if presets_dir.join("wheel.ini").exists() && presets_dir.join("x360.ini").exists() && presets_dir.join("keyboard.ini").exists() {
+        return Ok(());
+    }
+
+    let base_ini_path = resolve_controls_ini_path(documents_path)
+        .unwrap_or_else(|| resolve_cfg_dir(Path::new(documents_path)).join("controls.ini"));
+        
+    let base_content = if base_ini_path.exists() {
+        fs::read_to_string(&base_ini_path).unwrap_or_default()
+    } else {
+        // Si pas de controls.ini du tout, on utilise le squelette de ensure_controls_ini_exists
+        let path = ensure_controls_ini_exists(documents_path)?;
+        fs::read_to_string(&path).unwrap_or_default()
+    };
+
+    let eol = if base_content.contains("\r\n") { "\r\n" } else { "\n" };
+
+    // On crée les 3 fichiers s'ils n'existent pas
+    for (filename, method) in [("wheel.ini", "WHEEL"), ("x360.ini", "X360"), ("keyboard.ini", "KEYBOARD")] {
+        let file_path = presets_dir.join(filename);
+        if !file_path.exists() {
+            let mut lines: Vec<String> = base_content.lines().map(|s| s.to_string()).collect();
+            let mut in_header = false;
+            let mut found = false;
+            
+            for line in lines.iter_mut() {
+                let trimmed = line.trim();
+                if trimmed.starts_with('[') && trimmed.ends_with(']') {
+                    in_header = trimmed.eq_ignore_ascii_case("[HEADER]");
+                } else if in_header && trimmed.to_uppercase().starts_with("INPUT_METHOD=") {
+                    *line = format!("INPUT_METHOD={}", method);
+                    found = true;
+                    break;
+                }
+            }
+            if !found {
+                lines.insert(0, format!("[HEADER]{eol}INPUT_METHOD={}{eol}", method));
+            }
+            
+            let final_content = lines.join(eol) + eol;
+            fs::write(&file_path, final_content).map_err(|e| format!("Erreur création {}: {}", filename, e))?;
+        }
+    }
+    Ok(())
+}
+
 // ⭐ Résout le chemin exact de controls.ini selon les 3 conventions possibles
 fn resolve_controls_ini_path(documents_path: &str) -> Option<std::path::PathBuf> {
     let base = Path::new(documents_path);
@@ -3397,8 +3623,7 @@ fn ensure_controller_registered(
     iguid: String,
     name: String,
 ) -> Result<u32, String> {
-    let path = resolve_controls_ini_path(&documents_path)
-        .ok_or("controls.ini introuvable")?;
+    let path = ensure_controls_ini_exists(&documents_path)?;
 
     // 1. Match par PGUID + IGUID (les 2 sont nécessaires car doublon PGUID possible)
     let existing = parse_controllers_section(documents_path.clone())?;
@@ -3432,9 +3657,12 @@ fn ensure_controller_registered(
     }
     if insert_at.is_none() {
         if in_section {
-            insert_at = Some(lines.len());  // [CONTROLLERS] est la dernière section
+            insert_at = Some(lines.len());
         } else {
-            return Err("[CONTROLLERS] introuvable dans controls.ini".into());
+            // ⭐ Sécurité : Si [CONTROLLERS] n'existe pas du tout, on l'ajoute à la fin
+            lines.push(String::new());
+            lines.push("[CONTROLLERS]".to_string());
+            insert_at = Some(lines.len());
         }
     }
     let insert_idx = insert_at.unwrap();
@@ -6529,12 +6757,14 @@ pub fn run() {
             read_controls_ini,
             read_specific_ini,
             write_controls_ini,
+            save_auto_profile, // ⭐ Ajouté
             get_controller_profiles,
             get_controller_mapping,
             get_directinput_devices,
             get_directinput_states,
             parse_controllers_section,
             ensure_controller_registered,
+            set_input_method, // ⭐ Ajouté
             list_ppfilters,
             read_ini_file,
             write_ini_file,

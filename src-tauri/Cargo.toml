@@ -1,6 +1,6 @@
 [package]
 name = "qarl"
-version = "1.0.0"
+version = "1.1.0"
 description = "QARL - Quick Assetto Race Launcher"
 authors = ["camarade35"]
 license = "GPL-3.0"

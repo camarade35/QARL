@@ -53,7 +53,8 @@
     return () => { if (autoPoll) clearInterval(autoPoll); };
   });
 
-  let ready = $derived(status && status.initialized && status.hasControllers);
+  // ⭐ On ne bloque plus sur hasControllers. QARL s'en occupe à l'étape 3.
+  let ready = $derived(status && status.initialized);
 </script>
 
 {#if ready}
@@ -74,10 +75,9 @@
         {#if !status.hasRace}
           <li>❌ {$t('setup.ac_init.missing_race')}</li>
         {/if}
-        {#if !status.hasControls}
-          <li>❌ {$t('setup.ac_init.missing_controls')}</li>
-        {:else if !status.hasControllers}
-          <li>❌ {$t('setup.ac_init.missing_controllers')}</li>
+        <!-- ⭐ On ne signale plus controls.ini comme une erreur bloquante -->
+        {#if status.hasControls && !status.hasControllers}
+          <li>ℹ️ {$t('setup.ac_init.missing_controllers')}</li>
         {/if}
       </ul>
     {/if}

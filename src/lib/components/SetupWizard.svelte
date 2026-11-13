@@ -55,6 +55,7 @@
   import { invoke } from '@tauri-apps/api/core';
   import { appState } from '$lib/stores/appState.svelte.js';
   import { confirm, alert } from '$lib/stores/dialog.svelte';
+  import LanguagePicker from '$lib/components/LanguagePicker.svelte';
 
   // ⭐ État pour savoir si la config AC est incomplète
   let hasError = $state(false);
@@ -121,7 +122,10 @@
           <span>🏗️</span>
           <span>{$t('setup.title')}</span>
         </div>
-        <button class="setup-close" onclick={handleClose} title={$t('common.close')}>✕</button>
+        <div style="display: flex; align-items: center; gap: 16px;">
+          <LanguagePicker />
+          <button class="setup-close" onclick={handleClose} title={$t('common.close')}>✕</button>
+        </div>
       </div>
 
       <div class="setup-steps">
@@ -141,8 +145,8 @@
       </div>
 
       <div class="setup-body">
-        <!-- ⭐ Avertissement conditionnel (caché sur l'étape 1 pour éviter le doublon) -->
-        {#if hasError && currentIdx !== 1}
+        <!-- ⭐ Avertissement conditionnel (caché sur l'étape 0 et 1 pour éviter les doublons) -->
+        {#if hasError && currentIdx !== 0 && currentIdx !== 1}
           <div style="background: rgba(229, 115, 115, 0.1); border: 1px solid rgba(229, 115, 115, 0.3); padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; color: #e57373; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 8px; line-height: 1.4;">
             {$t('setup.warning_ac_required')}
           </div>
@@ -188,15 +192,18 @@
 <style>
   /* ⭐ FORCE LA TAILLE POUR ÉVITER LES SAUTS */
   .setup-modal {
-    min-width: 800px;
-    min-height: 700px; /* Assez grand pour contenir l'étape CSP sans sauter */
-    max-height: 90vh;  /* Ne dépasse pas l'écran */
+    width: 800px;
+    max-width: 95vw;
+    height: 90vh; /* ⭐ Utilise la hauteur de l'écran sans minimum rigide */
+    max-height: 90vh; 
     display: flex;
     flex-direction: column;
+    overflow: hidden;
   }
 
   .setup-body {
-    flex: 1; /* Le corps prend tout l'espace disponible */
-    overflow-y: auto; /* Scroll interne si le contenu est trop grand (ex: installation en cours) */
+    flex: 1; 
+    overflow-y: auto; 
+    overflow-x: hidden;
   }
 </style>
