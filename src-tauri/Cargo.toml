@@ -1,0 +1,58 @@
+[package]
+name = "qarl"
+version = "1.1.0"
+description = "QARL - Quick Assetto Race Launcher"
+authors = ["camarade35"]
+license = "GPL-3.0"
+edition = "2024"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "qarl_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+libloading = "0.8"
+image = "0.24"
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dirs = "5.0"
+tauri-plugin-window-state = "2"
+reqwest = { version = "0.11", features = ["json"] }
+tauri-plugin-deep-link = "2"
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+cpal = "0.15"
+tokio = { version = "1", features = ["full"] }
+scraper = "0.19"
+notify = "6.1"
+unarc-rs = "0.6.3"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+
+# ⭐ Ajout pour la détection native des périphériques
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+    "Win32_Devices_HumanInterfaceDevice",
+    "Win32_Foundation",
+    "Win32_System_Com",
+    "Win32_System_LibraryLoader"
+] }
+
+
+# Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

@@ -1,0 +1,54 @@
+# ==========================================
+# FICHIERS SYSTÈME
+# ==========================================
+.DS_Store
+Thumbs.db
+*.log
+
+# ==========================================
+# NODE / SVELTEKIT
+# ==========================================
+node_modules/
+/build/
+/dist/
+/.svelte-kit/
+/package/
+.env
+.env.*
+!.env.example
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# ==========================================
+# TAURI / RUST (crucial)
+# ==========================================
+src-tauri/target/
+src-tauri/gen/
+# NE PAS ignorer src-tauri/Cargo.lock (application, pas lib)
+
+# ==========================================
+# DOSSIERS DE TRAVAIL / TESTS
+# ==========================================
+/samples/
+/.samples/
+
+# ==========================================
+# IDE
+# ==========================================
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ==========================================
+# DIVERS / BACKUPS
+# ==========================================
+*.bak
+*.tmp
+*.old
+*.orig
+*~

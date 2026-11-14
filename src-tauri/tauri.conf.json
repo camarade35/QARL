@@ -1,0 +1,74 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "QARL",
+  "version": "1.1.0",
+  "identifier": "com.plays.qarl",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "QARL",
+        "backgroundColor": "#0f1219",
+        "width": 1200,
+        "height": 800,
+        "decorations": false
+      }
+    ],
+    "security": {
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ5MDIyRUEzODBEQjE4RUMKUldUc0dOdUFveTRDU1cyb3dPMHBWSThYU3RuUFVhOGMrUFJ4K1gvQTVBa3NVbjduSzg3L01LYWcK",
+      "endpoints": [
+        "https://github.com/camarade35/QARL/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    },
+    "deep-link": {
+      "desktop": {
+        "schemes": ["qarl", "acmanager"]
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "createUpdaterArtifacts": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": [
+      "resources/controllers/*",
+      "resources/track_ext_config.ini",
+      "resources/7z.exe",
+      "resources/7z.dll"
+    ],
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "headerImage": "windows/header.bmp",
+        "sidebarImage": "windows/sidebar.bmp",
+        "languages": ["English", "French", "Spanish", "German", "Italian"],
+        "displayLanguageSelector": true,
+        "installMode": "currentUser"
+      }
+    }
+  }
+}
