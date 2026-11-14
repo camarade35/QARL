@@ -68,11 +68,14 @@
             );
 
             if (wantsUpdate) {
-              await update.downloadAndInstall((event) => {
-                if (event.event === 'Finished') {
-                  relaunch(); // Redémarre l'appli automatiquement
-                }
-              });
+              // ⭐ On re-vérifie pour être sûr d'avoir la dernière version (comme dans SettingsTab)
+              const freshUpdate = await check();
+              if (freshUpdate) {
+                // ⭐ On attend la fin complète de l'installation
+                await freshUpdate.downloadAndInstall();
+                // ⭐ Et SEULEMENT ENSUITE on relance
+                await relaunch();
+              }
             } else {
               // ⭐ L'utilisateur a cliqué sur "Annuler", on ignore cette version
               localStorage.setItem('qarl_ignored_update', update.version);
