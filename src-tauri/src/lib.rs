@@ -170,7 +170,7 @@ fn clean_track_id(id: &str) -> String {
 }
 
 #[tauri::command]
-fn get_ac_cars(ac_path: String) -> Result<Vec<CarInfo>, String> {
+fn get_ac_cars(app_handle: tauri::AppHandle, ac_path: String) -> Result<Vec<CarInfo>, String> {
     let cars_dir = Path::new(&ac_path).join("content").join("cars");
     if !cars_dir.exists() { return Err("Dossier introuvable".into()); }
     
@@ -181,6 +181,11 @@ fn get_ac_cars(ac_path: String) -> Result<Vec<CarInfo>, String> {
     if cache_file.exists() {
         if let Ok(content) = fs::read_to_string(&cache_file) {
             if let Ok(cached_cars) = serde_json::from_str::<Vec<CarInfo>>(&content) {
+                // ⭐ On émet les événements un par un même depuis le cache pour le stream
+                for car in &cached_cars {
+                    let _ = app_handle.emit("car-found", car);
+                    std::thread::sleep(std::time::Duration::from_millis(2)); // Petit délai pour l'effet visuel
+                }
                 return Ok(cached_cars);
             }
         }
@@ -257,7 +262,13 @@ fn get_ac_cars(ac_path: String) -> Result<Vec<CarInfo>, String> {
                 
                 // ⭐ On considère Kunos si l'ID commence par "ks_" OU s'il est dans la liste statique
                 let is_kunos = id.starts_with("ks_") || KUNOS_CARS.contains(&id.as_str()); 
-                cars.push(CarInfo { id, name, brand, car_class, bhp, pwratio, year, tags, is_kunos, skins, image_path: default_image, flag_path, brand_logo_path });
+                
+                let car_info = CarInfo { id, name, brand, car_class, bhp, pwratio, year, tags, is_kunos, skins, image_path: default_image, flag_path, brand_logo_path };
+                
+                // ⭐ Émission de l'événement pour le chargement au fur et à mesure
+                let _ = app_handle.emit("car-found", &car_info);
+                
+                cars.push(car_info);
             }
         }
     }
@@ -269,7 +280,7 @@ fn get_ac_cars(ac_path: String) -> Result<Vec<CarInfo>, String> {
 }
 
 #[tauri::command]
-fn get_ac_tracks(ac_path: String) -> Result<Vec<TrackInfo>, String> {
+fn get_ac_tracks(app_handle: tauri::AppHandle, ac_path: String) -> Result<Vec<TrackInfo>, String> {
     let tracks_dir = Path::new(&ac_path).join("content").join("tracks");
     if !tracks_dir.exists() { return Err("Dossier content/tracks introuvable".into()); }
     
@@ -280,6 +291,11 @@ fn get_ac_tracks(ac_path: String) -> Result<Vec<TrackInfo>, String> {
     if cache_file.exists() {
         if let Ok(content) = fs::read_to_string(&cache_file) {
             if let Ok(cached_tracks) = serde_json::from_str::<Vec<TrackInfo>>(&content) {
+                // ⭐ On émet les événements un par un même depuis le cache pour le stream
+                for track in &cached_tracks {
+                    let _ = app_handle.emit("track-found", track);
+                    std::thread::sleep(std::time::Duration::from_millis(2)); // Petit délai pour l'effet visuel
+                }
                 return Ok(cached_tracks);
             }
         }
@@ -427,12 +443,17 @@ fn get_ac_tracks(ac_path: String) -> Result<Vec<TrackInfo>, String> {
 
             // ⭐ On utilise la liste exacte
             let is_kunos = KUNOS_TRACKS.contains(&id.as_str());
-            tracks.push(TrackInfo {
+            let track_info = TrackInfo {
                 id, name, city, country, flag_path, is_kunos,
                 preview_path: main_preview,
                 outline_path: main_outline,
                 tags, layouts,
-            });
+            };
+            
+            // ⭐ Émission de l'événement pour le chargement au fur et à mesure
+            let _ = app_handle.emit("track-found", &track_info);
+            
+            tracks.push(track_info);
         }
     }
 

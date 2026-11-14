@@ -19,15 +19,20 @@
     if (appState.acPath && appState.dataLoadedForPath !== appState.acPath) {
       loadTracks();
     }
-    // ⭐ Démarrer la surveillance des dossiers
-    if (appState.acPath) {
-      invoke('start_content_watcher', { acPath: appState.acPath }).catch(console.error);
+  });
+
+  // ⭐ Effet séparé : le watcher ne démarre qu'une seule fois par chemin
+  $effect(() => {
+    const path = appState.acPath;
+    if (path) {
+      invoke('start_content_watcher', { acPath: path }).catch(console.error);
     }
   });
 
   // ⭐ Écouter les changements de contenu
   let debounceTimer: any;
   let unlistenPromise: any;
+  let unlistenTrackFound: any;
 
   onMount(() => {
     unlistenPromise = listen('content-changed', () => {
@@ -38,16 +43,31 @@
       }, 2000);
     });
 
+    // ⭐ Écoute du chargement progressif des circuits
+    unlistenTrackFound = listen<any>('track-found', (event) => {
+      const newTrack = event.payload;
+      if (!appState.tracks.some(t => t.id === newTrack.id)) {
+        appState.tracks.push(newTrack);
+      }
+    });
+
     return () => {
+      clearTimeout(debounceTimer);
       if (unlistenPromise) unlistenPromise.then((unlisten: any) => unlisten());
+      if (unlistenTrackFound) unlistenTrackFound.then((unlisten: any) => unlisten());
     };
   });
 
   async function loadTracks() {
     loading = true;
+    appState.tracks = []; // ⭐ On vide la liste avant de commencer le stream
     try {
       const result = await invoke<any[]>('get_ac_tracks', { acPath: appState.acPath });
-      appState.tracks = result;
+      
+      // ⭐ On ne remplace la liste QUE si le stream n'a rien rempli (sécurité)
+      if (appState.tracks.length === 0) {
+        appState.tracks = result;
+      }
       appState.dataLoadedForPath = appState.acPath;
     } catch (e) {
       console.error("Error loading tracks:", e);
@@ -90,6 +110,41 @@
       return true;
     })
   );
+
+  // ⭐ Action Svelte pour le Lazy Loading natif
+  function lazySrc(node: HTMLImageElement, src: string) {
+    let currentSrc = src;
+    let observer: IntersectionObserver | null = null;
+
+    const load = () => {
+      if (currentSrc && node.src !== currentSrc) {
+        node.src = currentSrc;
+      }
+    };
+
+    if (typeof IntersectionObserver !== 'undefined') {
+      observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) {
+          load();
+          observer?.disconnect();
+          observer = null;
+        }
+      }, { rootMargin: '400px' }); // Déclenche 400px avant l'écran
+      observer.observe(node);
+    } else {
+      load();
+    }
+
+    return {
+      update(newSrc: string) {
+        currentSrc = newSrc;
+        if (!observer) load();
+      },
+      destroy() {
+        if (observer) observer.disconnect();
+      }
+    };
+  }
 
   function selectTrack(track) {
     appState.selectedTrack = track;
@@ -199,7 +254,7 @@
           {#if bgImage}
             <img 
               class="track-bg" 
-              src={convertFileSrc(bgImage)} 
+              use:lazySrc={convertFileSrc(bgImage)} 
               alt="" 
               onload={(e) => e.currentTarget.classList.add('loaded')} 
             />
@@ -208,7 +263,7 @@
           {#if outlineImage}
             <img 
               class="track-outline" 
-              src={convertFileSrc(outlineImage)} 
+              use:lazySrc={convertFileSrc(outlineImage)} 
               alt="" 
               onload={(e) => e.currentTarget.classList.add('loaded')} 
             />

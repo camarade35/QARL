@@ -1,7 +1,7 @@
 <script lang="ts">
   import { invoke, convertFileSrc } from '@tauri-apps/api/core';
   import { appState, toggleFavorite, bumpUsedCount } from '$lib/stores/appState.svelte.js';
-  import { getFlagUrl, getBrandLogoUrl, getCountryName } from '$lib/utils/assets.js';
+  import { getFlagUrl, getCountryName } from '$lib/utils/assets.js';
   import { t } from 'svelte-i18n';
   import { onMount, onDestroy } from 'svelte';
   import { listen } from '@tauri-apps/api/event';
@@ -35,15 +35,20 @@
     if (appState.acPath && appState.dataLoadedForPath !== appState.acPath) {
       loadCars();
     }
-    // ⭐ Démarrer la surveillance des dossiers
-    if (appState.acPath) {
-      invoke('start_content_watcher', { acPath: appState.acPath }).catch(console.error);
+  });
+
+  // ⭐ Effet séparé : le watcher ne démarre qu'une seule fois par chemin
+  $effect(() => {
+    const path = appState.acPath;
+    if (path) {
+      invoke('start_content_watcher', { acPath: path }).catch(console.error);
     }
   });
 
   // ⭐ Écouter les changements de contenu
   let debounceTimer: any;
   let unlistenPromise: any;
+  let unlistenCarFound: any;
 
   onMount(() => {
     unlistenPromise = listen('content-changed', () => {
@@ -54,16 +59,31 @@
       }, 2000);
     });
 
+    // ⭐ Écoute du chargement progressif des voitures
+    unlistenCarFound = listen<any>('car-found', (event) => {
+      const newCar = event.payload;
+      if (!appState.cars.some(c => c.id === newCar.id)) {
+        appState.cars.push(newCar);
+      }
+    });
+
     return () => {
+      clearTimeout(debounceTimer);
       if (unlistenPromise) unlistenPromise.then((unlisten: any) => unlisten());
+      if (unlistenCarFound) unlistenCarFound.then((unlisten: any) => unlisten());
     };
   });
 
   async function loadCars() {
     isLoading = true;
+    appState.cars = []; // ⭐ On vide la liste avant de commencer le stream
     try {
       const result = await invoke<any[]>('get_ac_cars', { acPath: appState.acPath });
-      appState.cars = result;
+      
+      // ⭐ On ne remplace la liste QUE si le stream n'a rien rempli (sécurité)
+      if (appState.cars.length === 0) {
+        appState.cars = result;
+      }
       appState.dataLoadedForPath = appState.acPath;
     } catch (e) {
       console.error("Loading error:", e);
@@ -145,6 +165,41 @@
       return true;
     })
   );
+
+  // ⭐ Action Svelte pour le Lazy Loading natif
+  function lazySrc(node: HTMLImageElement, src: string) {
+    let currentSrc = src;
+    let observer: IntersectionObserver | null = null;
+
+    const load = () => {
+      if (currentSrc && node.src !== currentSrc) {
+        node.src = currentSrc;
+      }
+    };
+
+    if (typeof IntersectionObserver !== 'undefined') {
+      observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) {
+          load();
+          observer?.disconnect();
+          observer = null;
+        }
+      }, { rootMargin: '400px' }); // Déclenche 400px avant l'écran
+      observer.observe(node);
+    } else {
+      load();
+    }
+
+    return {
+      update(newSrc: string) {
+        currentSrc = newSrc;
+        if (!observer) load();
+      },
+      destroy() {
+        if (observer) observer.disconnect();
+      }
+    };
+  }
 
   function handleCarClick(car) {
     appState.selectedCar = car;
@@ -279,9 +334,8 @@
 
       {#if car.image_path}
         <img 
-          src={convertFileSrc(car.image_path)} 
+          use:lazySrc={convertFileSrc(car.image_path)} 
           class="car-preview" 
-          loading="lazy" 
           onload={(e) => e.currentTarget.classList.add('loaded')} 
         />
       {:else}

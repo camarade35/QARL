@@ -49,15 +49,25 @@
   let { children } = $props();
 </script>
 
-<div style="display: flex; flex-direction: column; height: 100vh; overflow: hidden; background-color: var(--bg-base, #0f1219);">
+<div style="display: flex; flex-direction: column; height: 100vh; overflow: hidden; background-color: var(--bg-base, #0f1219); position: relative;">
   {#if i18nReady}
     <Titlebar />
-    {#if bootDone}
-      <div class="app-body" style="flex: 1; display: flex; min-height: 0;">
-        {@render children()}
+    
+    <!-- ⭐ L'interface est TOUJOURS montée, mais cachée si bootDone est faux -->
+    <div 
+      class="app-body" 
+      style="flex: 1; display: flex; min-height: 0; transition: opacity 0.3s ease;"
+      style:opacity={bootDone ? 1 : 0}
+      style:pointer-events={bootDone ? 'auto' : 'none'}
+    >
+      {@render children()}
+    </div>
+
+    <!-- ⭐ L'écran de chargement est superposé par-dessus -->
+    {#if !bootDone}
+      <div style="position: absolute; top: 34px; left: 0; right: 0; bottom: 0; z-index: 9999; display: flex; flex-direction: column;">
+        <AppLoadingScreen onComplete={() => bootDone = true} />
       </div>
-    {:else}
-      <AppLoadingScreen onComplete={() => bootDone = true} />
     {/if}
   {:else}
     <!-- ⭐ Fallback pendant le chargement de la langue pour éviter le white screen -->
