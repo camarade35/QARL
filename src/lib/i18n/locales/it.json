@@ -355,7 +355,8 @@
     },
     "types": {
       "practice": "Prove libere (Partenza dai box)",
-      "race": "Gara (Griglia di partenza)",
+      "race_quick": "Gara veloce (Griglia di partenza)",
+      "race_weekend": "Weekend di gara",
       "hotlap": "Hotlap (Partenza lanciata)"
     },
     "session": {

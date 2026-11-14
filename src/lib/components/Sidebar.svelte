@@ -332,7 +332,7 @@
     <div class="recap-card clickable" onclick={() => { appState.activeTab = 'tab-session'; }}>
       <div class="recap-label">{$t('sidebar.session')}</div>
       <div class="recap-title">
-        {appState.session.type === 'RACE' 
+        {(appState.session.type === 'RACE_QUICK' || appState.session.type === 'RACE_WEEKEND') 
           ? $t('sidebar.race_with_laps', { values: { count: appState.session.laps } }) 
           : $t(`session.types.${appState.session.type.toLowerCase()}`)}
       </div>

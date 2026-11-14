@@ -8,6 +8,9 @@ function getRandomName() {
 }
 
 export function generateGrid(playerCar, allCars, sessionSettings) {
+  // ⭐ Si ce n'est pas une course, on ne génère pas d'IA
+  if (sessionSettings.type !== 'RACE_QUICK' && sessionSettings.type !== 'RACE_WEEKEND') return [];
+  
   if (!playerCar || !allCars || allCars.length === 0) return [];
 
   // ⭐ Sécurité : Si les anciennes sessions n'ont pas le gridType, on met RANDOM par défaut

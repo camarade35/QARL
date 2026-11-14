@@ -355,7 +355,8 @@
     },
     "types": {
       "practice": "Practice (Pit Start)",
-      "race": "Race (Starting Grid)",
+      "race_quick": "Quick Race (Starting Grid)",
+      "race_weekend": "Race Weekend",
       "hotlap": "Hotlap (Rolling Start)"
     },
     "session": {

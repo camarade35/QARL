@@ -355,7 +355,8 @@
     },
     "types": {
       "practice": "Práctica (Salida de boxes)",
-      "race": "Carrera (Parrilla de salida)",
+      "race_quick": "Carrera rápida (Parrilla de salida)",
+      "race_weekend": "Fin de semana de carrera",
       "hotlap": "Hotlap (Salida lanzada)"
     },
     "session": {

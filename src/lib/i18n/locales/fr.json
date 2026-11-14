@@ -355,7 +355,8 @@
     },
     "types": {
       "practice": "Essais libres (Départ Pit)",
-      "race": "Course (Grille de départ)",
+      "race_quick": "Course rapide (Grille de départ)",
+      "race_weekend": "Week-end de course",
       "hotlap": "Hotlap (Départ lancé)"
     },
     "session": {

@@ -1844,9 +1844,26 @@ fn launch_race(
     let road_temp = ambient_temp + temp_variation;
 
     let custom_pos_str = session_data.customStartPos.unwrap_or(1).to_string();
+    
+    // ⭐ On calcule le nombre total de voitures
+    let total_cars_for_random = if session_data.session_type == "RACE_QUICK" || session_data.session_type == "RACE_WEEKEND" {
+        session_data.opponentsCount + 1
+    } else {
+        1
+    };
+    
+    let now_nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().subsec_nanos() as i32;
+    let random_val = (now_nanos % total_cars_for_random) + 1;
+    let random_pos_str = random_val.to_string();
+    
+    // ⭐ On remplace le "-1" par la vraie dernière position
+    let last_pos_str = (session_data.opponentsCount + 1).to_string();
+
     let start_pos = match session_data.startingPositionMode.as_deref() {
         Some("FIRST") => "1", Some("SECOND") => "2", Some("THIRD") => "3",
-        Some("CUSTOM") => custom_pos_str.as_str(), Some("RANDOM") => "0", _ => "-1",
+        Some("CUSTOM") => custom_pos_str.as_str(), 
+        Some("RANDOM") => random_pos_str.as_str(), 
+        _ => last_pos_str.as_str(), // ⭐ Fini le -1
     };
 
     let assists = &session_data.assists;
@@ -1926,8 +1943,8 @@ SLIPSTREAM={slipstream}
     // ⭐ On détermine le type de session AVANT de compter les voitures
     let session_type = session_data.session_type.as_str();
     
-    // ⭐ On n'ajoute les IA QUE si c'est une COURSE
-    let is_race = session_type == "RACE";
+    // ⭐ On n'ajoute les IA QUE si c'est une COURSE (rapide ou week-end)
+    let is_race = session_type == "RACE_QUICK" || session_type == "RACE_WEEKEND";
     
     let mut cars_ini = String::new();
     if is_race {
@@ -1953,24 +1970,29 @@ SLIPSTREAM={slipstream}
     let mut session_idx = 0;
     let session_type = session_data.session_type.as_str();
 
-    if session_type == "RACE" {
-        if session_data.practiceMinutes > 0 {
-            sessions_str.push_str(&format!(
-                "[SESSION_{}]\nNAME=Essais libres\nTYPE=1\nDURATION_MINUTES={}\nSPAWN_SET=PIT\n\n",
-                session_idx, session_data.practiceMinutes
-            ));
-            session_idx += 1;
+        if session_type == "RACE_WEEKEND" || session_type == "RACE_QUICK" {
+        // ⭐ Pour le week-end, on ajoute les essais et les qualifs si les temps sont > 0
+        if session_type == "RACE_WEEKEND" {
+            if session_data.practiceMinutes > 0 {
+                sessions_str.push_str(&format!(
+                    "[SESSION_{}]\nNAME=Essais libres\nTYPE=1\nDURATION_MINUTES={}\nSPAWN_SET=PIT\n\n",
+                    session_idx, session_data.practiceMinutes
+                ));
+                session_idx += 1;
+            }
+            if session_data.qualifyMinutes > 0 {
+                sessions_str.push_str(&format!(
+                    "[SESSION_{}]\nNAME=Qualifications\nTYPE=2\nDURATION_MINUTES={}\nSPAWN_SET=PIT\n\n",
+                    session_idx, session_data.qualifyMinutes
+                ));
+                session_idx += 1;
+            }
         }
-        if session_data.qualifyMinutes > 0 {
-            sessions_str.push_str(&format!(
-                "[SESSION_{}]\nNAME=Qualifications\nTYPE=2\nDURATION_MINUTES={}\nSPAWN_SET=PIT\n\n",
-                session_idx, session_data.qualifyMinutes
-            ));
-            session_idx += 1;
-        }
+        
+        // ⭐ Dans tous les cas, on ajoute la session de Course à la fin
         sessions_str.push_str(&format!(
-            "[SESSION_{}]\nNAME=Course\nTYPE=3\nLAPS={}\nSPAWN_SET=START\n\n",
-            session_idx, session_data.laps
+            "[SESSION_{}]\nNAME=Course\nTYPE=3\nLAPS={}\nSPAWN_SET=START\nSTARTING_POSITION={}\n\n",
+            session_idx, session_data.laps, start_pos
         ));
     } else if session_type == "PRACTICE" {
         sessions_str.push_str(&format!(

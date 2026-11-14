@@ -265,13 +265,14 @@
         <label>{$t('session.session.type_label')}</label>
         <select bind:value={appState.session.type}>
           <option value="PRACTICE">{$t('session.types.practice')}</option>
-          <option value="RACE">{$t('session.types.race')}</option>
+          <option value="RACE_QUICK">{$t('session.types.race_quick')}</option>
+          <option value="RACE_WEEKEND">{$t('session.types.race_weekend')}</option>
           <option value="HOTLAP">{$t('session.types.hotlap')}</option>
         </select>
       </div>
     </div>
 
-    {#if appState.session.type !== 'RACE'}
+    {#if appState.session.type !== 'RACE_QUICK' && appState.session.type !== 'RACE_WEEKEND'}
       <div class="row">
         <div class="field">
           <label>{$t('session.session.duration_label')}</label>
@@ -280,16 +281,19 @@
       </div>
     {/if}
 
-    {#if appState.session.type === 'RACE'}
+    {#if appState.session.type === 'RACE_QUICK' || appState.session.type === 'RACE_WEEKEND'}
       <div class="row">
-        <div class="field">
-          <label>{$t('session.session.practice_label')}</label>
-          <input type="number" bind:value={appState.session.practiceMinutes} min="0" max="240" />
-        </div>
-        <div class="field">
-          <label>{$t('session.session.qualify_label')}</label>
-          <input type="number" bind:value={appState.session.qualifyMinutes} min="0" max="120" />
-        </div>
+        <!-- ⭐ On cache les essais/qualifs si c'est une course rapide -->
+        {#if appState.session.type === 'RACE_WEEKEND'}
+          <div class="field">
+            <label>{$t('session.session.practice_label')}</label>
+            <input type="number" bind:value={appState.session.practiceMinutes} min="0" max="240" />
+          </div>
+          <div class="field">
+            <label>{$t('session.session.qualify_label')}</label>
+            <input type="number" bind:value={appState.session.qualifyMinutes} min="0" max="120" />
+          </div>
+        {/if}
         <div class="field">
           <label>{$t('session.session.laps_label')}</label>
           <input type="number" bind:value={appState.session.laps} min="1" max="99" />
@@ -634,7 +638,7 @@
                 </div>
                 <div style="font-size: 0.75rem; color: var(--text-secondary); display: flex; align-items: center; gap: 10px;">
                   <span>📅 {formatDate(h.date)}</span>
-                  <span>{h.session_data.type === 'RACE' ? $t('session.history.race_laps', { values: { count: h.session_data.laps } }) : $t(`session.types.${h.session_data.type.toLowerCase()}`)}</span>
+                  <span>{(h.session_data.type === 'RACE_QUICK' || h.session_data.type === 'RACE_WEEKEND') ? $t('session.history.race_laps', { values: { count: h.session_data.laps } }) : $t(`session.types.${h.session_data.type.toLowerCase()}`)}</span>
                   <span>{$t('session.history.ai_count', { values: { count: h.session_data.opponentsCount } })}</span>
                   <span>🕒 {String(h.session_data.weather.startHour).padStart(2, '0')}:{String(h.session_data.weather.startMinute).padStart(2, '0')}</span>
                   <span>{getWeatherIcon(h.weather_summary)} {translateWeatherName(h.weather_summary, h.weather_summary, $locale)}</span>

@@ -355,7 +355,8 @@
     },
     "types": {
       "practice": "Training (Boxenstart)",
-      "race": "Rennen (Startaufstellung)",
+      "race_quick": "Schnelles Rennen (Startaufstellung)",
+      "race_weekend": "Rennwochenende",
       "hotlap": "Hotlap (Fliegender Start)"
     },
     "session": {
