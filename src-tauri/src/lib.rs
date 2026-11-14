@@ -87,6 +87,7 @@ struct TrackInfo {
     id: String, name: String, city: String, country: String,
     flag_path: Option<String>, preview_path: Option<String>,
     outline_path: Option<String>, tags: Vec<String>, layouts: Vec<TrackLayoutInfo>, is_kunos: bool,
+    pitboxes: i32, // ⭐ NOUVEAU
 }
 
 fn extract_json_string(content: &str, key: &str) -> Option<String> {
@@ -104,6 +105,26 @@ fn extract_json_string(content: &str, key: &str) -> Option<String> {
     let end_quote = value_str.find('"')?;
     
     Some(value_str[..end_quote].to_string())
+}
+
+fn extract_json_number(content: &str, key: &str) -> Option<i32> {
+    let search = format!("\"{}\"", key);
+    if let Some(pos) = content.find(&search) {
+        let after_key = &content[pos + search.len()..];
+        if let Some(colon) = after_key.find(':') {
+            let after_colon = &after_key[colon + 1..];
+            let trimmed = after_colon.trim();
+            
+            // ⭐ NOUVEAU : On gère le cas où il y a des guillemets (ex: "24")
+            let cleaned = trimmed.trim_start_matches('"');
+            let num_str: String = cleaned.chars().take_while(|c| c.is_digit(10) || *c == '-').collect();
+            
+            if let Ok(num) = num_str.parse::<i32>() {
+                return Some(num);
+            }
+        }
+    }
+    None
 }
 
 fn extract_json_tags(content: &str, key: &str) -> Vec<String> {
@@ -316,6 +337,7 @@ fn get_ac_tracks(app_handle: tauri::AppHandle, ac_path: String) -> Result<Vec<Tr
             let mut city = String::new();
             let mut country = String::new();
             let mut tags = Vec::new();
+            let mut pitboxes = 0; // ⭐ NOUVEAU
             
             // ⭐ Variables pour récupérer les infos depuis les layouts si la racine est vide
             let mut fallback_country = String::new();
@@ -330,6 +352,7 @@ fn get_ac_tracks(app_handle: tauri::AppHandle, ac_path: String) -> Result<Vec<Tr
                     }
                     if let Some(c) = extract_json_string(clean_json, "city") { city = c; }
                     if let Some(c) = extract_json_string(clean_json, "country") { country = c; }
+                    if let Some(p) = extract_json_number(clean_json, "pitboxes") { pitboxes = p; } // ⭐ NOUVEAU
                     tags = extract_json_tags(clean_json, "tags");
                 }
             }
@@ -387,6 +410,17 @@ fn get_ac_tracks(app_handle: tauri::AppHandle, ac_path: String) -> Result<Vec<Tr
                                         if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&json_str) {
                                             if let Some(n) = parsed.get("name").and_then(|v| v.as_str()) {
                                                 if !n.is_empty() { display_name = n.to_string(); }
+                                            }
+                                            
+                                            // ⭐ NOUVEAU : On cherche pitboxes dans le layout s'il n'est pas à la racine
+                                            if pitboxes == 0 {
+                                                if let Some(p) = parsed.get("pitboxes") {
+                                                    if let Some(i) = p.as_i64() {
+                                                        pitboxes = i as i32;
+                                                    } else if let Some(s) = p.as_str() {
+                                                        pitboxes = s.parse::<i32>().unwrap_or(0);
+                                                    }
+                                                }
                                             }
                                             
                                             if fallback_country.is_empty() {
@@ -448,6 +482,7 @@ fn get_ac_tracks(app_handle: tauri::AppHandle, ac_path: String) -> Result<Vec<Tr
                 preview_path: main_preview,
                 outline_path: main_outline,
                 tags, layouts,
+                pitboxes, // ⭐ NOUVEAU
             };
             
             // ⭐ Émission de l'événement pour le chargement au fur et à mesure

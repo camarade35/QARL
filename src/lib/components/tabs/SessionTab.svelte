@@ -246,6 +246,20 @@
       console.error(e);
     }
   }
+
+  // ⭐ NOUVEAU : Calcul dynamique du nombre max d'adversaires
+  let maxOpponents = $derived(
+    appState.selectedTrack?.pitboxes 
+      ? appState.selectedTrack.pitboxes - 1 
+      : 35
+  );
+
+  // ⭐ NOUVEAU : Si on change de circuit et que le nombre dépasse la limite, on le bride
+  $effect(() => {
+    if (appState.session.opponentsCount > maxOpponents) {
+      appState.session.opponentsCount = maxOpponents;
+    }
+  });
 </script>
 
 <div class="subtabs">
@@ -310,7 +324,24 @@
     <div class="row">
       <div class="field">
         <label>{$t('session.race_ia.opponents_count')}</label>
-        <input type="number" bind:value={appState.session.opponentsCount} min="0" max="35" />
+        <input 
+          type="number" 
+          bind:value={appState.session.opponentsCount} 
+          min="0" 
+          max={maxOpponents}
+          oninput={(e) => {
+            const val = parseInt(e.currentTarget.value);
+            if (val > maxOpponents) {
+              appState.session.opponentsCount = maxOpponents;
+            } else if (isNaN(val) || val < 0) {
+              appState.session.opponentsCount = 0;
+            }
+          }}
+        />
+        <!-- ⭐ On ajoute une petite indication pour l'utilisateur -->
+        <span style="font-size: 0.7rem; color: var(--text-tertiary); margin-top: 4px;">
+          Max : {maxOpponents} (limite du circuit)
+        </span>
       </div>
       <div class="field">
         <label>{$t('session.race_ia.grid_type')}</label>
