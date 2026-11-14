@@ -156,7 +156,7 @@
     }
   }
 
-  async function saveAssistPreset() {
+    async function saveAssistPreset() {
     if (!newAssistPresetName.trim()) {
       alert("Veuillez donner un nom au profil.");
       return;
@@ -166,7 +166,12 @@
         documentsPath: appState.documentsPath,
         presetName: newAssistPresetName,
         assists: appState.session.assists,
-        fov: currentFov // ⭐ Ajout du FOV
+        fov: currentFov,
+        ghostCar: appState.session.ghostCar,
+        allowedTyresOut: appState.session.allowedTyresOut,
+        trackGrip: appState.session.trackGrip,
+        windSpeed: appState.session.windSpeed,
+        windDirection: appState.session.windDirection
       });
       newAssistPresetName = '';
       await loadAssistsList();
@@ -193,15 +198,23 @@
     }
   }
 
-  async function loadAssistPreset() {
+    async function loadAssistPreset() {
     if (!selectedAssistPreset) return;
     try {
       const data = await invoke<any>('load_assists_preset', {
         documentsPath: appState.documentsPath,
         presetName: selectedAssistPreset
       });
-      // Mise à jour de l'UI
+      
+      // Mise à jour de l'UI (Assists)
       appState.session.assists = { ...appState.session.assists, ...data };
+      
+      // Mise à jour de l'UI (Environment)
+      if (data.ghostCar !== undefined) appState.session.ghostCar = data.ghostCar;
+      if (data.allowedTyresOut !== undefined) appState.session.allowedTyresOut = data.allowedTyresOut;
+      if (data.trackGrip !== undefined) appState.session.trackGrip = data.trackGrip;
+      if (data.windSpeed !== undefined) appState.session.windSpeed = data.windSpeed;
+      if (data.windDirection !== undefined) appState.session.windDirection = data.windDirection;
       
       // ⭐ Application du FOV s'il est présent dans le profil
       if (data.fov) {

@@ -127,7 +127,7 @@
   });
 
     // Constante pour la version (à modifier lors du push Github)
-  const APP_VERSION = "v1.1.3";
+  const APP_VERSION = "v1.1.4";
 
   async function detectSteamId() {
     isDetectingSteam = true;

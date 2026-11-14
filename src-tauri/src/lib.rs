@@ -1383,7 +1383,17 @@ fn list_assists_presets(documents_path: String) -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-fn save_assists_preset(documents_path: String, preset_name: String, assists: serde_json::Value, fov: i32) -> Result<(), String> {
+fn save_assists_preset(
+    documents_path: String, 
+    preset_name: String, 
+    assists: serde_json::Value, 
+    fov: i32,
+    ghost_car: bool,
+    allowed_tyres_out: i32,
+    track_grip: i32,
+    wind_speed: i32,
+    wind_direction: i32
+) -> Result<(), String> {
     let cfg_dir = resolve_cfg_dir(Path::new(&documents_path));
     let get_bool = |key: &str| assists[key].as_bool().unwrap_or(false) as i32;
     let get_int = |key: &str, def: i32| assists[key].as_i64().unwrap_or(def as i64) as i32;
@@ -1404,14 +1414,23 @@ FUEL_RATE={}
 TYRE_WEAR={}
 TYRE_BLANKETS={}
 SLIPSTREAM={}
+PENALTIES={}
 
 [CAMERA]
 FOV={}
+
+[ENVIRONMENT]
+GHOST_CAR={}
+ALLOWED_TYRES_OUT={}
+TRACK_GRIP={}
+WIND_SPEED={}
+WIND_DIRECTION={}
 "#,
         get_bool("idealLine"), get_bool("autoblip"), get_int("stability", 0), 
         get_bool("autoGearbox"), get_int("abs", 1), get_int("tc", 1), get_bool("autoClutch"),
         get_int("mechanicalDamage", 100), get_int("fuelRate", 1), get_int("tyreWear", 1), 
-        get_bool("tyreBlankets"), get_int("slipstream", 1), fov
+        get_bool("tyreBlankets"), get_int("slipstream", 1), get_bool("penalties"), fov,
+        ghost_car as i32, allowed_tyres_out, track_grip, wind_speed, wind_direction
     );
 
     // 1. Sauvegarde du profil
@@ -1438,14 +1457,16 @@ fn load_assists_preset(documents_path: String, preset_name: String) -> Result<se
     // On copie le preset vers le fichier actif d'AC
     fs::write(cfg_dir.join("assists.ini"), &content).map_err(|e| e.to_string())?;
 
-        // On parse pour renvoyer à Svelte
+    // On parse pour renvoyer à Svelte
     let mut result = serde_json::json!({});
     let mut in_camera_section = false;
+    let mut in_env_section = false;
     
     for line in content.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with('[') && trimmed.ends_with(']') {
             in_camera_section = trimmed.eq_ignore_ascii_case("[CAMERA]");
+            in_env_section = trimmed.eq_ignore_ascii_case("[ENVIRONMENT]");
             continue;
         }
         if trimmed.starts_with(';') || trimmed.is_empty() { continue; }
@@ -1455,6 +1476,18 @@ fn load_assists_preset(documents_path: String, preset_name: String) -> Result<se
             
             if in_camera_section && k.trim() == "FOV" {
                 result["fov"] = serde_json::json!(val_str.parse::<i32>().unwrap_or(56));
+                continue;
+            }
+
+            if in_env_section {
+                match k.trim() {
+                    "GHOST_CAR" => result["ghostCar"] = serde_json::json!(val_str == "1"),
+                    "ALLOWED_TYRES_OUT" => result["allowedTyresOut"] = serde_json::json!(val_str.parse::<i32>().unwrap_or(-1)),
+                    "TRACK_GRIP" => result["trackGrip"] = serde_json::json!(val_str.parse::<i32>().unwrap_or(1)),
+                    "WIND_SPEED" => result["windSpeed"] = serde_json::json!(val_str.parse::<i32>().unwrap_or(0)),
+                    "WIND_DIRECTION" => result["windDirection"] = serde_json::json!(val_str.parse::<i32>().unwrap_or(0)),
+                    _ => {}
+                }
                 continue;
             }
             
@@ -1471,6 +1504,7 @@ fn load_assists_preset(documents_path: String, preset_name: String) -> Result<se
                 "TYRE_WEAR" => result["tyreWear"] = serde_json::json!(val_str.parse::<i32>().unwrap_or(1)),
                 "TYRE_BLANKETS" => result["tyreBlankets"] = serde_json::json!(val_str == "1"),
                 "SLIPSTREAM" => result["slipstream"] = serde_json::json!(val_str.parse::<i32>().unwrap_or(1)),
+                "PENALTIES" => result["penalties"] = serde_json::json!(val_str == "1"),
                 _ => {}
             }
         }
@@ -1844,9 +1878,20 @@ fn launch_race(
     let road_temp = ambient_temp + temp_variation;
 
     let custom_pos_str = session_data.customStartPos.unwrap_or(1).to_string();
+    
+    // ⭐ On calcule le nombre total de voitures (nous + les IA)
+    let total_cars_for_random = if session_data.session_type == "RACE" { session_data.opponentsCount + 1 } else { 1 };
+    
+    // ⭐ On génère un nombre aléatoire basé sur l'horloge système (entre 1 et total_cars_for_random)
+    let now_nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().subsec_nanos() as i32;
+    let random_val = (now_nanos % total_cars_for_random) + 1;
+    let random_pos_str = random_val.to_string();
+
     let start_pos = match session_data.startingPositionMode.as_deref() {
         Some("FIRST") => "1", Some("SECOND") => "2", Some("THIRD") => "3",
-        Some("CUSTOM") => custom_pos_str.as_str(), Some("RANDOM") => "0", _ => "-1",
+        Some("CUSTOM") => custom_pos_str.as_str(), 
+        Some("RANDOM") => random_pos_str.as_str(), // ⭐ On envoie le chiffre calculé au hasard
+        _ => "-1",
     };
 
     let assists = &session_data.assists;
@@ -1969,8 +2014,8 @@ SLIPSTREAM={slipstream}
             session_idx += 1;
         }
         sessions_str.push_str(&format!(
-            "[SESSION_{}]\nNAME=Course\nTYPE=3\nLAPS={}\nSPAWN_SET=START\n\n",
-            session_idx, session_data.laps
+            "[SESSION_{}]\nNAME=Course\nTYPE=3\nLAPS={}\nSPAWN_SET=START\nSTARTING_POSITION={}\n\n",
+            session_idx, session_data.laps, start_pos
         ));
     } else if session_type == "PRACTICE" {
         sessions_str.push_str(&format!(
@@ -2083,7 +2128,6 @@ SKIN={skin}
 DRIVER_NAME=
 NATIONALITY=
 AI_LEVEL={ai_level}
-STARTING_POSITION={start_pos}
 BALLAST={ballast}
 RESTRICTOR={restrictor}
 
@@ -2093,7 +2137,6 @@ RESTRICTOR={restrictor}
         config_track = config_track,
         car = car_id,
         skin = skin_id,
-        start_pos = start_pos,
         penalties = penalties,
         fixed_setup = fixed_setup,
         ghost_car = ghost_car,
@@ -2130,7 +2173,7 @@ RESTRICTOR={restrictor}
         ambient_temp = ambient_temp,
         road_temp = road_temp
     );
-
+    println!("🔍 DEBUG QARL : J'écris le race.ini ICI : {:?}", race_ini_path);
     fs::write(&race_ini_path, race_ini_content)
         .map_err(|e| format!("Erreur écriture race.ini: {}", e))?;
 
