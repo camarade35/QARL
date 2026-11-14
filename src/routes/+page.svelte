@@ -16,6 +16,9 @@
   import { setupState } from '$lib/stores/setupState.svelte.js';
   import { onMount } from 'svelte';
   import { listen } from '@tauri-apps/api/event'; // ⭐ Import pour écouter le Deep Link
+  import { check } from '@tauri-apps/plugin-updater';
+  import { relaunch } from '@tauri-apps/plugin-process';
+  import { confirm } from '$lib/stores/dialog.svelte';
 
   // ⭐ État pour afficher la visite au démarrage
   let showTour = $state(false);
@@ -46,9 +49,46 @@
       }, 300);
     }).then((fn) => { unlisten = fn; });
 
+    // ⭐ VÉRIFICATION AUTOMATIQUE DES MISES À JOUR (en arrière-plan)
+    const updateTimer = setTimeout(async () => {
+      try {
+        const update = await check();
+        
+        if (update) {
+          const ignoredVersion = localStorage.getItem('qarl_ignored_update');
+          
+          // Si l'utilisateur n'a pas déjà ignoré cette version spécifique
+          if (ignoredVersion !== update.version) {
+            
+            // On demande l'accord (OK = Mettre à jour, Annuler = Ignorer)
+            const wantsUpdate = await confirm(
+              `Une nouvelle version de QARL (${update.version}) est disponible !\nVoulez-vous l'installer maintenant ?`,
+              "Mise à jour disponible",
+              "info"
+            );
+
+            if (wantsUpdate) {
+              await update.downloadAndInstall((event) => {
+                if (event.event === 'Finished') {
+                  relaunch(); // Redémarre l'appli automatiquement
+                }
+              });
+            } else {
+              // ⭐ L'utilisateur a cliqué sur "Annuler", on ignore cette version
+              localStorage.setItem('qarl_ignored_update', update.version);
+            }
+          }
+        }
+      } catch (error) {
+        // Échec silencieux (hors ligne, GitHub down, etc.)
+        console.log("Vérification des mises à jour ignorée :", error);
+      }
+    }, 3000); // Attend 3 secondes après le démarrage
+
     return () => {
       window.removeEventListener('qarl-change-tab', handleTabChange);
       if (unlisten) unlisten();
+      clearTimeout(updateTimer); // ⭐ Nettoyage du timer
     };
   });
 

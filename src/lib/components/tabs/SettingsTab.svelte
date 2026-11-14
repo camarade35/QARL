@@ -127,7 +127,7 @@
   });
 
     // Constante pour la version (à modifier lors du push Github)
-  const APP_VERSION = "v1.1.5";
+  const APP_VERSION = "v1.1.6";
 
   async function detectSteamId() {
     isDetectingSteam = true;
@@ -215,14 +215,46 @@
   // ⭐ Fonctions de mise à jour
   async function checkForUpdates(silent = false) {
     if (updateStatus === 'checking' || updateStatus === 'downloading') return;
+    
+    // ⭐ Si c'est manuel, on force la vérification en ignorant la version ignorée
+    if (!silent) {
+      localStorage.removeItem('qarl_ignored_update');
+    }
+
     updateStatus = 'checking';
     updateErrorMsg = '';
     
     try {
       const update = await check();
       if (update) {
+        const ignoredVersion = localStorage.getItem('qarl_ignored_update');
+        
+        // Si c'est le démarrage auto et que l'utilisateur a ignoré cette version
+        if (silent && ignoredVersion === update.version) {
+          updateStatus = 'idle';
+          return;
+        }
+
         updateVersion = update.version;
         updateStatus = 'available';
+
+        // ⭐ Si c'est le check automatique (démarrage), on affiche ta modale custom
+        if (silent) {
+          const wantsUpdate = await confirm(
+            `Une nouvelle version de QARL (${update.version}) est disponible !\nVoulez-vous l'installer maintenant ?`,
+            "Mise à jour disponible",
+            "info"
+          );
+          
+          if (wantsUpdate) {
+            installUpdate();
+          } else {
+            // L'utilisateur a cliqué sur Annuler
+            localStorage.setItem('qarl_ignored_update', update.version);
+            updateStatus = 'idle'; // On cache le bouton pour ne pas l'embêter
+          }
+        }
+
       } else {
         updateStatus = 'idle';
         if (!silent) alert($t('settings.general.update_uptodate') + " (" + APP_VERSION + ")");
