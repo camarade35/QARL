@@ -233,7 +233,12 @@
               style="padding: 4px 8px; font-size: 0.75rem;" 
               title={$t('mods.history_view')}
               onclick={() => { 
-                invoke('open_folder', { acPath: appState.acPath, folderType: 'mod', folderId: mod.path_installed })
+                invoke('open_folder', { 
+                  acPath: appState.acPath, 
+                  documentsPath: appState.documentsPath, 
+                  folderType: 'mod', 
+                  folderId: mod.path_installed 
+                })
                   .catch(e => alert($t('mods.open_folder_error') + e)); 
               }}
             >
