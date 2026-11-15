@@ -13,18 +13,17 @@ export function generateGrid(playerCar, allCars, sessionSettings) {
   
   if (!playerCar || !allCars || allCars.length === 0) return [];
 
-  // ⭐ Sécurité : Si les anciennes sessions n'ont pas le gridType, on met RANDOM par défaut
+  // ⭐ RESTAURATION : Les variables de base
   const opponentsCount = sessionSettings.opponentsCount || 0;
   const gridType = sessionSettings.gridType || 'RANDOM';
-  
-  // ⭐ NOUVEAU : Mode Grille Personnalisée
+
+  // ⭐ RESTAURATION : Mode Grille Personnalisée
   if (gridType === 'CUSTOM_GRID') {
     const grid = [];
     if (sessionSettings.customGrid) {
       for (const row of sessionSettings.customGrid) {
         const car = allCars.find(c => c.id === row.carId);
         if (car) {
-          // On ajoute la voiture autant de fois que la quantité demandée
           for (let i = 0; i < row.quantity; i++) {
             grid.push({
               id: car.id,
@@ -39,74 +38,81 @@ export function generateGrid(playerCar, allCars, sessionSettings) {
     }
     return grid;
   }
+
+  // ⭐ Gestion de la Restriction (Tout / Kunos / Mods)
+  const gridRestriction = sessionSettings.gridRestriction || 'ALL';
+  let baseCandidates = [...allCars];
   
+  if (gridRestriction === 'KUNOS') {
+    baseCandidates = allCars.filter(c => c.is_kunos);
+  } else if (gridRestriction === 'MODS') {
+    baseCandidates = allCars.filter(c => !c.is_kunos);
+  }
+
+  // Sécurité : si le filtre de restriction vide la liste, on remet tout
+  if (baseCandidates.length === 0) baseCandidates = [...allCars];
+
   let candidates = [];
   
-  // 1. On filtre les voitures selon la règle choisie
+  // 1. On filtre les voitures selon la règle de cohérence choisie
   if (gridType === 'SAME_CAR') {
-    candidates = [playerCar];
+    candidates = [playerCar]; // Ignore la restriction, c'est la voiture du joueur
   } 
   else if (gridType === 'RANDOM') {
-    candidates = [...allCars];
+    candidates = baseCandidates; // Utilise la restriction
   } 
   else if (gridType === 'SAME_CLASS') {
-    candidates = allCars.filter(c => c.car_class === playerCar.car_class);
-    // Si la classe est vide ou introuvable, on prend tout
-    if (candidates.length <= 1) candidates = [...allCars]; 
+    candidates = baseCandidates.filter(c => c.car_class === playerCar.car_class);
+    if (candidates.length <= 1) candidates = baseCandidates; // Fallback sur la restriction
   } 
   else if (gridType === 'SAME_BRAND') {
-    candidates = allCars.filter(c => c.brand === playerCar.brand);
-    if (candidates.length <= 1) candidates = [...allCars];
+    candidates = baseCandidates.filter(c => c.brand === playerCar.brand);
+    if (candidates.length <= 1) candidates = baseCandidates;
   }
   else if (gridType.includes('SIMILAR_POWER_')) {
-    // Ex: SIMILAR_POWER_5 -> tolérance 5%
     const tolerance = parseInt(gridType.split('_').pop(), 10) / 100;
     const targetBhp = playerCar.bhp || 0;
     
     if (targetBhp > 0) {
       const min = targetBhp * (1 - tolerance);
       const max = targetBhp * (1 + tolerance);
-      candidates = allCars.filter(c => c.bhp >= min && c.bhp <= max);
+      candidates = baseCandidates.filter(c => c.bhp >= min && c.bhp <= max);
     } else {
-      candidates = [...allCars];
+      candidates = baseCandidates;
     }
   }
   else if (gridType.includes('SIMILAR_PWRATIO_')) {
-    // Ex: SIMILAR_PWRATIO_5 -> tolérance 5%
     const tolerance = parseInt(gridType.split('_').pop(), 10) / 100;
     const targetRatio = playerCar.pwratio || 0;
     
     if (targetRatio > 0) {
       const min = targetRatio * (1 - tolerance);
       const max = targetRatio * (1 + tolerance);
-      // On exclut les voitures sans ratio connu pour éviter les faux positifs à 0
-      candidates = allCars.filter(c => c.pwratio > 0 && c.pwratio >= min && c.pwratio <= max);
+      candidates = baseCandidates.filter(c => c.pwratio > 0 && c.pwratio >= min && c.pwratio <= max);
     } else {
-      candidates = [...allCars];
+      candidates = baseCandidates;
     }
   }
   else if (gridType === 'SAME_ERA_CLASS') {
-    // On cherche la même classe, à +/- 10 ans
     const targetYear = playerCar.year || 0;
     if (targetYear > 0) {
-      candidates = allCars.filter(c => {
+      candidates = baseCandidates.filter(c => {
         const sameClass = c.car_class === playerCar.car_class;
         const closeYear = c.year > 0 && Math.abs(c.year - targetYear) <= 10;
         return sameClass && closeYear;
       });
     } else {
-      candidates = allCars.filter(c => c.car_class === playerCar.car_class);
+      candidates = baseCandidates.filter(c => c.car_class === playerCar.car_class);
     }
-    if (candidates.length <= 1) candidates = [...allCars];
+    if (candidates.length <= 1) candidates = baseCandidates;
   }
 
-  // 2. Sécurité : si le filtre ne renvoie AUCUNE voiture (ou juste le joueur)
-  if (candidates.length === 0) candidates = [...allCars];
+  // 2. Sécurité : si le filtre ne renvoie AUCUNE voiture
+  if (candidates.length === 0) candidates = baseCandidates;
 
   // 3. On génère la grille finale
   const grid = [];
   for (let i = 0; i < opponentsCount; i++) {
-    // On pioche au hasard dans les candidats
     grid.push(candidates[Math.floor(Math.random() * candidates.length)]);
   }
 

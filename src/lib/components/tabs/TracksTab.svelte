@@ -47,7 +47,7 @@
     unlistenTrackFound = listen<any>('track-found', (event) => {
       const newTrack = event.payload;
       if (!appState.tracks.some(t => t.id === newTrack.id)) {
-        appState.tracks.push(newTrack);
+        appState.tracks = [...appState.tracks, newTrack];
       }
     });
 

@@ -354,6 +354,7 @@
           </span>
         </div>
       {/if}
+      <!-- ⭐ Type de Grille (Cohérence) -->
       <div class="field">
         <label>{$t('session.race_ia.grid_type')}</label>
         <select bind:value={appState.session.gridType}>
@@ -370,16 +371,23 @@
             <option value="SIMILAR_PWRATIO_5">{$t('session.race_ia.grid_similar_pwratio_5')}</option>
           </optgroup>
           
-          <optgroup label={$t('session.race_ia.grid_restrictions_group')}>
-            <option value="KUNOS_ONLY">{$t('session.race_ia.grid_kunos_only')}</option>
-            <option value="MODS_ONLY">{$t('session.race_ia.grid_mods_only')}</option>
-          </optgroup>
-          
           <optgroup label="Personnalisé">
             <option value="CUSTOM_GRID">{$t('session.race_ia.grid_custom')}</option>
           </optgroup>
         </select>
       </div>
+
+      <!-- ⭐ NOUVEAU : Restriction (affiché seulement si ce n'est pas Custom ou Same Car) -->
+      {#if appState.session.gridType !== 'CUSTOM_GRID' && appState.session.gridType !== 'SAME_CAR'}
+        <div class="field">
+          <label>{$t('session.race_ia.grid_restriction_label')}</label>
+          <select bind:value={appState.session.gridRestriction}>
+            <option value="ALL">{$t('session.race_ia.grid_restriction_all')}</option>
+            <option value="KUNOS">{$t('session.race_ia.grid_restriction_kunos')}</option>
+            <option value="MODS">{$t('session.race_ia.grid_restriction_mods')}</option>
+          </select>
+        </div>
+      {/if}
     </div>
 
     <!-- ⭐ C'EST ICI QUE LE NOUVEAU BLOC COMMENCE ⭐ -->

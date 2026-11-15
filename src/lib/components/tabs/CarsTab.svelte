@@ -63,7 +63,8 @@
     unlistenCarFound = listen<any>('car-found', (event) => {
       const newCar = event.payload;
       if (!appState.cars.some(c => c.id === newCar.id)) {
-        appState.cars.push(newCar);
+        // ⭐ FIX SVELTE 5 : On réassigne le tableau pour forcer la réactivité
+        appState.cars = [...appState.cars, newCar];
       }
     });
 

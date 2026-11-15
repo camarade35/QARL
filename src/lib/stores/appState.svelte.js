@@ -27,6 +27,7 @@ const defaultSession = {
   // IA & Grille
   opponentsCount: 10,
   gridType: 'RANDOM',
+  gridRestriction: 'ALL', // ⭐ NOUVEAU : 'ALL', 'KUNOS', 'MODS'
   customGrid: [], // ⭐ NOUVEAU
   gridOffset: 0, // ⭐ NOUVEAU : Écart de grille
   startingPositionMode: 'LAST',
