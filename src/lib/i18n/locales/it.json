@@ -372,6 +372,8 @@
       "custom_grid_title": "Griglia personalizzata",
       "custom_grid_empty": "Nessuna auto aggiunta. Clicca sul pulsante qui sotto.",
       "custom_grid_add": "➕ Aggiungi un'auto",
+      "custom_grid_choose_car": "Scegli un'auto",
+      "custom_grid_random_skins": "Skin casuali",
       "custom_grid_total": "Totale: {total} / {max}",
       "custom_grid_car_placeholder": "-- Auto --",
       "custom_grid_skin_placeholder": "-- Skin --",

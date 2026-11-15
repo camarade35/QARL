@@ -372,6 +372,8 @@
       "custom_grid_title": "Benutzerdefinierte Startaufstellung",
       "custom_grid_empty": "Keine Autos hinzugefügt. Klicke auf die Schaltfläche unten.",
       "custom_grid_add": "➕ Auto hinzufügen",
+      "custom_grid_choose_car": "Auto auswählen",
+      "custom_grid_random_skins": "Zufällige Skins",
       "custom_grid_total": "Gesamt: {total} / {max}",
       "custom_grid_car_placeholder": "-- Auto --",
       "custom_grid_skin_placeholder": "-- Skin --",

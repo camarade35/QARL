@@ -25,9 +25,17 @@ export function generateGrid(playerCar, allCars, sessionSettings) {
         const car = allCars.find(c => c.id === row.carId);
         if (car) {
           for (let i = 0; i < row.quantity; i++) {
+            let finalSkin = row.skinId || '';
+            
+            // ⭐ Si la quantité > 1, on pioche une skin au hasard
+            if (row.quantity > 1 && car.skins && car.skins.length > 0) {
+              const randomSkin = car.skins[Math.floor(Math.random() * car.skins.length)];
+              finalSkin = randomSkin.name;
+            }
+
             grid.push({
               id: car.id,
-              skin: row.skinId || '', 
+              skin: finalSkin, 
               driver: row.driverName.trim() || 'Driver',
               brand: car.brand,
               model: car.name

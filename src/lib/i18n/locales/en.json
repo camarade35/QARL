@@ -372,6 +372,8 @@
       "custom_grid_title": "Custom Grid",
       "custom_grid_empty": "No cars added. Click the button below.",
       "custom_grid_add": "➕ Add a car",
+      "custom_grid_choose_car": "Choose a car",
+      "custom_grid_random_skins": "Random skins",
       "custom_grid_total": "Total: {total} / {max}",
       "custom_grid_car_placeholder": "-- Car --",
       "custom_grid_skin_placeholder": "-- Skin --",

@@ -154,6 +154,7 @@ export const appState = $state({
   modalOpen: false,
   modalType: null,
   modalData: null,
+  modalContext: null, // ⭐ NOUVEAU : pour cibler la ligne de la grille personnalisée
   favorites: savedFavorites,
   used: savedUsed,
   carFilters: { type: 'all', search: '', tags: [], power: '' },

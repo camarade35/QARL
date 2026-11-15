@@ -405,35 +405,54 @@
             {$t('session.race_ia.custom_grid_empty')}
           </div>
         {:else}
-          <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; flex-direction: column; gap: 4px;">
             {#each appState.session.customGrid as row, i}
-              <div style="display: flex; gap: 8px; align-items: center; background: var(--bg-base); padding: 10px; border-radius: var(--r-xs); flex-wrap: wrap;">
+              <div style="display: flex; gap: 8px; align-items: center; background: var(--bg-base); padding: 4px 8px; border-radius: var(--r-xs); flex-wrap: wrap;">
                 
-                <select bind:value={row.carId} onchange={() => {
-                  const car = appState.cars.find(c => c.id === row.carId);
-                  if (car && car.skins.length > 0) row.skinId = car.skins[0].name;
-                }} style="flex: 2; min-width: 150px;">
-                  <option value="">{$t('session.race_ia.custom_grid_car_placeholder')}</option>
-                  {#each appState.cars as car}
-                    <option value={car.id}>{car.name}</option>
-                  {/each}
-                </select>
-
-                <select bind:value={row.skinId} style="flex: 1; min-width: 120px;">
-                  {#if row.carId}
-                    {#each appState.cars.find(c => c.id === row.carId)?.skins || [] as skin}
-                      <option value={skin.name}>{skin.name}</option>
-                    {/each}
+                <button 
+                  class="filter-btn" 
+                  onclick={() => {
+                    appState.modalOpen = true;
+                    appState.modalType = 'custom_grid_car';
+                    appState.modalContext = { rowIndex: i };
+                  }}
+                  style="flex: 2; min-width: 150px; height: 56px; display: flex; align-items: center; gap: 12px; text-align: left; overflow: hidden; padding: 4px 10px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--r-sm);"
+                  title={$t('session.race_ia.custom_grid_choose_car')}
+                >
+                  {#if row.carId && appState.cars.find(c => c.id === row.carId)}
+                    {@const selectedCar = appState.cars.find(c => c.id === row.carId)}
+                    {#if selectedCar.image_path}
+                      <img src={convertFileSrc(selectedCar.image_path)} style="height: 40px; width: 72px; object-fit: cover; border-radius: 4px; flex-shrink: 0;" alt="" />
+                    {:else}
+                      <span style="font-size: 1.2rem; flex-shrink: 0;">🚗</span>
+                    {/if}
+                    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{selectedCar.name}</span>
                   {:else}
-                    <option value="">{$t('session.race_ia.custom_grid_skin_placeholder')}</option>
+                    <span style="color: var(--text-tertiary);">{$t('session.race_ia.custom_grid_car_placeholder')}</span>
                   {/if}
-                </select>
+                </button>
 
-               <input type="text" bind:value={row.driverName} placeholder={$t('session.race_ia.custom_grid_driver_placeholder')} style="flex: 1; min-width: 100px;" />
+                {#if parseInt(row.quantity) > 1}
+                  <div style="flex: 1; min-width: 120px; height: 56px; display: flex; align-items: center; color: var(--text-tertiary); font-size: 0.85rem; font-style: italic; background: var(--bg-elevated); border-radius: var(--r-sm); border: 1px solid var(--border); padding: 0 12px;">
+                    {$t('session.race_ia.custom_grid_random_skins')}
+                  </div>
+                {:else}
+                  <select bind:value={row.skinId} style="flex: 1; min-width: 120px; height: 56px; padding: 0 10px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--r-sm);">
+                    {#if row.carId}
+                      {#each appState.cars.find(c => c.id === row.carId)?.skins || [] as skin}
+                        <option value={skin.name}>{skin.name}</option>
+                      {/each}
+                    {:else}
+                      <option value="">{$t('session.race_ia.custom_grid_skin_placeholder')}</option>
+                    {/if}
+                  </select>
+                {/if}
 
-                <input type="number" bind:value={row.quantity} min="1" style="width: 60px; text-align: center;" title="Quantité" />
+               <input type="text" bind:value={row.driverName} placeholder={$t('session.race_ia.custom_grid_driver_placeholder')} style="flex: 1; min-width: 100px; height: 56px; padding: 0 10px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--r-sm);" />
 
-                <button class="filter-btn" onclick={() => { appState.session.customGrid.splice(i, 1); }} style="padding: 6px 10px; color: var(--danger);">✖</button>
+                <input type="number" bind:value={row.quantity} min="1" style="width: 60px; height: 56px; text-align: center; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--r-sm);" title="Quantité" />
+
+                <button class="filter-btn" onclick={() => { appState.session.customGrid.splice(i, 1); }} style="height: 56px; padding: 0 16px; color: var(--danger); border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--bg-elevated);">✖</button>
               </div>
             {/each}
           </div>
@@ -775,7 +794,7 @@
                 <div style="width: 80px; height: 45px; background: #000; border-radius: 4px;"></div>
               {/if}
               
-              <div style="display: flex; flex-direction: column; gap: 4px;">
+              <div style="display: flex; flex-direction: column; gap: 3px;">
                 <div style="font-weight: 600; font-size: 0.9rem; color: var(--text-primary);">
                   {carName} <span style="color: var(--text-tertiary); font-weight: normal;">•</span> {trackName}
                 </div>
