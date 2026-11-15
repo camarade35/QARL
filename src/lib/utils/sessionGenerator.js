@@ -117,11 +117,18 @@ export function generateGrid(playerCar, allCars, sessionSettings) {
       model = model.substring(car.brand.length).trim();
     }
 
+    // ⭐ NOUVEAU : On récupère la première skin par défaut
+    let defaultSkin = '';
+    if (car.skins && car.skins.length > 0) {
+      defaultSkin = car.skins[0].name;
+    }
+
     return {
       brand: car.brand || null,
       model: model,
       driver: getRandomName(),
-      id: car.id
+      id: car.id,
+      skin: defaultSkin // ⭐ On ajoute le champ skin pour Rust
     };
   });
 }

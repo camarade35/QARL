@@ -28,6 +28,7 @@ const defaultSession = {
   opponentsCount: 10,
   gridType: 'RANDOM',
   customGrid: [], // ⭐ NOUVEAU
+  gridOffset: 0, // ⭐ NOUVEAU : Écart de grille
   startingPositionMode: 'LAST',
   customStartPos: 1,
   jumpStartPenalty: 0,

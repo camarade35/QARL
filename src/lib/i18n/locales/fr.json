@@ -399,6 +399,7 @@
       "pos_second": "2ème position",
       "pos_third": "3ème position",
       "pos_custom": "Position spécifique...",
+      "grid_offset": "Places de vide devant vous",
       "pos_exact": "Position exacte",
       "jump_start": "Pénalité départ anticipé",
       "jump_disabled": "Désactivé",

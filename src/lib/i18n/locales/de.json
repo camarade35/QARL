@@ -399,6 +399,7 @@
       "pos_second": "2. Position",
       "pos_third": "3. Position",
       "pos_custom": "Bestimmte Position...",
+      "grid_offset": "Leere Slots davor",
       "pos_exact": "Genaue Position",
       "jump_start": "Strafe für Frühstart",
       "jump_disabled": "Deaktiviert",

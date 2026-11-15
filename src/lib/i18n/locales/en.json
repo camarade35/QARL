@@ -399,6 +399,7 @@
       "pos_second": "2nd position",
       "pos_third": "3rd position",
       "pos_custom": "Specific position...",
+      "grid_offset": "Empty slots ahead",
       "pos_exact": "Exact position",
       "jump_start": "Jump start penalty",
       "jump_disabled": "Disabled",

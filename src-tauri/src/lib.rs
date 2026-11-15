@@ -1538,6 +1538,7 @@ struct SessionData {
     assists: serde_json::Value,
     startingPositionMode: Option<String>,
     customStartPos: Option<i32>,
+    gridOffset: Option<i32>, // ⭐ NOUVEAU
     aiLevel: Option<i32>,
     aiLevelVar: Option<i32>,
     aiAggression: Option<i32>,
@@ -1881,9 +1882,14 @@ fn launch_race(
 
     let custom_pos_str = session_data.customStartPos.unwrap_or(1).to_string();
     
-    // ⭐ On calcule le nombre total de voitures
-    let total_cars_for_random = if session_data.session_type == "RACE_QUICK" || session_data.session_type == "RACE_WEEKEND" {
-        session_data.opponentsCount + 1
+    // ⭐ NOUVEAU : On utilise la vraie taille de la grille (ai_grid.len) au lieu de opponentsCount
+    let is_race_session = session_data.session_type == "RACE_QUICK" || session_data.session_type == "RACE_WEEKEND";
+    let real_opponents_count = if is_race_session { ai_grid.len() as i32 } else { 0 };
+    let grid_offset = session_data.gridOffset.unwrap_or(0);
+    
+    // ⭐ On calcule le nombre total de voitures (Joueur + Adversaires + Écart)
+    let total_cars_for_random = if is_race_session {
+        real_opponents_count + 1 + grid_offset
     } else {
         1
     };
@@ -1892,8 +1898,8 @@ fn launch_race(
     let random_val = (now_nanos % total_cars_for_random) + 1;
     let random_pos_str = random_val.to_string();
     
-    // ⭐ On remplace le "-1" par la vraie dernière position
-    let last_pos_str = (session_data.opponentsCount + 1).to_string();
+    // ⭐ La vraie dernière position inclut l'écart
+    let last_pos_str = (real_opponents_count + 1 + grid_offset).to_string();
 
     let start_pos = match session_data.startingPositionMode.as_deref() {
         Some("FIRST") => "1", Some("SECOND") => "2", Some("THIRD") => "3",

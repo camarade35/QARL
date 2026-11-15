@@ -260,6 +260,16 @@
       appState.session.opponentsCount = maxOpponents;
     }
   });
+
+  // ⭐ NOUVEAU : Calcul dynamique de l'écart max (basé sur les pitboxes du circuit)
+  let maxGridOffset = $derived(Math.max(0, maxOpponents - appState.session.opponentsCount));
+
+  // ⭐ NOUVEAU : On force l'écart à 0 si on choisit Aléatoire
+  $effect(() => {
+    if (appState.session.startingPositionMode === 'RANDOM') {
+      appState.session.gridOffset = 0;
+    }
+  });
 </script>
 
 <div class="subtabs">
@@ -447,9 +457,38 @@
       {#if appState.session.startingPositionMode === 'CUSTOM'}
         <div class="field">
           <label>{$t('session.race_ia.pos_exact')}</label>
-          <input type="number" bind:value={appState.session.customStartPos} min="1" max="36" />
+          <input type="number" bind:value={appState.session.customStartPos} min="1" max="100" />
         </div>
       {/if}
+
+      <!-- ⭐ NOUVEAU : Écart de grille (seulement pour Dernier) -->
+      {#if appState.session.startingPositionMode === 'LAST'}
+        <div class="field">
+          <label>{$t('session.race_ia.grid_offset')}</label>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <input 
+              type="range" 
+              bind:value={appState.session.gridOffset} 
+              min="0" 
+              max={maxGridOffset} 
+              step="1" 
+              style="flex: 1;" 
+            />
+            <input 
+              type="number" 
+              bind:value={appState.session.gridOffset} 
+              min="0" 
+              max={maxGridOffset}
+              style="width: 70px; text-align: center;"
+              title="Nombre de slots vides"
+            />
+          </div>
+          <span style="font-size: 0.7rem; color: var(--text-tertiary); margin-top: 4px;">
+            Max : {maxGridOffset} (basé sur la taille de la grille)
+          </span>
+        </div>
+      {/if}
+
       <div class="field">
         <label>{$t('session.race_ia.jump_start')}</label>
         <select bind:value={appState.session.jumpStartPenalty}>
