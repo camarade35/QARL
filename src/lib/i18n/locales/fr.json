@@ -368,6 +368,14 @@
       "laps_label": "Tours de course"
     },
     "race_ia": {
+      "grid_custom": "Grille personnalisée (Manuel)",
+      "custom_grid_title": "Grille personnalisée",
+      "custom_grid_empty": "Aucune voiture ajoutée. Cliquez sur le bouton ci-dessous.",
+      "custom_grid_add": "➕ Ajouter une voiture",
+      "custom_grid_total": "Total : {total} / {max}",
+      "custom_grid_car_placeholder": "-- Voiture --",
+      "custom_grid_skin_placeholder": "-- Skin --",
+      "custom_grid_driver_placeholder": "Pilote (auto)",
       "group_opponents": "Adversaires et grille de départ",
       "opponents_count": "Nombre d'adversaires",
       "grid_type": "Type de grille (Filtre des IA)",

@@ -368,6 +368,14 @@
       "laps_label": "Race laps"
     },
     "race_ia": {
+      "grid_custom": "Custom Grid (Manual)",
+      "custom_grid_title": "Custom Grid",
+      "custom_grid_empty": "No cars added. Click the button below.",
+      "custom_grid_add": "➕ Add a car",
+      "custom_grid_total": "Total: {total} / {max}",
+      "custom_grid_car_placeholder": "-- Car --",
+      "custom_grid_skin_placeholder": "-- Skin --",
+      "custom_grid_driver_placeholder": "Driver (auto)",
       "group_opponents": "Opponents and starting grid",
       "opponents_count": "Number of opponents",
       "grid_type": "Grid type (AI filter)",

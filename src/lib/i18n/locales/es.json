@@ -368,6 +368,14 @@
       "laps_label": "Vueltas de carrera"
     },
     "race_ia": {
+      "grid_custom": "Parrilla personalizada (Manual)",
+      "custom_grid_title": "Parrilla personalizada",
+      "custom_grid_empty": "No se han añadido coches. Haz clic en el botón de abajo.",
+      "custom_grid_add": "➕ Añadir un coche",
+      "custom_grid_total": "Total: {total} / {max}",
+      "custom_grid_car_placeholder": "-- Coche --",
+      "custom_grid_skin_placeholder": "-- Skin --",
+      "custom_grid_driver_placeholder": "Piloto (auto)",
       "group_opponents": "Oponentes y parrilla de salida",
       "opponents_count": "Número de oponentes",
       "grid_type": "Tipo de parrilla (Filtro de IA)",

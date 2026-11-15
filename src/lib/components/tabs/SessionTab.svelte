@@ -322,27 +322,28 @@
   <div class="group">
     <div class="group-title">{$t('session.race_ia.group_opponents')}</div>
     <div class="row">
-      <div class="field">
-        <label>{$t('session.race_ia.opponents_count')}</label>
-        <input 
-          type="number" 
-          bind:value={appState.session.opponentsCount} 
-          min="0" 
-          max={maxOpponents}
-          oninput={(e) => {
-            const val = parseInt(e.currentTarget.value);
-            if (val > maxOpponents) {
-              appState.session.opponentsCount = maxOpponents;
-            } else if (isNaN(val) || val < 0) {
-              appState.session.opponentsCount = 0;
-            }
-          }}
-        />
-        <!-- ⭐ On ajoute une petite indication pour l'utilisateur -->
-        <span style="font-size: 0.7rem; color: var(--text-tertiary); margin-top: 4px;">
-          Max : {maxOpponents} (limite du circuit)
-        </span>
-      </div>
+      {#if appState.session.gridType !== 'CUSTOM_GRID'}
+        <div class="field">
+          <label>{$t('session.race_ia.opponents_count')}</label>
+          <input 
+            type="number" 
+            bind:value={appState.session.opponentsCount} 
+            min="0" 
+            max={maxOpponents}
+            oninput={(e) => {
+              const val = parseInt(e.currentTarget.value);
+              if (val > maxOpponents) {
+                appState.session.opponentsCount = maxOpponents;
+              } else if (isNaN(val) || val < 0) {
+                appState.session.opponentsCount = 0;
+              }
+            }}
+          />
+          <span style="font-size: 0.7rem; color: var(--text-tertiary); margin-top: 4px;">
+            Max : {maxOpponents} (limite du circuit)
+          </span>
+        </div>
+      {/if}
       <div class="field">
         <label>{$t('session.race_ia.grid_type')}</label>
         <select bind:value={appState.session.gridType}>
@@ -363,9 +364,73 @@
             <option value="KUNOS_ONLY">{$t('session.race_ia.grid_kunos_only')}</option>
             <option value="MODS_ONLY">{$t('session.race_ia.grid_mods_only')}</option>
           </optgroup>
+          
+          <optgroup label="Personnalisé">
+            <option value="CUSTOM_GRID">{$t('session.race_ia.grid_custom')}</option>
+          </optgroup>
         </select>
       </div>
     </div>
+
+    <!-- ⭐ C'EST ICI QUE LE NOUVEAU BLOC COMMENCE ⭐ -->
+    {#if appState.session.gridType === 'CUSTOM_GRID'}
+      <div class="group" style="margin-top: 15px; background: var(--bg-elevated); padding: 15px; border-radius: var(--r-sm); border: 1px solid var(--border);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <div style="font-weight: 600; color: var(--text-secondary);">{$t('session.race_ia.custom_grid_title')}</div>
+          <div style="font-size: 0.8rem; color: var(--text-tertiary);">
+            {$t('session.race_ia.custom_grid_total', { values: { total: appState.session.customGrid.reduce((acc, row) => acc + (parseInt(row.quantity) || 0), 0), max: maxOpponents } })}
+          </div>
+        </div>
+        
+        {#if appState.session.customGrid.length === 0}
+          <div style="text-align: center; padding: 20px; color: var(--text-tertiary); font-style: italic; font-size: 0.85rem;">
+            {$t('session.race_ia.custom_grid_empty')}
+          </div>
+        {:else}
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            {#each appState.session.customGrid as row, i}
+              <div style="display: flex; gap: 8px; align-items: center; background: var(--bg-base); padding: 10px; border-radius: var(--r-xs); flex-wrap: wrap;">
+                
+                <select bind:value={row.carId} onchange={() => {
+                  const car = appState.cars.find(c => c.id === row.carId);
+                  if (car && car.skins.length > 0) row.skinId = car.skins[0].name;
+                }} style="flex: 2; min-width: 150px;">
+                  <option value="">{$t('session.race_ia.custom_grid_car_placeholder')}</option>
+                  {#each appState.cars as car}
+                    <option value={car.id}>{car.name}</option>
+                  {/each}
+                </select>
+
+                <select bind:value={row.skinId} style="flex: 1; min-width: 120px;">
+                  {#if row.carId}
+                    {#each appState.cars.find(c => c.id === row.carId)?.skins || [] as skin}
+                      <option value={skin.name}>{skin.name}</option>
+                    {/each}
+                  {:else}
+                    <option value="">{$t('session.race_ia.custom_grid_skin_placeholder')}</option>
+                  {/if}
+                </select>
+
+               <input type="text" bind:value={row.driverName} placeholder={$t('session.race_ia.custom_grid_driver_placeholder')} style="flex: 1; min-width: 100px;" />
+
+                <input type="number" bind:value={row.quantity} min="1" style="width: 60px; text-align: center;" title="Quantité" />
+
+                <button class="filter-btn" onclick={() => { appState.session.customGrid.splice(i, 1); }} style="padding: 6px 10px; color: var(--danger);">✖</button>
+              </div>
+            {/each}
+          </div>
+        {/if}
+        
+        <button 
+          class="filter-btn" 
+          onclick={() => { appState.session.customGrid.push({ carId: '', skinId: '', driverName: '', quantity: 1 }); }} 
+          style="margin-top: 15px; width: 100%; background-color: var(--accent); color: white; border-color: var(--accent);"
+        >
+          {$t('session.race_ia.custom_grid_add')}
+        </button>
+      </div>
+    {/if}
+    <!-- ⭐ FIN DU NOUVEAU BLOC ⭐ -->
     
     <div class="row">
       <div class="field">

@@ -17,6 +17,29 @@ export function generateGrid(playerCar, allCars, sessionSettings) {
   const opponentsCount = sessionSettings.opponentsCount || 0;
   const gridType = sessionSettings.gridType || 'RANDOM';
   
+  // ⭐ NOUVEAU : Mode Grille Personnalisée
+  if (gridType === 'CUSTOM_GRID') {
+    const grid = [];
+    if (sessionSettings.customGrid) {
+      for (const row of sessionSettings.customGrid) {
+        const car = allCars.find(c => c.id === row.carId);
+        if (car) {
+          // On ajoute la voiture autant de fois que la quantité demandée
+          for (let i = 0; i < row.quantity; i++) {
+            grid.push({
+              id: car.id,
+              skin: row.skinId || '', 
+              driver: row.driverName.trim() || 'Driver',
+              brand: car.brand,
+              model: car.name
+            });
+          }
+        }
+      }
+    }
+    return grid;
+  }
+  
   let candidates = [];
   
   // 1. On filtre les voitures selon la règle choisie

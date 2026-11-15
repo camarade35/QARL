@@ -27,6 +27,7 @@ const defaultSession = {
   // IA & Grille
   opponentsCount: 10,
   gridType: 'RANDOM',
+  customGrid: [], // ⭐ NOUVEAU
   startingPositionMode: 'LAST',
   customStartPos: 1,
   jumpStartPenalty: 0,

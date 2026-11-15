@@ -1556,6 +1556,7 @@ struct SessionData {
 struct AIData {
     id: String,
     driver: String,
+    skin: String, // ⭐ NOUVEAU
 }
 
 // ⭐ NOUVEAU : Gestion des fichiers ext_config.ini temporaires pour Pure
@@ -1985,8 +1986,8 @@ SLIPSTREAM={slipstream}
     if is_race {
         for (i, ai) in ai_grid.iter().enumerate() {
             cars_ini.push_str(&format!(
-                "[CAR_{}]\nMODEL={}\nMODEL_CONFIG=\nSKIN=\nDRIVER_NAME={}\nNATIONALITY=\nAI_LEVEL={}\n\n", 
-                i + 1, ai.id, ai.driver, ai_level
+                "[CAR_{}]\nMODEL={}\nMODEL_CONFIG=\nSKIN={}\nDRIVER_NAME={}\nNATIONALITY=\nAI_LEVEL={}\n\n", 
+                i + 1, ai.id, ai.skin, ai.driver, ai_level // ⭐ Ajout de ai.skin
             ));
         }
     }
@@ -2673,10 +2674,7 @@ fn open_folder(ac_path: String, documents_path: String, folder_type: String, fol
         _ => return Err("Type inconnu".into()),
     };
 
-    println!("🔍 RUST : Tentative d'ouverture du chemin : {:?}", path);
-
     if !path.exists() {
-        println!("❌ RUST : Le dossier n'existe pas physiquement sur le disque.");
         return Err("Le dossier n'existe pas.".into());
     }
 
@@ -3308,14 +3306,9 @@ fn get_controller_mapping(app_handle: tauri::AppHandle, vendor_id: String, produ
             .map_err(|e| e.to_string())?;
     }
 
-    println!("🔍 RUST: Recherche du fichier de mapping : {:?}", resource_path);
-
     if !resource_path.exists() {
-        println!("❌ RUST: Fichier de mapping NON TROUVÉ à cet emplacement.");
         return Ok(None);
     }
-
-    println!("✅ RUST: Fichier de mapping TROUVÉ !");
 
     let content = std::fs::read_to_string(resource_path).map_err(|e| e.to_string())?;
     

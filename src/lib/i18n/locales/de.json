@@ -368,6 +368,14 @@
       "laps_label": "Runden im Rennen"
     },
     "race_ia": {
+      "grid_custom": "Benutzerdefinierte Startaufstellung (Manuell)",
+      "custom_grid_title": "Benutzerdefinierte Startaufstellung",
+      "custom_grid_empty": "Keine Autos hinzugefügt. Klicke auf die Schaltfläche unten.",
+      "custom_grid_add": "➕ Auto hinzufügen",
+      "custom_grid_total": "Gesamt: {total} / {max}",
+      "custom_grid_car_placeholder": "-- Auto --",
+      "custom_grid_skin_placeholder": "-- Skin --",
+      "custom_grid_driver_placeholder": "Fahrer (auto)",
       "group_opponents": "Gegner und Startaufstellung",
       "opponents_count": "Anzahl der Gegner",
       "grid_type": "Startaufstellungstyp (KI-Filter)",

@@ -368,6 +368,14 @@
       "laps_label": "Giri di gara"
     },
     "race_ia": {
+      "grid_custom": "Griglia personalizzata (Manuale)",
+      "custom_grid_title": "Griglia personalizzata",
+      "custom_grid_empty": "Nessuna auto aggiunta. Clicca sul pulsante qui sotto.",
+      "custom_grid_add": "➕ Aggiungi un'auto",
+      "custom_grid_total": "Totale: {total} / {max}",
+      "custom_grid_car_placeholder": "-- Auto --",
+      "custom_grid_skin_placeholder": "-- Skin --",
+      "custom_grid_driver_placeholder": "Pilota (auto)",
       "group_opponents": "Avversari e griglia di partenza",
       "opponents_count": "Numero di avversari",
       "grid_type": "Tipo di griglia (filtro IA)",
