@@ -75,11 +75,17 @@
     };
   });
 
-  async function loadCars() {
+  let isRefreshing = $state(false); // ⭐ NOUVEAU
+
+  async function loadCars(force = false) {
+    if (force) isRefreshing = true;
     isLoading = true;
     appState.cars = []; // ⭐ On vide la liste avant de commencer le stream
     try {
-      const result = await invoke<any[]>('get_ac_cars', { acPath: appState.acPath });
+      const result = await invoke<any[]>('get_ac_cars', { 
+        acPath: appState.acPath,
+        forceRefresh: force // ⭐ NOUVEAU
+      });
       
       // ⭐ On ne remplace la liste QUE si le stream n'a rien rempli (sécurité)
       if (appState.cars.length === 0) {
@@ -90,6 +96,7 @@
       console.error("Loading error:", e);
     } finally {
       isLoading = false;
+      isRefreshing = false; // ⭐ NOUVEAU
     }
   }
 
@@ -254,8 +261,24 @@
 
 <div class="toolbar" style="margin-top: 15px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
   <!-- Recherche à gauche -->
-  <div class="search-input" style="flex: 1; min-width: 250px; max-width: 400px;">
-    <input type="text" placeholder={$t('cars.search_placeholder')} bind:value={searchQuery} style="width: 100%;" />
+  <div style="display: flex; gap: 8px; align-items: stretch; flex: 1; min-width: 250px; max-width: 400px;">
+    <div class="search-input" style="flex: 1;">
+      <input type="text" placeholder={$t('cars.search_placeholder')} bind:value={searchQuery} style="width: 100%; height: 100%;" />
+    </div>
+    <button 
+      class="filter-btn" 
+      onclick={() => loadCars(true)} 
+      disabled={isRefreshing}
+      title="Forcer le rafraîchissement des voitures"
+      style="display: flex; align-items: center; justify-content: center; padding: 0 12px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--r-sm); color: var(--text-secondary); cursor: pointer; transition: 0.2s;"
+    >
+      <svg class:spin={isRefreshing} xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+        <path d="M3 3v5h5"></path>
+        <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path>
+        <path d="M16 21v-5h5"></path>
+      </svg>
+    </button>
   </div>
 
   <!-- Filtres à droite -->
@@ -354,6 +377,15 @@
         {/if}
       </div>
     </div>
-  {/each}
+    {/each}
 </div>
 {/if}
+
+<style>
+  .spin {
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin {
+    100% { transform: rotate(360deg); }
+  }
+</style>

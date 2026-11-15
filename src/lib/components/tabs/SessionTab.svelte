@@ -247,11 +247,11 @@
     }
   }
 
-  // ⭐ NOUVEAU : Calcul dynamique du nombre max d'adversaires
+  // ⭐ NOUVEAU : Calcul dynamique du nombre max d'adversaires (basé sur le layout)
   let maxOpponents = $derived(
-    appState.selectedTrack?.pitboxes 
-      ? appState.selectedTrack.pitboxes - 1 
-      : 35
+    appState.selectedTrackLayout?.pitboxes 
+      ? appState.selectedTrackLayout.pitboxes - 1 
+      : 99 // Fallback plus généreux si le moddeur n'a pas renseigné l'info
   );
 
   // ⭐ NOUVEAU : Si on change de circuit et que le nombre dépasse la limite, on le bride
@@ -340,7 +340,7 @@
             bind:value={appState.session.opponentsCount} 
             min="0" 
             max={maxOpponents}
-            oninput={(e) => {
+            onchange={(e) => {
               const val = parseInt(e.currentTarget.value);
               if (val > maxOpponents) {
                 appState.session.opponentsCount = maxOpponents;

@@ -80,6 +80,7 @@ struct TrackLayoutInfo {
     id: String, name: String,
     outline_path: Option<String>,
     preview_path: Option<String>,
+    pitboxes: i32, // ⭐ Déplacé ici
 }
 
 #[derive(Serialize, serde::Deserialize, Clone)]
@@ -87,7 +88,7 @@ struct TrackInfo {
     id: String, name: String, city: String, country: String,
     flag_path: Option<String>, preview_path: Option<String>,
     outline_path: Option<String>, tags: Vec<String>, layouts: Vec<TrackLayoutInfo>, is_kunos: bool,
-    pitboxes: i32, // ⭐ NOUVEAU
+    // ⭐ pitboxes supprimé d'ici
 }
 
 fn extract_json_string(content: &str, key: &str) -> Option<String> {
@@ -191,7 +192,7 @@ fn clean_track_id(id: &str) -> String {
 }
 
 #[tauri::command]
-fn get_ac_cars(app_handle: tauri::AppHandle, ac_path: String) -> Result<Vec<CarInfo>, String> {
+fn get_ac_cars(app_handle: tauri::AppHandle, ac_path: String, force_refresh: Option<bool>) -> Result<Vec<CarInfo>, String> {
     let cars_dir = Path::new(&ac_path).join("content").join("cars");
     if !cars_dir.exists() { return Err("Dossier introuvable".into()); }
     
@@ -199,6 +200,12 @@ fn get_ac_cars(app_handle: tauri::AppHandle, ac_path: String) -> Result<Vec<CarI
     let cache_dir = dirs::data_dir().unwrap_or_default().join("QARL");
     let _ = fs::create_dir_all(&cache_dir);
     let cache_file = cache_dir.join("cars_cache.json");
+    
+    // ⭐ NOUVEAU : Si on force le rafraîchissement, on supprime le cache
+    if force_refresh.unwrap_or(false) {
+        let _ = fs::remove_file(&cache_file);
+    }
+
     if cache_file.exists() {
         if let Ok(content) = fs::read_to_string(&cache_file) {
             if let Ok(cached_cars) = serde_json::from_str::<Vec<CarInfo>>(&content) {
@@ -301,7 +308,7 @@ fn get_ac_cars(app_handle: tauri::AppHandle, ac_path: String) -> Result<Vec<CarI
 }
 
 #[tauri::command]
-fn get_ac_tracks(app_handle: tauri::AppHandle, ac_path: String) -> Result<Vec<TrackInfo>, String> {
+fn get_ac_tracks(app_handle: tauri::AppHandle, ac_path: String, force_refresh: Option<bool>) -> Result<Vec<TrackInfo>, String> {
     let tracks_dir = Path::new(&ac_path).join("content").join("tracks");
     if !tracks_dir.exists() { return Err("Dossier content/tracks introuvable".into()); }
     
@@ -309,6 +316,12 @@ fn get_ac_tracks(app_handle: tauri::AppHandle, ac_path: String) -> Result<Vec<Tr
     let cache_dir = dirs::data_dir().unwrap_or_default().join("QARL");
     let _ = fs::create_dir_all(&cache_dir);
     let cache_file = cache_dir.join("tracks_cache.json");
+    
+    // ⭐ NOUVEAU : Si on force le rafraîchissement, on supprime le cache
+    if force_refresh.unwrap_or(false) {
+        let _ = fs::remove_file(&cache_file);
+    }
+
     if cache_file.exists() {
         if let Ok(content) = fs::read_to_string(&cache_file) {
             if let Ok(cached_tracks) = serde_json::from_str::<Vec<TrackInfo>>(&content) {
@@ -337,7 +350,7 @@ fn get_ac_tracks(app_handle: tauri::AppHandle, ac_path: String) -> Result<Vec<Tr
             let mut city = String::new();
             let mut country = String::new();
             let mut tags = Vec::new();
-            let mut pitboxes = 0; // ⭐ NOUVEAU
+            let mut root_pitboxes = 0; // ⭐ Renommé pour plus de clarté
             
             // ⭐ Variables pour récupérer les infos depuis les layouts si la racine est vide
             let mut fallback_country = String::new();
@@ -352,7 +365,7 @@ fn get_ac_tracks(app_handle: tauri::AppHandle, ac_path: String) -> Result<Vec<Tr
                     }
                     if let Some(c) = extract_json_string(clean_json, "city") { city = c; }
                     if let Some(c) = extract_json_string(clean_json, "country") { country = c; }
-                    if let Some(p) = extract_json_number(clean_json, "pitboxes") { pitboxes = p; } // ⭐ NOUVEAU
+                    if let Some(p) = extract_json_number(clean_json, "pitboxes") { root_pitboxes = p; } // ⭐ Renommé
                     tags = extract_json_tags(clean_json, "tags");
                 }
             }
@@ -371,6 +384,7 @@ fn get_ac_tracks(app_handle: tauri::AppHandle, ac_path: String) -> Result<Vec<Tr
                     name: "".to_string(),
                     outline_path: ui_outline.clone(),
                     preview_path: ui_preview.clone(),
+                    pitboxes: root_pitboxes, // ⭐ Ajout du pitboxes racine
                 });
             } else {
                 let search_dirs = vec![ui_dir.clone(), path.clone()];
@@ -386,6 +400,7 @@ fn get_ac_tracks(app_handle: tauri::AppHandle, ac_path: String) -> Result<Vec<Tr
                                 if layouts.iter().any(|l| l.id == folder_name) { continue; }
 
                                 let mut display_name = folder_name.replace("layout_", "").replace('_', " ");
+                                let mut layout_pitboxes = 0; // ⭐ Déclaration déplacée ici
 
                                 // ⭐ Recherche robuste du ui_track.json
                                 let mut layout_json = sub_path.join("ui_track.json");
@@ -406,35 +421,26 @@ fn get_ac_tracks(app_handle: tauri::AppHandle, ac_path: String) -> Result<Vec<Tr
                                             String::from_utf8_lossy(&bytes).to_string()
                                         };
 
-                                        // ⭐ Parsing fiable avec serde_json
-                                        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&json_str) {
-                                            if let Some(n) = parsed.get("name").and_then(|v| v.as_str()) {
-                                                if !n.is_empty() { display_name = n.to_string(); }
+                                        // ⭐ CORRECTION : On nettoie le BOM (Byte Order Mark) s'il est présent
+                                        let clean_json_str = json_str.trim_start_matches('\u{feff}');
+                                        
+                                        // ⭐ On utilise nos fonctions robustes (résiste à l'ANSI et aux caractères invalides)
+                                        if let Some(n) = extract_json_string(clean_json_str, "name") {
+                                            if !n.is_empty() { display_name = n.to_string(); }
+                                        }
+                                        
+                                        if let Some(p) = extract_json_number(clean_json_str, "pitboxes") {
+                                            layout_pitboxes = p;
+                                        }
+                                        
+                                        if fallback_country.is_empty() {
+                                            if let Some(c) = extract_json_string(clean_json_str, "country") {
+                                                if !c.is_empty() { fallback_country = c; }
                                             }
-                                            
-                                            // ⭐ NOUVEAU : On cherche pitboxes dans le layout s'il n'est pas à la racine
-                                            if pitboxes == 0 {
-                                                if let Some(p) = parsed.get("pitboxes") {
-                                                    if let Some(i) = p.as_i64() {
-                                                        pitboxes = i as i32;
-                                                    } else if let Some(s) = p.as_str() {
-                                                        pitboxes = s.parse::<i32>().unwrap_or(0);
-                                                    }
-                                                }
-                                            }
-                                            
-                                            if fallback_country.is_empty() {
-                                                if let Some(c) = parsed.get("country").and_then(|v| v.as_str()) {
-                                                    if !c.is_empty() { fallback_country = c.to_string(); }
-                                                }
-                                            }
-                                            
-                                            if fallback_tags.is_empty() {
-                                                if let Some(tags_arr) = parsed.get("tags").and_then(|v| v.as_array()) {
-                                                    let t: Vec<String> = tags_arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
-                                                    if !t.is_empty() { fallback_tags = t; }
-                                                }
-                                            }
+                                        }
+                                        
+                                        if fallback_tags.is_empty() {
+                                            fallback_tags = extract_json_tags(clean_json_str, "tags");
                                         }
                                     }
                                 }
@@ -457,6 +463,7 @@ fn get_ac_tracks(app_handle: tauri::AppHandle, ac_path: String) -> Result<Vec<Tr
                                         name: display_name.to_uppercase(),
                                         outline_path: sub_outline.or_else(|| main_outline.clone()),
                                         preview_path: sub_preview.or_else(|| main_preview.clone()),
+                                        pitboxes: layout_pitboxes, // ⭐ Ajout du pitboxes du layout
                                     });
                                 }
                             }
@@ -482,7 +489,7 @@ fn get_ac_tracks(app_handle: tauri::AppHandle, ac_path: String) -> Result<Vec<Tr
                 preview_path: main_preview,
                 outline_path: main_outline,
                 tags, layouts,
-                pitboxes, // ⭐ NOUVEAU
+                // ⭐ pitboxes supprimé
             };
             
             // ⭐ Émission de l'événement pour le chargement au fur et à mesure
