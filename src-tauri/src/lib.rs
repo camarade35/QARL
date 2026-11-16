@@ -6901,3 +6901,99 @@ pub fn run() {
             }
         });
 }
+
+// ⭐ TESTS UNITAIRES ET D'INTÉGRATION (ne compile pas dans l'exe final)
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+
+    #[test]
+    fn test_split_safe_dlss_cases() {
+        // Test du bug de la virgule dans le preset L
+        let hint = "\"Auto (recommended)\" is 0, \"L (default for Ultra Performance, sharper and more stable, but more expensive; peak performant on RTX 40 series and above)\" is 12";
+        let parts = split_safe(hint);
+        
+        assert_eq!(parts.len(), 2, "La chaîne aurait dû être coupée en 2 parties");
+        assert!(parts[1].contains("is 12"), "La valeur 12 n'est pas correctement attachée au preset L");
+    }
+
+        #[test]
+    fn test_parse_ini_line_complex() {
+        // Test du bug du point-virgule dans le preset L
+        let line = "DLSS_PRESET=0 ; DLSS preset; \"Auto\" is 0, \"L (expensive; peak performant)\" is 12; visible with OLD_IMPLEMENTATION=3";
+        let (key, val, hints) = parse_ini_line(line).unwrap();
+        
+        assert_eq!(key, "DLSS_PRESET");
+        assert_eq!(val, "0");
+        
+        // On vérifie que le hint contenant les presets est bien intact et n'a pas été coupé par le ';' de "expensive; peak"
+        let preset_hint = hints.iter().find(|h| h.contains("expensive; peak performant")).expect("Le hint des presets est introuvable ou a été coupé");
+        assert!(preset_hint.contains("is 12"), "La valeur 12 n'est pas attachée au preset L");
+        
+        // On vérifie que la condition est bien séparée
+        assert!(hints.iter().any(|h| h.contains("visible with OLD_IMPLEMENTATION=3")));
+    }
+
+    #[test]
+    fn test_parse_all_csp_modules() {
+        // ⚠️ Pour utiliser ce test, définis la variable d'environnement QARL_TEST_AC_PATH
+        // Ex (PowerShell) : $env:QARL_TEST_AC_PATH="E:\SteamLibrary\steamapps\common\assettocorsa"
+        let ac_path = match env::var("QARL_TEST_AC_PATH") {
+            Ok(path) => path,
+            Err(_) => {
+                println!("⚠️ Variable QARL_TEST_AC_PATH non définie. Test d'intégration ignoré.");
+                return;
+            }
+        };
+
+        let config_dir = Path::new(&ac_path).join("extension").join("config");
+        if !config_dir.exists() {
+            println!("⚠️ Dossier {} introuvable. Test ignoré.", config_dir.display());
+            return;
+        }
+
+        let mut errors = Vec::new();
+        let mut count = 0;
+
+        if let Ok(entries) = fs::read_dir(config_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().map_or(false, |e| e == "ini") {
+                    let filename = path.file_name().unwrap().to_string_lossy().to_string();
+                    count += 1;
+                    
+                    // On utilise un dossier temporaire bidon pour documentsPath
+                    let dummy_docs = std::env::temp_dir().to_string_lossy().to_string();
+                    
+                    match read_csp_module_data(dummy_docs, ac_path.clone(), filename.clone()) {
+                        Ok(data) => {
+                            if data.sections.is_empty() {
+                                println!("⚠️ [{}] 0 section trouvée (vérifie le fichier).", filename);
+                            }
+                        },
+                        Err(e) => {
+                            errors.push(format!("❌ [{}] Erreur: {}", filename, e));
+                        }
+                    }
+                }
+            }
+        }
+
+        if !errors.is_empty() {
+            panic!("Des erreurs ont été trouvées lors du parsing:\n{}", errors.join("\n"));
+        }
+        
+        println!("✅ Test terminé. {} fichiers analysés avec succès.", count);
+    }
+}
+    #[test]
+    fn test_extract_range_vr_clip_planes() {
+        // Test que "Near plane, m" ne déclenche pas un faux range
+        assert_eq!(extract_range("Near plane, m"), None);
+        assert_eq!(extract_range("Far plane, m"), None);
+        
+        // Test qu'un vrai range fonctionne toujours
+        assert_eq!(extract_range("from 0.1 to 10"), Some((0.1, 10.0)));
+        assert_eq!(extract_range("from 0.1 to 2, perc."), Some((0.1, 2.0)));
+    }
