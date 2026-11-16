@@ -39,5 +39,5 @@ jobs:
           releaseName: 'QARL ${{ github.ref_name }}'
           releaseBody: 'Mise à jour automatique de QARL.'
           releaseDraft: false
-          prerelease: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
           includeUpdaterJson: true

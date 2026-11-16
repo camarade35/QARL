@@ -3965,28 +3965,17 @@ fn ensure_user_csp_file(documents_path: &str, ac_path: &str, filename: &str) -> 
 
 // Découpe une ligne en (Key, Value, Vec<Hints>)
 fn parse_ini_line(line: &str) -> Option<(String, String, Vec<String>)> {
-    let (main_part, rest) = match line.split_once(';') {
-        Some((m, r)) => (m, Some(r)),
-        None => (line, None),
-    };
-    
+    // ⭐ CORRECTION : On utilise split_safe_char pour ne pas couper sur les ';' à l'intérieur des guillemets
+    let parts = split_safe_char(line, ';');
+    if parts.is_empty() { return None; }
+
+    let main_part = &parts[0];
     let (key, val) = main_part.split_once('=')?;
     let key = key.trim().to_string();
     if key.is_empty() { return None; }
     
     let val = val.trim().to_string();
-    let mut hints = Vec::new();
-    
-    if let Some(r) = rest {
-        // On remet les ";" pour bien séparer les hints (ex: ";; from 0 to 100")
-        let full_rest = format!(";{}", r);
-        for h in full_rest.split(';').skip(1) {
-            let clean = h.trim();
-            if !clean.is_empty() {
-                hints.push(clean.to_string());
-            }
-        }
-    }
+    let hints = parts[1..].to_vec();
     
     Some((key, val, hints))
 }
@@ -4028,6 +4017,11 @@ fn extract_range(hint: &str) -> Option<(f32, f32)> {
 
 // ⭐ NOUVEAU : Découpe intelligemment la chaîne en ignorant les virgules dans les guillemets/parenthèses
 fn split_safe(s: &str) -> Vec<String> {
+    split_safe_char(s, ',')
+}
+
+// ⭐ NOUVEAU : Version générique qui accepte n'importe quel délimiteur (pour gérer les ';')
+fn split_safe_char(s: &str, delimiter: char) -> Vec<String> {
     let mut result = Vec::new();
     let mut current = String::new();
     let mut in_quotes = false;
@@ -4038,7 +4032,7 @@ fn split_safe(s: &str) -> Vec<String> {
             '"' => { in_quotes = !in_quotes; current.push(c); }
             '(' => { depth += 1; current.push(c); }
             ')' => { depth -= 1; current.push(c); }
-            ',' if !in_quotes && depth == 0 => {
+            c if c == delimiter && !in_quotes && depth == 0 => {
                 result.push(current.trim().to_string());
                 current.clear();
             }
@@ -4073,13 +4067,14 @@ fn extract_choices(hint: &str) -> Option<Vec<Choice>> {
             let mut value = String::new();
             let mut label = String::new();
             
-            if let Some((v, l)) = part.split_once(" for ") {
+            // ⭐ CORRECTION : On donne la priorité à " is " (rsplit_once pour gérer les " is " ou " for " dans le label)
+            if let Some((label_part, value_part)) = part.rsplit_once(" is ") {
+                label = label_part.trim().trim_matches('"').to_string();
+                value = value_part.trim().trim_matches('"').to_string();
+                valid_count += 1;
+            } else if let Some((v, l)) = part.split_once(" for ") {
                 value = v.trim().trim_matches('"').to_string();
                 label = l.trim().trim_matches('"').to_string();
-                valid_count += 1;
-            } else if let Some((v, l)) = part.split_once(" is ") {
-                label = v.trim().trim_matches('"').to_string();
-                value = l.trim().trim_matches('"').to_string();
                 valid_count += 1;
             } else {
                 let clean_part = part.trim_matches('"').trim_matches('\'').trim();
