@@ -37,7 +37,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'QARL ${{ github.ref_name }}'
-          releaseBody: 'Mise à jour automatique de QARL.'
+          releaseBody: ${{ contains(github.ref_name, '-') && format('⚠️ VERSION BETA ({0}) - À tester uniquement. Ne pas installer si vous cherchez la stabilité.', github.ref_name) || format('Mise à jour automatique de QARL {0}.', github.ref_name) }}
           releaseDraft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           includeUpdaterJson: true

@@ -26,6 +26,7 @@ C'est un outil pour la communauté, pour qu'on puisse tous continuer à profiter
 *   **Un assistant de configuration** pour tout installer en 2 minutes (CSP/Pure inclus).
 *   **Un cache Rust** pour un chargement instantané.
 *   **Un gestionnaire de mods** simple (glisser-déposer).
+*   **Un catalogue d'applications Assetto Corsa** pour découvrir CrashFX, CMRT et Map Display.
 *   **Une interface traduite en 5 langues**, claire et moderne.
 
 ---
@@ -85,6 +86,7 @@ It's a tool for the community, so we can all keep enjoying this incredible game.
 *   **A setup wizard** to install everything in 2 minutes (CSP/Pure included).
 *   **A Rust cache** for instant loading.
 *   **A simple mod manager** (drag & drop).
+*   **An Assetto Corsa app catalog** featuring CrashFX, CMRT, and Map Display.
 *   **An interface translated into 5 languages**, clean and modern.
 
 ### 📸 Screenshots

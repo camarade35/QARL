@@ -128,7 +128,8 @@
   // ⭐ NOUVEAU : Vérifie si la valeur est hors limites
   function isOutOfBounds(entry: CspOption): boolean {
     if (entry.option_type !== 'number') return false;
-    if (entry.min === undefined || entry.max === undefined) return false;
+    // ⭐ FIX : Utiliser != null pour gérer les null envoyés par Rust
+    if (entry.min == null || entry.max == null) return false;
 
     const val = parseFloat(entry.value);
     if (isNaN(val)) return true; // Si ce n'est pas un nombre valide
@@ -354,7 +355,7 @@
                         />
                       {:else if entry.option_type === 'number'}
                         <!-- Si pas de range défini, on affiche juste un champ texte pour éviter les bugs -->
-                                                {#if entry.min !== undefined && entry.max !== undefined}
+                                                {#if entry.min != null && entry.max != null}
                           {@const pct = entry.is_percentage ? 100 : 1}
                           {@const displayMin = entry.min * pct}
                           {@const displayMax = entry.max * pct}

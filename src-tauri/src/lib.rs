@@ -2671,6 +2671,314 @@ fn get_mods_history(ac_path: String, documents_path: String) -> Result<Vec<ModIn
     Ok(history)
 }
 
+#[derive(Serialize)]
+struct CrashFxData {
+    installed: bool,
+    enabled: bool,
+    volume_percent: u16,
+}
+
+#[derive(Serialize)]
+struct ModAppsStatus {
+    cmrt_installed: bool,
+    map_display_installed: bool,
+}
+
+fn has_app_directory_named(apps_dir: &Path, app_name: &str) -> Result<bool, String> {
+    if !apps_dir.is_dir() {
+        return Ok(false);
+    }
+
+    let expected: String = app_name
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect();
+
+    for entry in fs::read_dir(apps_dir)
+        .map_err(|e| format!("Lecture de {} impossible : {}", apps_dir.display(), e))?
+    {
+        let entry = entry.map_err(|e| format!("Lecture du contenu de {} impossible : {}", apps_dir.display(), e))?;
+        let file_type = entry
+            .file_type()
+            .map_err(|e| format!("Lecture du type de fichier impossible : {}", e))?;
+        if !file_type.is_dir() {
+            continue;
+        }
+
+        let directory_name: String = entry
+            .file_name()
+            .to_string_lossy()
+            .chars()
+            .filter(|character| character.is_ascii_alphanumeric())
+            .flat_map(char::to_lowercase)
+            .collect();
+
+        if directory_name.contains(&expected) {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
+#[tauri::command]
+fn read_mod_apps_status(ac_path: String) -> Result<ModAppsStatus, String> {
+    let apps_dir = Path::new(&ac_path).join("apps");
+    let lua_apps_dir = apps_dir.join("lua");
+
+    Ok(ModAppsStatus {
+        cmrt_installed: has_app_directory_named(&lua_apps_dir, "CMRT")?,
+        map_display_installed: lua_apps_dir.join("map_display").is_dir(),
+    })
+}
+
+const CRASHFX_ENABLED_KEY: &str = "3340018370217961824";
+const CRASHFX_VOLUME_KEY: &str = "7498773596612489108";
+const CRASHFX_DEFAULT_INI: &str =
+    "[BOOLEAN]\r\n3340018370217961824=1\r\n\r\n[NUMBER]\r\n7498773596612489108=1.00\r\n";
+
+fn crashfx_ini_path(documents_path: &str) -> Result<std::path::PathBuf, String> {
+    let cfg_dir = if documents_path.is_empty() {
+        dirs::document_dir()
+            .ok_or_else(|| "Dossier Documents introuvable".to_string())?
+            .join("Assetto Corsa")
+            .join("cfg")
+    } else {
+        resolve_cfg_dir(Path::new(documents_path))
+    };
+
+    Ok(cfg_dir
+        .join("extension")
+        .join("state")
+        .join("lua")
+        .join("app")
+        .join("CrashFX.ini"))
+}
+
+fn ensure_crashfx_ini(documents_path: &str) -> Result<std::path::PathBuf, String> {
+    let ini_path = crashfx_ini_path(documents_path)?;
+    let parent = ini_path
+        .parent()
+        .ok_or_else(|| "Dossier parent de CrashFX.ini introuvable".to_string())?;
+
+    fs::create_dir_all(parent)
+        .map_err(|e| format!("Création du dossier {} impossible : {}", parent.display(), e))?;
+
+    match fs::OpenOptions::new().write(true).create_new(true).open(&ini_path) {
+        Ok(mut file) => {
+            use std::io::Write;
+            file.write_all(CRASHFX_DEFAULT_INI.as_bytes())
+                .map_err(|e| format!("Création de {} impossible : {}", ini_path.display(), e))?;
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(e) => {
+            return Err(format!("Création de {} impossible : {}", ini_path.display(), e));
+        }
+    }
+
+    Ok(ini_path)
+}
+
+fn read_crashfx_ini_value(content: &str, section: &str, key: &str) -> Result<String, String> {
+    let mut current_section = String::new();
+
+    for line in content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
+            continue;
+        }
+
+        if let Some(name) = line.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
+            current_section = name.trim().to_ascii_uppercase();
+            continue;
+        }
+
+        if current_section == section.to_ascii_uppercase() {
+            if let Some((found_key, value)) = line.split_once('=') {
+                if found_key.trim() == key {
+                    let value = value
+                        .split(|c| c == ';' || c == '#')
+                        .next()
+                        .unwrap_or("")
+                        .trim();
+
+                    return Ok(value.to_string());
+                }
+            }
+        }
+    }
+
+    Err(format!("Clé {} absente de la section [{}] de CrashFX.ini", key, section))
+}
+
+fn set_crashfx_ini_value(
+    content: &str,
+    section: &str,
+    key: &str,
+    value: &str,
+) -> String {
+    let newline = if content.contains("\r\n") { "\r\n" } else { "\n" };
+    let has_final_newline = content.ends_with('\n');
+    let mut lines: Vec<String> = content.lines().map(str::to_string).collect();
+    let target_section = section.to_ascii_uppercase();
+
+    let section_start = lines.iter().position(|line| {
+        let trimmed = line.trim();
+        trimmed
+            .strip_prefix('[')
+            .and_then(|s| s.strip_suffix(']'))
+            .map(|name| name.trim().eq_ignore_ascii_case(&target_section))
+            .unwrap_or(false)
+    });
+
+    if let Some(start) = section_start {
+        let end = lines
+            .iter()
+            .enumerate()
+            .skip(start + 1)
+            .find(|(_, line)| {
+                let trimmed = line.trim();
+                trimmed.starts_with('[') && trimmed.ends_with(']')
+            })
+            .map(|(index, _)| index)
+            .unwrap_or(lines.len());
+
+        for index in start + 1..end {
+    let updated_line = {
+        let line = &lines[index];
+
+        if let Some((found_key, old_value)) = line.split_once('=') {
+            if found_key.trim() == key {
+                let equals_index = line.find('=').unwrap();
+                let comment_index = old_value
+                    .find(|c| c == ';' || c == '#')
+                    .unwrap_or(old_value.len());
+                let value_part = &old_value[..comment_index];
+                let comment = &old_value[comment_index..];
+                let leading = &value_part[..value_part.len() - value_part.trim_start().len()];
+                let trailing = &value_part[value_part.trim_end().len()..];
+
+                Some(format!(
+                    "{}={}{}{}{}",
+                    &line[..equals_index],
+                    leading,
+                    value,
+                    trailing,
+                    comment
+                ))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    };
+
+    if let Some(updated_line) = updated_line {
+        lines[index] = updated_line;
+
+        let mut result = lines.join(newline);
+        if has_final_newline {
+            result.push_str(newline);
+        }
+        return result;
+    }
+}
+
+        lines.insert(end, format!("{} = {}", key, value));
+    } else {
+        if !lines.is_empty() && !lines.last().unwrap().is_empty() {
+            lines.push(String::new());
+        }
+        lines.push(format!("[{}]", section));
+        lines.push(format!("{} = {}", key, value));
+    }
+
+    let mut result = lines.join(newline);
+    if has_final_newline {
+        result.push_str(newline);
+    }
+    result
+}
+
+#[tauri::command]
+fn read_crashfx_data(ac_path: String, documents_path: String) -> Result<CrashFxData, String> {
+    let app_dir = Path::new(&ac_path).join("apps").join("lua").join("CrashFX");
+
+    if !app_dir.is_dir() {
+        return Ok(CrashFxData {
+            installed: false,
+            enabled: false,
+            volume_percent: 100,
+        });
+    }
+
+    let ini_path = ensure_crashfx_ini(&documents_path)?;
+    let content = fs::read_to_string(&ini_path)
+        .map_err(|e| format!("Lecture de {} impossible : {}", ini_path.display(), e))?;
+
+    let enabled_value = read_crashfx_ini_value(&content, "BOOLEAN", CRASHFX_ENABLED_KEY)?;
+    let enabled = match enabled_value.to_ascii_lowercase().as_str() {
+        "1" | "true" => true,
+        "0" | "false" => false,
+        _ => return Err(format!("Valeur booléenne invalide dans CrashFX.ini : {}", enabled_value)),
+    };
+
+    let volume_value = read_crashfx_ini_value(&content, "NUMBER", CRASHFX_VOLUME_KEY)?;
+    let volume: f64 = volume_value
+        .parse()
+        .map_err(|_| format!("Volume CrashFX invalide : {}", volume_value))?;
+
+    if !volume.is_finite() || !(0.0..=2.0).contains(&volume) {
+        return Err(format!("Volume CrashFX hors limites : {}", volume_value));
+    }
+
+    Ok(CrashFxData {
+        installed: true,
+        enabled,
+        volume_percent: (volume * 100.0).round() as u16,
+    })
+}
+
+#[tauri::command]
+fn save_crashfx_data(
+    ac_path: String,
+    documents_path: String,
+    enabled: bool,
+    volume_percent: u16,
+) -> Result<(), String> {
+    if volume_percent > 200 {
+        return Err("Le volume CrashFX doit être compris entre 0 et 200 %.".into());
+    }
+
+    let app_dir = Path::new(&ac_path).join("apps").join("lua").join("CrashFX");
+    if !app_dir.is_dir() {
+        return Err("CrashFX n'est pas installé dans Assetto Corsa.".into());
+    }
+
+    let ini_path = ensure_crashfx_ini(&documents_path)?;
+    let content = fs::read_to_string(&ini_path)
+        .map_err(|e| format!("Lecture de {} impossible : {}", ini_path.display(), e))?;
+
+    let content = set_crashfx_ini_value(
+        &content,
+        "BOOLEAN",
+        CRASHFX_ENABLED_KEY,
+        if enabled { "1" } else { "0" },
+    );
+
+    let content = set_crashfx_ini_value(
+        &content,
+        "NUMBER",
+        CRASHFX_VOLUME_KEY,
+        &format!("{:.2}", volume_percent as f64 / 100.0),
+    );
+
+    fs::write(&ini_path, content)
+        .map_err(|e| format!("Écriture de {} impossible : {}", ini_path.display(), e))
+}
+
 #[tauri::command]
 fn open_folder(ac_path: String, documents_path: String, folder_type: String, folder_id: String) -> Result<(), String> {
     let cfg_dir = resolve_cfg_dir(Path::new(&documents_path));
@@ -6821,6 +7129,9 @@ pub fn run() {
             delete_pure_plan,
             install_mod_from_archive,
             get_mods_history,
+            read_mod_apps_status,
+            read_crashfx_data,
+            save_crashfx_data,
             open_folder,
             get_online_servers,
             get_server_details,
