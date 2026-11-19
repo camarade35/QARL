@@ -1011,6 +1011,7 @@
       "update_no_notes": "Aucune note de version n’est disponible.",
       "update_link_error": "Impossible d’ouvrir ce lien : {error}",
       "update_downloading": "Téléchargement... {percent}%",
+      "update_downloading_unknown": "Téléchargement de la mise à jour...",
       "update_error": "Erreur de MAJ",
       "update_retry": "Réessayer"
     }

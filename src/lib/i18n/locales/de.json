@@ -1009,6 +1009,7 @@
       "update_no_notes": "Keine Versionshinweise verfügbar.",
       "update_link_error": "Link konnte nicht geöffnet werden: {error}",
       "update_downloading": "Herunterladen... {percent}%",
+      "update_downloading_unknown": "Update wird heruntergeladen...",
       "update_error": "Update-Fehler",
       "update_retry": "Erneut versuchen"
     }

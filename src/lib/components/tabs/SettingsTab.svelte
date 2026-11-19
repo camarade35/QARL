@@ -26,7 +26,7 @@
   // ⭐ États pour le système de mise à jour
   let updateStatus = $state<'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error'>('idle');
   let updateVersion = $state('');
-  let updateProgress = $state(0);
+  let updateProgress = $state<number | null>(null);
   let updateErrorMsg = $state('');
   
   // ⭐ Applications Python
@@ -127,7 +127,7 @@
   });
 
     // Constante pour la version (à modifier lors du push Github)
-  const APP_VERSION = "v1.3.2";
+  const APP_VERSION = "v1.3.3";
 
   async function detectSteamId() {
     isDetectingSteam = true;
@@ -269,15 +269,25 @@
 
   async function installUpdate() {
     updateStatus = 'downloading';
-    updateProgress = 0;
+    updateProgress = null;
     try {
       const update = await check();
       if (!update) { updateStatus = 'idle'; return; }
-      
+
+      let totalBytes: number | null = null;
+      let downloadedBytes = 0;
       await update.downloadAndInstall((event) => {
-        if (event.event === 'Progress') {
-          updateProgress = (event.data.chunkLength / (event.data.contentLength || 1)) * 100;
+        if (event.event === 'Started') {
+          totalBytes = event.data.contentLength ?? null;
+          downloadedBytes = 0;
+          updateProgress = totalBytes !== null && totalBytes > 0 ? 0 : null;
+        } else if (event.event === 'Progress') {
+          downloadedBytes += Math.max(0, event.data.chunkLength);
+          updateProgress = totalBytes !== null && totalBytes > 0
+            ? Math.min(99, Math.floor((downloadedBytes / totalBytes) * 100))
+            : null;
         } else if (event.event === 'Finished') {
+          updateProgress = 100;
           updateStatus = 'ready';
         }
       });
@@ -526,7 +536,13 @@
           <span style="color: var(--accent); font-size: 0.85rem; font-weight: 600;">{$t('settings.general.update_available', { values: { version: updateVersion } })}</span>
           <button class="btn-launch" onclick={installUpdate} style="padding: 6px 12px; height: auto; font-size: 0.85rem;">{$t('settings.general.update_install')}</button>
         {:else if updateStatus === 'downloading'}
-          <span style="color: var(--text-secondary); font-size: 0.85rem;">{$t('settings.general.update_downloading', { values: { percent: updateProgress.toFixed(0) } })}</span>
+          <span style="color: var(--text-secondary); font-size: 0.85rem;">
+            {#if updateProgress === null}
+              {$t('settings.general.update_downloading_unknown')}
+            {:else}
+              {$t('settings.general.update_downloading', { values: { percent: updateProgress.toFixed(0) } })}
+            {/if}
+          </span>
         {:else if updateStatus === 'error'}
           <span style="color: #e57373; font-size: 0.85rem;" title={updateErrorMsg}>{$t('settings.general.update_error')}</span>
           <button class="btn-secondary" onclick={() => checkForUpdates(false)} style="padding: 6px 12px; height: auto; font-size: 0.85rem;">{$t('settings.general.update_retry')}</button>

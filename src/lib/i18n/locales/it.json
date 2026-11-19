@@ -1009,6 +1009,7 @@
       "update_no_notes": "Nessuna nota di rilascio disponibile.",
       "update_link_error": "Impossibile aprire questo link: {error}",
       "update_downloading": "Download... {percent}%",
+      "update_downloading_unknown": "Download dell’aggiornamento...",
       "update_error": "Errore di aggiornamento",
       "update_retry": "Riprova"
     }

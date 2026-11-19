@@ -1008,6 +1008,7 @@
       "update_no_notes": "No release notes are available.",
       "update_link_error": "Could not open this link: {error}",
       "update_downloading": "Downloading... {percent}%",
+      "update_downloading_unknown": "Downloading update...",
       "update_error": "Update error",
       "update_retry": "Retry"
     }

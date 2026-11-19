@@ -1010,6 +1010,7 @@
       "update_no_notes": "No hay notas de la versión disponibles.",
       "update_link_error": "No se pudo abrir este enlace: {error}",
       "update_downloading": "Descargando... {percent}%",
+      "update_downloading_unknown": "Descargando la actualización...",
       "update_error": "Error de actualización",
       "update_retry": "Reintentar"
     }

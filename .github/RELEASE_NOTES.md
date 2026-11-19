@@ -1,29 +1,29 @@
 # English
 
-## QARL {{VERSION}} — A more complete update preview
+## QARL {{VERSION}} — Accurate update download progress
 
-Manual update checks now show the same release notes preview as the automatic update prompt. Links in the notes can be opened directly.
+Update downloads now show an accurate percentage based on bytes received. If the total download size is unavailable, the progress is shown as indeterminate instead of an incorrect percentage.
 
 # Français
 
-## QARL {{VERSION}} — Un aperçu des mises à jour plus complet
+## QARL {{VERSION}} — Une progression de téléchargement fiable
 
-La vérification manuelle affiche désormais le même aperçu des notes de version que la modale automatique. Les liens contenus dans les notes peuvent être ouverts directement.
+Le téléchargement des mises à jour affiche désormais un pourcentage calculé à partir des octets reçus. Si la taille totale est inconnue, la progression est indiquée sans pourcentage plutôt qu’avec une valeur incorrecte.
 
 # Deutsch
 
-## QARL {{VERSION}} — Eine ausführlichere Update-Vorschau
+## QARL {{VERSION}} — Korrekte Anzeige des Update-Fortschritts
 
-Bei einer manuellen Update-Prüfung werden jetzt dieselben Versionshinweise wie im automatischen Update-Dialog angezeigt. Links in den Hinweisen lassen sich direkt öffnen.
+Der Download-Fortschritt basiert jetzt auf den empfangenen Bytes. Ist die Gesamtgröße unbekannt, wird der Fortschritt ohne falsche Prozentangabe angezeigt.
 
 # Español
 
-## QARL {{VERSION}} — Una vista previa de la actualización más completa
+## QARL {{VERSION}} — Progreso de descarga preciso
 
-La búsqueda manual de actualizaciones ahora muestra la misma vista previa de las notas que el diálogo automático. Los enlaces de las notas se pueden abrir directamente.
+El porcentaje de descarga ahora se calcula a partir de los bytes recibidos. Si no se conoce el tamaño total, se muestra un progreso indeterminado en lugar de un porcentaje incorrecto.
 
 # Italiano
 
-## QARL {{VERSION}} — Un’anteprima degli aggiornamenti più completa
+## QARL {{VERSION}} — Avanzamento del download preciso
 
-La verifica manuale degli aggiornamenti ora mostra la stessa anteprima delle note del dialogo automatico. I link nelle note possono essere aperti direttamente.
+La percentuale di download ora si basa sui byte ricevuti. Se la dimensione totale non è disponibile, l’avanzamento viene mostrato senza una percentuale errata.
