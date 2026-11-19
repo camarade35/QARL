@@ -127,7 +127,7 @@
   });
 
     // Constante pour la version (à modifier lors du push Github)
-  const APP_VERSION = "v1.3.1";
+  const APP_VERSION = "v1.3.2";
 
   async function detectSteamId() {
     isDetectingSteam = true;
@@ -238,25 +238,21 @@
         updateVersion = update.version;
         updateStatus = 'available';
 
-        // ⭐ Si c'est le check automatique (démarrage), on affiche ta modale custom
-        if (silent) {
-          const wantsUpdate = await updatePrompt({
-            title: $t('settings.general.update_dialog_title'),
-            message: $t('settings.general.update_available', { values: { version: update.version } }),
-            notes: update.body ?? '',
-            notesLabel: $t('settings.general.update_notes_title'),
-            emptyNotesMessage: $t('settings.general.update_no_notes'),
-            installLabel: $t('settings.general.update_install'),
-            ignoreLabel: $t('settings.general.update_ignore')
-          });
-          
-          if (wantsUpdate) {
-            await installUpdate();
-          } else {
-            // L'utilisateur a cliqué sur Annuler
-            localStorage.setItem('qarl_ignored_update', update.version);
-            updateStatus = 'idle'; // On cache le bouton pour ne pas l'embêter
-          }
+        const wantsUpdate = await updatePrompt({
+          title: $t('settings.general.update_dialog_title'),
+          message: $t('settings.general.update_available', { values: { version: update.version } }),
+          notes: update.body ?? '',
+          notesLabel: $t('settings.general.update_notes_title'),
+          emptyNotesMessage: $t('settings.general.update_no_notes'),
+          installLabel: $t('settings.general.update_install'),
+          ignoreLabel: $t('settings.general.update_ignore')
+        });
+
+        if (wantsUpdate) {
+          await installUpdate();
+        } else if (silent) {
+          localStorage.setItem('qarl_ignored_update', update.version);
+          updateStatus = 'idle';
         }
 
       } else {

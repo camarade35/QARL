@@ -1009,6 +1009,7 @@
       "update_dialog_title": "Mise à jour disponible",
       "update_notes_title": "Notes de version",
       "update_no_notes": "Aucune note de version n’est disponible.",
+      "update_link_error": "Impossible d’ouvrir ce lien : {error}",
       "update_downloading": "Téléchargement... {percent}%",
       "update_error": "Erreur de MAJ",
       "update_retry": "Réessayer"

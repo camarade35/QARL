@@ -1,29 +1,29 @@
 # English
 
-## QARL {{VERSION}} — Release notes in the update dialog
+## QARL {{VERSION}} — A more complete update preview
 
-The update prompt now displays the release notes directly in QARL, so you can review what's new before choosing to install or ignore an update.
+Manual update checks now show the same release notes preview as the automatic update prompt. Links in the notes can be opened directly.
 
 # Français
 
-## QARL {{VERSION}} — Les notes de version dans la modale de mise à jour
+## QARL {{VERSION}} — Un aperçu des mises à jour plus complet
 
-La modale de mise à jour affiche désormais les notes de version directement dans QARL. Vous pouvez consulter les nouveautés avant de choisir d’installer ou d’ignorer la mise à jour.
+La vérification manuelle affiche désormais le même aperçu des notes de version que la modale automatique. Les liens contenus dans les notes peuvent être ouverts directement.
 
 # Deutsch
 
-## QARL {{VERSION}} — Versionshinweise im Update-Dialog
+## QARL {{VERSION}} — Eine ausführlichere Update-Vorschau
 
-Der Update-Dialog zeigt jetzt die Versionshinweise direkt in QARL an. So kannst du die Neuerungen ansehen, bevor du das Update installierst oder ignorierst.
+Bei einer manuellen Update-Prüfung werden jetzt dieselben Versionshinweise wie im automatischen Update-Dialog angezeigt. Links in den Hinweisen lassen sich direkt öffnen.
 
 # Español
 
-## QARL {{VERSION}} — Notas de versión en el diálogo de actualización
+## QARL {{VERSION}} — Una vista previa de la actualización más completa
 
-El diálogo de actualización ahora muestra las notas de versión directamente en QARL, para que puedas revisar las novedades antes de instalar o ignorar la actualización.
+La búsqueda manual de actualizaciones ahora muestra la misma vista previa de las notas que el diálogo automático. Los enlaces de las notas se pueden abrir directamente.
 
 # Italiano
 
-## QARL {{VERSION}} — Note di rilascio nella finestra di aggiornamento
+## QARL {{VERSION}} — Un’anteprima degli aggiornamenti più completa
 
-La finestra di aggiornamento ora mostra le note di rilascio direttamente in QARL, così puoi scoprire le novità prima di scegliere se installare o ignorare l’aggiornamento.
+La verifica manuale degli aggiornamenti ora mostra la stessa anteprima delle note del dialogo automatico. I link nelle note possono essere aperti direttamente.

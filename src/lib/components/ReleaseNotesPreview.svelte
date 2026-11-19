@@ -1,9 +1,10 @@
 <script lang="ts">
-  type InlinePart = {
-    kind: 'text' | 'strong' | 'link';
-    text: string;
-    href?: string;
-  };
+  import { openUrl } from '@tauri-apps/plugin-opener';
+  import { t } from 'svelte-i18n';
+
+  type InlinePart =
+    | { kind: 'text' | 'strong'; text: string }
+    | { kind: 'link'; text: string; href: string };
 
   type ReleaseBlock =
     | { kind: 'heading'; level: number; content: InlinePart[] }
@@ -12,6 +13,21 @@
     | { kind: 'image'; alt: string; src: string };
 
   let { notes }: { notes: string } = $props();
+  let linkError = $state('');
+
+  async function openExternalLink(href: string) {
+    linkError = '';
+    try {
+      const url = new URL(href);
+      if (url.protocol !== 'https:') {
+        throw new Error('Only HTTPS links are allowed.');
+      }
+      await openUrl(url.href);
+    } catch (error) {
+      console.error('Could not open release notes link:', error);
+      linkError = $t('settings.general.update_link_error', { values: { error: String(error) } });
+    }
+  }
 
   function parseInline(text: string): InlinePart[] {
     const parts: InlinePart[] = [];
@@ -114,7 +130,9 @@
           {#if part.kind === 'strong'}
             <strong>{part.text}</strong>
           {:else if part.kind === 'link'}
-            <span class="release-notes-link" title={part.href}>{part.text}</span>
+            <button class="release-notes-link" type="button" title={part.href} onclick={() => void openExternalLink(part.href)}>
+              {part.text}
+            </button>
           {:else}
             {part.text}
           {/if}
@@ -128,7 +146,9 @@
             {#if part.kind === 'strong'}
               <strong>{part.text}</strong>
             {:else if part.kind === 'link'}
-              <span class="release-notes-link" title={part.href}>{part.text}</span>
+              <button class="release-notes-link" type="button" title={part.href} onclick={() => void openExternalLink(part.href)}>
+                {part.text}
+              </button>
             {:else}
               {part.text}
             {/if}
@@ -139,6 +159,9 @@
       <img src={block.src} alt={block.alt} loading="lazy" referrerpolicy="no-referrer" />
     {/if}
   {/each}
+  {#if linkError}
+    <p class="release-notes-link-error" role="status">{linkError}</p>
+  {/if}
 </div>
 
 <style>
@@ -177,9 +200,20 @@
   }
 
   .release-notes-link {
+    padding: 0;
+    border: 0;
+    background: transparent;
     color: var(--accent);
+    font: inherit;
     text-decoration: underline;
     text-decoration-color: var(--accent-muted);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .release-notes-link-error {
+    margin: 0;
+    color: var(--color-error, #e57373);
   }
 
   img {

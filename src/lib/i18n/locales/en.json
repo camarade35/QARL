@@ -1006,6 +1006,7 @@
       "update_dialog_title": "Update available",
       "update_notes_title": "Release notes",
       "update_no_notes": "No release notes are available.",
+      "update_link_error": "Could not open this link: {error}",
       "update_downloading": "Downloading... {percent}%",
       "update_error": "Update error",
       "update_retry": "Retry"

@@ -1008,6 +1008,7 @@
       "update_dialog_title": "Actualización disponible",
       "update_notes_title": "Notas de la versión",
       "update_no_notes": "No hay notas de la versión disponibles.",
+      "update_link_error": "No se pudo abrir este enlace: {error}",
       "update_downloading": "Descargando... {percent}%",
       "update_error": "Error de actualización",
       "update_retry": "Reintentar"
