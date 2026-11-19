@@ -1000,8 +1000,12 @@
       "python_apps_desc": "Enable or disable your installed Python apps (requires a game restart to take effect).",
       "update_check": "🔄 Check for Updates",
       "update_install": "⬇ Install",
+      "update_ignore": "Ignore",
       "update_uptodate": "QARL is already up to date!",
       "update_available": "Version {version} available!",
+      "update_dialog_title": "Update available",
+      "update_notes_title": "Release notes",
+      "update_no_notes": "No release notes are available.",
       "update_downloading": "Downloading... {percent}%",
       "update_error": "Update error",
       "update_retry": "Retry"

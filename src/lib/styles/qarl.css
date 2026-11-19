@@ -4195,6 +4195,18 @@ select:disabled, input:disabled {
   animation: qacrl-dialog-pop-in 0.18s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.qacrl-dialog-update {
+  width: 760px;
+  max-width: 92vw;
+  max-height: 90vh;
+}
+
+.qacrl-update-notes-label {
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 .qacrl-dialog-header {
   display: flex;
   align-items: center;

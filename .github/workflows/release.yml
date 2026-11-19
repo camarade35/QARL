@@ -28,6 +28,29 @@ jobs:
       - name: Install npm dependencies
         run: npm install
 
+      - name: Load release notes
+        id: release_notes
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $notesPath = ".github/RELEASE_NOTES.md"
+          if (-not (Test-Path $notesPath)) {
+            throw "Release notes file not found: $notesPath"
+          }
+
+          $notes = Get-Content -Path $notesPath -Raw
+          if ([string]::IsNullOrWhiteSpace($notes)) {
+            throw "Release notes file is empty: $notesPath"
+          }
+
+          $version = $env:RELEASE_TAG -replace '^v', ''
+          $notes = $notes.Replace('{{VERSION}}', $version)
+          $delimiter = "RELEASE_NOTES_$([guid]::NewGuid().ToString('N'))"
+          "body<<$delimiter" >> $env:GITHUB_OUTPUT
+          $notes >> $env:GITHUB_OUTPUT
+          "$delimiter" >> $env:GITHUB_OUTPUT
+
       - name: Build Tauri App
         uses: tauri-apps/tauri-action@v0
         env:
@@ -37,7 +60,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'QARL ${{ github.ref_name }}'
-          releaseBody: ${{ contains(github.ref_name, '-') && format('⚠️ VERSION BETA ({0}) - À tester uniquement. Ne pas installer si vous cherchez la stabilité.', github.ref_name) || format('Mise à jour automatique de QARL {0}.', github.ref_name) }}
+          releaseBody: ${{ contains(github.ref_name, '-') && format('⚠️ VERSION BETA ({0}) - À tester uniquement. Ne pas installer si vous cherchez la stabilité.', github.ref_name) || steps.release_notes.outputs.body }}
           releaseDraft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           includeUpdaterJson: true

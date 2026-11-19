@@ -2,6 +2,7 @@
 <script lang="ts">
   import { t } from 'svelte-i18n';
   import { dialogState } from '$lib/stores/dialog.svelte.js';
+  import ReleaseNotesPreview from '$lib/components/ReleaseNotesPreview.svelte';
 
   function handleOk() {
     dialogState.resolve(dialogState.type === 'prompt' ? dialogState.inputValue : true);
@@ -14,7 +15,7 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter') handleOk();
+    if (e.key === 'Enter' && dialogState.type !== 'update') handleOk();
     if (e.key === 'Escape') handleCancel();
   }
 </script>
@@ -23,7 +24,7 @@
 
 {#if dialogState.isOpen}
   <div class="qacrl-dialog-overlay visible" onclick={(e) => { if(e.target === e.currentTarget) handleCancel(); }}>
-    <div class="qacrl-dialog qacrl-dialog-{dialogState.variant}">
+    <div class="qacrl-dialog qacrl-dialog-{dialogState.variant} {dialogState.type === 'update' ? 'qacrl-dialog-update' : ''}">
       
       <div class="qacrl-dialog-header">
         <div class="qacrl-dialog-icon">
@@ -38,7 +39,17 @@
       </div>
 
       <div class="qacrl-dialog-body">
-        <p style="white-space: pre-wrap;">{dialogState.message}</p>
+        {#if dialogState.type === 'update'}
+          <p class="qacrl-update-summary">{dialogState.message}</p>
+          <div class="qacrl-update-notes-label">{dialogState.notesLabel}</div>
+          {#if dialogState.notes.trim()}
+            <ReleaseNotesPreview notes={dialogState.notes} />
+          {:else}
+            <p>{dialogState.emptyNotesMessage}</p>
+          {/if}
+        {:else}
+          <p style="white-space: pre-wrap;">{dialogState.message}</p>
+        {/if}
         
         {#if dialogState.type === 'prompt'}
           <div class="qacrl-dialog-input" style="margin-top: 12px;">

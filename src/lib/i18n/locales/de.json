@@ -1001,8 +1001,12 @@
       "python_apps_desc": "Aktiviere oder deaktiviere deine installierten Python-Apps (erfordert einen Neustart des Spiels, um wirksam zu werden).",
       "update_check": "🔄 Auf Updates prüfen",
       "update_install": "⬇ Installieren",
+      "update_ignore": "Ignorieren",
       "update_uptodate": "QARL ist bereits aktuell!",
       "update_available": "Version {version} verfügbar!",
+      "update_dialog_title": "Update verfügbar",
+      "update_notes_title": "Versionshinweise",
+      "update_no_notes": "Keine Versionshinweise verfügbar.",
       "update_downloading": "Herunterladen... {percent}%",
       "update_error": "Update-Fehler",
       "update_retry": "Erneut versuchen"

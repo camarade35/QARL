@@ -12,7 +12,7 @@
   import { onMount } from 'svelte';
   import { open } from '@tauri-apps/plugin-dialog';
   import { openUrl } from '@tauri-apps/plugin-opener';
-  import { alert, confirm } from '$lib/stores/dialog.svelte';
+  import { alert, confirm, updatePrompt } from '$lib/stores/dialog.svelte';
   import { t, locale } from 'svelte-i18n';
   import { check } from '@tauri-apps/plugin-updater';
   import { relaunch } from '@tauri-apps/plugin-process';
@@ -127,7 +127,7 @@
   });
 
     // Constante pour la version (à modifier lors du push Github)
-  const APP_VERSION = "v1.3.0";
+  const APP_VERSION = "v1.3.1";
 
   async function detectSteamId() {
     isDetectingSteam = true;
@@ -240,14 +240,18 @@
 
         // ⭐ Si c'est le check automatique (démarrage), on affiche ta modale custom
         if (silent) {
-          const wantsUpdate = await confirm(
-            `Une nouvelle version de QARL (${update.version}) est disponible !\nVoulez-vous l'installer maintenant ?`,
-            "Mise à jour disponible",
-            "info"
-          );
+          const wantsUpdate = await updatePrompt({
+            title: $t('settings.general.update_dialog_title'),
+            message: $t('settings.general.update_available', { values: { version: update.version } }),
+            notes: update.body ?? '',
+            notesLabel: $t('settings.general.update_notes_title'),
+            emptyNotesMessage: $t('settings.general.update_no_notes'),
+            installLabel: $t('settings.general.update_install'),
+            ignoreLabel: $t('settings.general.update_ignore')
+          });
           
           if (wantsUpdate) {
-            installUpdate();
+            await installUpdate();
           } else {
             // L'utilisateur a cliqué sur Annuler
             localStorage.setItem('qarl_ignored_update', update.version);
