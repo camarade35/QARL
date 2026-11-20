@@ -1,29 +1,39 @@
 # English
 
-## QARL {{VERSION}} — Accurate update download progress
+## QARL {{VERSION}} — CSP search in your interface language
 
-Update downloads now show an accurate percentage based on bytes received. If the total download size is unavailable, the progress is shown as indeterminate instead of an incorrect percentage.
+CSP searches now match translated labels as well as English labels and INI keys. Section headings and search results are displayed in the selected interface language.
+
+Joining an online server no longer reports an installed track as missing when the server uses one of its layouts.
 
 # Français
 
-## QARL {{VERSION}} — Une progression de téléchargement fiable
+## QARL {{VERSION}} — Recherche CSP dans la langue de l’interface
 
-Le téléchargement des mises à jour affiche désormais un pourcentage calculé à partir des octets reçus. Si la taille totale est inconnue, la progression est indiquée sans pourcentage plutôt qu’avec une valeur incorrecte.
+La recherche CSP reconnaît désormais les libellés traduits, les libellés anglais et les clés INI. Les titres de section et les résultats s’affichent dans la langue choisie.
+
+La connexion à un serveur en ligne ne signale plus à tort qu’un circuit installé est manquant lorsque le serveur utilise l’un de ses layouts.
 
 # Deutsch
 
-## QARL {{VERSION}} — Korrekte Anzeige des Update-Fortschritts
+## QARL {{VERSION}} — CSP-Suche in der Sprache der Benutzeroberfläche
 
-Der Download-Fortschritt basiert jetzt auf den empfangenen Bytes. Ist die Gesamtgröße unbekannt, wird der Fortschritt ohne falsche Prozentangabe angezeigt.
+Die CSP-Suche findet jetzt übersetzte und englische Bezeichnungen sowie INI-Schlüssel. Abschnittsüberschriften und Suchergebnisse werden in der ausgewählten Sprache angezeigt.
+
+Beim Beitritt zu einem Online-Server wird eine installierte Strecke nicht mehr fälschlich als fehlend gemeldet, wenn der Server eines ihrer Layouts verwendet.
 
 # Español
 
-## QARL {{VERSION}} — Progreso de descarga preciso
+## QARL {{VERSION}} — Búsqueda de CSP en el idioma de la interfaz
 
-El porcentaje de descarga ahora se calcula a partir de los bytes recibidos. Si no se conoce el tamaño total, se muestra un progreso indeterminado en lugar de un porcentaje incorrecto.
+La búsqueda de CSP ahora reconoce las etiquetas traducidas, las etiquetas en inglés y las claves INI. Los títulos de sección y los resultados se muestran en el idioma seleccionado.
+
+Al unirse a un servidor en línea, una pista instalada ya no aparece erróneamente como ausente cuando el servidor utiliza uno de sus trazados.
 
 # Italiano
 
-## QARL {{VERSION}} — Avanzamento del download preciso
+## QARL {{VERSION}} — Ricerca CSP nella lingua dell’interfaccia
 
-La percentuale di download ora si basa sui byte ricevuti. Se la dimensione totale non è disponibile, l’avanzamento viene mostrato senza una percentuale errata.
+La ricerca CSP ora riconosce le etichette tradotte, quelle in inglese e le chiavi INI. I titoli delle sezioni e i risultati vengono mostrati nella lingua selezionata.
+
+Quando ci si unisce a un server online, una pista installata non viene più segnalata erroneamente come mancante se il server usa uno dei suoi layout.

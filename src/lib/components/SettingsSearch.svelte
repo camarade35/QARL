@@ -3,6 +3,11 @@
   import { invoke } from '@tauri-apps/api/core';
   import { appState } from '$lib/stores/appState.svelte.js';
   import { searchState, clearSearch } from '$lib/stores/searchState.svelte.js';
+  import {
+    getCspOptionTranslationKeys,
+    getCspSectionTranslationKey,
+    normalizeCspSearchText
+  } from '$lib/utils/cspTranslations';
 
   let { onNavigate = (tabId: string, groupKey: string, cspFile: string | null) => {} } = $props();
 
@@ -225,7 +230,7 @@
                   value: String(opt.value ?? ''),
                   tab: 'subtab-csp',
                   groupKey: sec.name,
-                  labelKey: `csp.option_labels.${opt.label}`,
+                  labelKey: null,
                   labelDefault: opt.label || opt.key,
                   cspFile: tpl.filename
                 });
@@ -271,12 +276,11 @@
   // ⭐ Groupes filtrés
   let filteredGroups = $derived.by(() => {
     if (!searchState.query.trim() || !loaded) return [];
-    const q = searchState.query.toLowerCase().trim();
+    const q = normalizeCspSearchText(searchState.query.trim());
 
     const matches = allEntries.filter((e) => {
-      const label = e.labelKey ? $t(e.labelKey, { default: e.labelDefault }) : e.labelDefault;
-      const labelStr = String(label).toLowerCase();
-      return labelStr.includes(q) || e.key.toLowerCase().includes(q) || e.section.toLowerCase().includes(q);
+      return [getEntryLabel(e), e.labelDefault, e.key, getSectionLabel(e.section, e.tab)]
+        .some(value => normalizeCspSearchText(value).includes(q));
     });
 
     const groups: Record<string, { file: string; section: string; tab: string; groupKey: string; cspFile: string | null; entries: Entry[] }> = {};
@@ -294,6 +298,28 @@
   });
 
   let totalResults = $derived(filteredGroups.reduce((s, g) => s + g.entries.length, 0));
+
+  function getEntryLabel(entry: Entry): string {
+    if (entry.tab === 'subtab-csp') {
+      for (const translationKey of getCspOptionTranslationKeys(entry.key, entry.labelDefault)) {
+        const translated = $t(translationKey, { default: '' });
+        if (translated) return translated;
+      }
+    }
+    return entry.labelKey ? String($t(entry.labelKey, { default: entry.labelDefault })) : entry.labelDefault;
+  }
+
+  function getGroupFileLabel(file: string): string {
+    const moduleId = file.replace(/\.ini$/i, '');
+    const translated = $t(`csp.modules.${moduleId}.label`, { default: '' });
+    return translated || file;
+  }
+
+  function getSectionLabel(section: string, tab: string): string {
+    return tab === 'subtab-csp'
+      ? String($t(getCspSectionTranslationKey(section), { default: section }))
+      : section;
+  }
 
   function jumpTo(group: typeof filteredGroups[number]) {
     const tab = group.tab;
@@ -342,9 +368,9 @@
       {#each filteredGroups as group}
         <div class="settings-search-group">
           <div class="settings-search-group-header">
-            <span class="settings-search-group-file">{group.file}</span>
+            <span class="settings-search-group-file">{getGroupFileLabel(group.file)}</span>
             <span class="settings-search-group-sep">›</span>
-            <span class="settings-search-group-section">[{group.section}]</span>
+            <span class="settings-search-group-section">[{getSectionLabel(group.section, group.tab)}]</span>
             <button class="settings-search-group-jump" onclick={() => jumpTo(group)}>
               {$t('settings.search.go')} →
             </button>
@@ -353,11 +379,7 @@
             {#each group.entries as entry}
               <div class="ini-row" style="grid-template-columns: 240px 1fr; padding: 6px 16px;">
                 <div class="ini-label">
-                  {#if entry.labelKey}
-                    {$t(entry.labelKey, { default: entry.labelDefault })}
-                  {:else}
-                    {entry.labelDefault}
-                  {/if}
+                  {getEntryLabel(entry)}
                   {#if entry.isAlt} <span style="color: var(--text-tertiary); font-size: 0.72rem;">(Alt)</span>{/if}
                 </div>
                 <div style="color: var(--text-secondary); font-family: 'Consolas', monospace; font-size: 0.82rem; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">

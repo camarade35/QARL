@@ -1,24 +1,24 @@
 <script lang="ts">
   import { t } from 'svelte-i18n';
   import { setupState } from '$lib/stores/setupState.svelte.js';
-  import { appState } from '$lib/stores/appState.svelte.js';
 
   let { onFinish = () => {} } = $props();
 
-  function truncate(s: string, len: number = 40) {
-    if (!s) return '—';
-    return s.length > len ? '…' + s.slice(-len) : s;
+  function truncatePath(path: string, maxLength = 40) {
+    if (!path) return '—';
+    // Conserve la fin du chemin, où se trouve le nom du dossier utile.
+    return path.length > maxLength ? `…${path.slice(-maxLength)}` : path;
   }
 </script>
 
 <div style="display: flex; flex-direction: column; gap: 12px; padding: 8px 0;">
   <div style="display: flex; justify-content: space-between; padding: 10px 14px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--r-sm);">
     <span style="font-weight: 600; color: var(--text-secondary);">{$t('setup.recap.ac_path')}</span>
-    <span style="font-weight: 600; text-align: right; word-break: break-all;">{truncate(setupState.data.acPath)}</span>
+    <span style="font-weight: 600; text-align: right; word-break: break-all;">{truncatePath(setupState.data.acPath)}</span>
   </div>
   <div style="display: flex; justify-content: space-between; padding: 10px 14px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--r-sm);">
     <span style="font-weight: 600; color: var(--text-secondary);">{$t('setup.recap.documents')}</span>
-    <span style="font-weight: 600; text-align: right; word-break: break-all;">{truncate(setupState.data.documentsPath)}</span>
+    <span style="font-weight: 600; text-align: right; word-break: break-all;">{truncatePath(setupState.data.documentsPath)}</span>
   </div>
   <div style="display: flex; justify-content: space-between; padding: 10px 14px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--r-sm);">
     <span style="font-weight: 600; color: var(--text-secondary);">{$t('setup.recap.driver_name')}</span>

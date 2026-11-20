@@ -6,17 +6,24 @@
   import { appState, setAcPath, setDocumentsPath } from '$lib/stores/appState.svelte.js';
   import { setupState } from '$lib/stores/setupState.svelte.js';
 
+  type DetectedSetupPaths = {
+    ac_path: string | null;
+    ac_path_source: string;
+    documents_path: string | null;
+    documents_source: string;
+  };
+
   let { onContinue = () => {} } = $props();
 
   let acPath = $state(appState.acPath || setupState.data.acPath || '');
   let documentsPath = $state(appState.documentsPath || setupState.data.documentsPath || '');
   let detecting = $state(false);
-  let isLaunching = $state(false); // ⭐ Nouvel état
+  let isLaunching = $state(false);
 
   async function autoDetect() {
     detecting = true;
     try {
-      const status = await invoke<any>('detect_setup_status');
+      const status = await invoke<DetectedSetupPaths>('detect_setup_status');
       if (status.ac_path) {
         acPath = status.ac_path;
         setupState.data.acPathSource = status.ac_path_source;
@@ -32,7 +39,7 @@
     }
   }
 
-  // ⭐ Nouvelle fonction pour lancer AC
+  // Lance AC pour permettre la création des fichiers utilisateur manquants.
   async function launchAc() {
     isLaunching = true;
     try {
@@ -46,15 +53,15 @@
 
   async function browseAc() {
     const selected = await open({ directory: true, multiple: false, title: $t('setup.paths.ac_label') });
-    if (selected) {
-      acPath = selected as string;
+    if (typeof selected === 'string') {
+      acPath = selected;
     }
   }
 
   async function browseDocs() {
     const selected = await open({ directory: true, multiple: false, title: $t('setup.paths.docs_label') });
-    if (selected) {
-      documentsPath = selected as string;
+    if (typeof selected === 'string') {
+      documentsPath = selected;
     }
   }
 
@@ -76,9 +83,9 @@
 </script>
 
 <div class="setup-field">
-  <label>{$t('setup.paths.ac_label')}</label>
+  <label for="setup-ac-path">{$t('setup.paths.ac_label')}</label>
   <div class="setup-input-row">
-    <input type="text" readonly value={acPath} placeholder={$t('setup.paths.ac_placeholder')} />
+    <input id="setup-ac-path" type="text" readonly value={acPath} placeholder={$t('setup.paths.ac_placeholder')} />
     <button class="filter-btn" onclick={autoDetect} disabled={detecting}>
       {detecting ? '⏳' : $t('setup.paths.auto_detect')}
     </button>
@@ -90,9 +97,9 @@
 </div>
 
 <div class="setup-field">
-  <label>{$t('setup.paths.docs_label')}</label>
+  <label for="setup-documents-path">{$t('setup.paths.docs_label')}</label>
   <div class="setup-input-row">
-    <input type="text" readonly value={documentsPath} placeholder={$t('setup.paths.docs_placeholder')} />
+    <input id="setup-documents-path" type="text" readonly value={documentsPath} placeholder={$t('setup.paths.docs_placeholder')} />
     <button class="filter-btn" onclick={browseDocs}>{$t('setup.paths.browse')}</button>
   </div>
   {#if !documentsPath}
@@ -100,7 +107,7 @@
   {/if}
 </div>
 
-<!-- ⭐ NOUVEAU : Bloc d'aide avec lancement d'AC -->
+<!-- Aide pour créer les fichiers utilisateur manquants -->
 {#if !documentsPath}
   <div class="setup-warning" style="margin-top: 15px; background: rgba(230, 163, 59, 0.1); border: 1px solid rgba(230, 163, 59, 0.3);">
     <strong style="color: #e6a33b;">{$t('setup.paths.help_generate_title')}</strong>

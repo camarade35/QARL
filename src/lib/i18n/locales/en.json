@@ -1400,6 +1400,19 @@
       "custom_rendering_modes": { "label": "Custom Rendering Modes", "desc": "Alternative rendering modes" },
       "weather_fx": { "label": "Weather FX", "desc": "New weather" }
     },
+    "section_names": {
+      "BASIC": "Basic",
+      "BRAKEDISC_FX": "Brake disc effects",
+      "SHADOWED_WHEELS": "Wheel shadows",
+      "FAKESHADOWSFX_BODY_SHADOW": "Fake Shadows FX: Body Shadow",
+      "EXTRAS": "Extras",
+      "PHYSICAL_DAMAGE": "Physical damage",
+      "BLURRED_RIMS": "Blurred rims",
+      "SMOOTH_CASCADES": "Smooth cascades",
+      "NO_CAR_SHADOWS_IN_THIRD_CASCADE": "No car shadows in third cascade",
+      "CUSTOM_SHADOW_MATRICES": "Custom shadow matrices",
+      "WITHOUT_SHADOWS": "Without shadows"
+    },
     "option_labels": {
       "Density": "Density",
       "Quality": "Quality",

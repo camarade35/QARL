@@ -3,8 +3,10 @@
   import { appState, saveServerState } from '$lib/stores/appState.svelte.js';
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { t } from 'svelte-i18n';
-  import { getFlagUrl } from '$lib/utils/assets.js'; // ⭐ L'import manquant !
-   import { alert } from '$lib/stores/dialog.svelte'; // ⭐ AJOUT IMPORT QARL
+  import { getFlagUrl } from '$lib/utils/assets.js';
+  import { alert } from '$lib/stores/dialog.svelte';
+
+  type LocalTrack = { id: string; name: string; layouts: { id: string }[] };
 
   let servers = $state<any[]>([]);
   let manualFilter = $state({ favoritesOnly: false });
@@ -12,9 +14,8 @@
   let isLoading = $state(false);
   let errorMsg = $state('');
   let pingStatus = $state<Record<string, any>>({});
-  let serverInfos = $state<Record<string, any>>({}); // ⭐ Stocke les détails de chaque serveur
+  let serverInfos = $state<Record<string, any>>({});
 
-  // ⭐ Nouveaux états pour la pagination et les filtres publics
   let currentPage = $state(1);
   let hasNextPage = $state(true);
   let isLoadingMore = $state(false);
@@ -22,19 +23,16 @@
   let filterCountry = $state('');
   let filterTrack = $state('');
   let filterMinPlayers = $state(0);
-  let filterOnlyPlayable = $state(false); // ⭐ Nouveau filtre : n'afficher que les serveurs jouables
+  let filterOnlyPlayable = $state(false);
 
-  // ⭐ Liste filtrée (Svelte 5 utilise $derived pour ça)
   let filteredServers = $derived(
     servers.filter(server => {
-      // ⭐ 1. Masquer les serveurs hors ligne (ping échoué)
       const key = server.ip + ':' + server.port;
       const ping = pingStatus[key];
       if (ping && ping.status === 'fail') {
         return false;
       }
 
-      // 2. Filtre texte (nom ou IP)
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         if (!server.name.toLowerCase().includes(q) && !`${server.ip}:${server.port}`.includes(q)) {
@@ -42,20 +40,16 @@
         }
       }
       
-      // 3. Filtre pays
       if (filterCountry && server.country !== filterCountry) return false;
       
-      // 4. Filtre circuit
       if (filterTrack && cleanTrackName(server.track) !== filterTrack) return false;
       
-      // 5. Filtre joueurs min
       if (filterMinPlayers > 0 && server.players < filterMinPlayers) return false;
 
-      // 6. ⭐ Filtre "Jouable" (on a le circuit + les voitures)
       if (filterOnlyPlayable) {
         const info = serverInfos[key];
         if (info) {
-          const trackData = getTrackDisplay(info.track);
+          const trackData = getTrackDisplay(info.track, info.track_config || '');
           const carsData = getCarsDisplay(info.cars);
           if (!trackData.exists || !carsData.allExist) {
             return false;
@@ -67,7 +61,6 @@
     })
   );
 
-  // ⭐ Listes uniques pour les menus déroulants de filtres
   let availableCountries = $derived(
     Array.from(new Set(servers.map(s => s.country).filter(Boolean))).sort()
   );
@@ -75,12 +68,10 @@
     Array.from(new Set(servers.map(s => cleanTrackName(s.track)).filter(Boolean))).sort()
   );
 
-  // États pour la partie haute
   let pastedLink = $state('');
   let manualIp = $state('');
   let manualName = $state('');
 
-  // États pour la modale
   let selectedServer = $state<any>(null);
   let serverDetails = $state<any>(null);
   let loadingDetails = $state(false);
@@ -98,15 +89,12 @@
   let selectedSkin = $state<any>(null);
   let isJoining = $state(false);
 
-  // ⭐ États pour la modale d'édition de serveur
   let editingServer = $state<any>(null);
   let editName = $state('');
   let editIp = $state('');
 
-  // ⭐ État pour l'association du protocole
   let isAssociated = $state(false);
 
-  // ⭐ Vérifier l'état au chargement
   $effect(() => {
     async function checkStatus() {
       try {
@@ -133,13 +121,11 @@
     }
   }
 
-  // ⭐ Fonction utilitaire pour nettoyer les chemins bizarres (ex: "csp/.../D:/../ks_nordschleife")
+  // Retire le préfixe CSP et conserve le dernier segment du chemin.
   function cleanTrackName(raw: string) {
     if (!raw) return $t('common.unknown');
     let s = raw;
-    // Virer le préfixe csp/...
     s = s.replace(/^csp\/[^/]*\/\.\.\//i, '');
-    // Virer les éventuels chemins Windows (on garde le dernier élément après un slash)
     if (s.includes('/')) {
       const parts = s.split('/');
       s = parts[parts.length - 1];
@@ -147,49 +133,69 @@
     return s;
   }
 
-  // ⭐ Analyse du circuit (croisement avec le local)
-  function getTrackDisplay(serverTrackId: string) {
-    if (!serverTrackId) return { name: $t('common.unknown'), exists: false };
+  // Le serveur peut concaténer l'identifiant du circuit et celui du layout avec un tiret.
+  function getTrackAndLayout(serverTrackId: string, serverLayoutId = '') {
+    if (!serverTrackId) return { trackId: '', layoutId: serverLayoutId.trim() };
+    const cleanTrack = cleanTrackName(serverTrackId);
+    const explicitLayout = serverLayoutId.trim();
+    const tracks: LocalTrack[] = appState.tracks;
+    const exactTrack = tracks.find(t => t.id.toLowerCase() === cleanTrack.toLowerCase());
+    if (exactTrack) return { trackId: exactTrack.id, layoutId: explicitLayout };
 
-    // ⭐ On utilise la fonction de nettoyage globale
-    let cleanTrack = cleanTrackName(serverTrackId);
-    let trackId = cleanTrack;
-    let layoutId = '';
-    
-    // Séparation track / layout (ex: ks_nordschleife-touristenfahrten)
-    const dashIdx = cleanTrack.indexOf('-');
-    if (dashIdx > 0) {
-      trackId = cleanTrack.substring(0, dashIdx);
-      layoutId = cleanTrack.substring(dashIdx + 1);
+    const matchingTrack = tracks
+      .filter(t => cleanTrack.toLowerCase().startsWith(`${t.id.toLowerCase()}-`))
+      .sort((a, b) => b.id.length - a.id.length)[0];
+    if (matchingTrack) {
+      return {
+        trackId: matchingTrack.id,
+        layoutId: explicitLayout || cleanTrack.substring(matchingTrack.id.length + 1)
+      };
     }
 
-    const localTrack = appState.tracks.find(t => t.id.toLowerCase() === trackId.toLowerCase());
+    if (explicitLayout) return { trackId: cleanTrack, layoutId: explicitLayout };
+
+    const dashIdx = cleanTrack.indexOf('-');
+    if (dashIdx > 0) {
+      return {
+        trackId: cleanTrack.substring(0, dashIdx),
+        layoutId: cleanTrack.substring(dashIdx + 1)
+      };
+    }
+    return { trackId: cleanTrack, layoutId: '' };
+  }
+
+  // Les layouts peuvent être référencés avec ou sans le préfixe "layout_".
+  function hasTrackLayout(track: LocalTrack, layoutId: string) {
+    const searchLayout = layoutId.toLowerCase().replace(/^layout_/, '');
+    return track.layouts.some(layout => {
+      const id = layout.id.toLowerCase();
+      return id === layoutId.toLowerCase() || id === `layout_${searchLayout}` || id === searchLayout;
+    });
+  }
+
+  function getTrackDisplay(serverTrackId: string, serverLayoutId = '') {
+    if (!serverTrackId) return { name: $t('common.unknown'), exists: false };
+
+    const cleanTrack = cleanTrackName(serverTrackId);
+    const { trackId, layoutId } = getTrackAndLayout(serverTrackId, serverLayoutId);
+
+    const tracks: LocalTrack[] = appState.tracks;
+    const localTrack = tracks.find(t => t.id.toLowerCase() === trackId.toLowerCase());
     
-    // Si le circuit n'existe pas
     if (!localTrack) {
       return { name: cleanTrack, exists: false };
     }
 
-    // Si le circuit existe mais pas le layout spécifique
     if (layoutId && localTrack.layouts && localTrack.layouts.length > 0) {
-      // On normalise la recherche (minuscules, on enlève les "layout_" éventuels)
-      const searchLayout = layoutId.toLowerCase().replace('layout_', '');
-      const hasLayout = localTrack.layouts.some((l: any) => 
-        l.id.toLowerCase() === layoutId.toLowerCase() || 
-        l.id.toLowerCase() === `layout_${searchLayout}` ||
-        l.id.toLowerCase() === searchLayout
-      );
-      if (!hasLayout) return { name: cleanTrack, exists: false };
+      if (!hasTrackLayout(localTrack, layoutId)) return { name: cleanTrack, exists: false };
     }
 
-    // Tout est bon, on renvoie le vrai nom du circuit
     return { name: localTrack.name, exists: true };
   }
 
-  // ⭐ Analyse des voitures (croisement avec le local)
   function getCarsDisplay(serverCars: string[]) {
     if (!serverCars || !Array.isArray(serverCars) || serverCars.length === 0) {
-      return { allExist: true, missingCount: 0, total: 0 }; // On considère OK si pas de liste
+      return { allExist: true, missingCount: 0, total: 0 };
     }
     
     let missing = 0;
@@ -210,12 +216,10 @@
     return $t('countries.' + code.toLowerCase(), { default: code.toUpperCase() });
   }
 
-    // ⭐ On utilise la fonction globale de assets.js
   function getFlagImage(countryCode: string) {
     return getFlagUrl(countryCode);
   }
 
-  // ⭐ Ajouter un serveur récent aux serveurs enregistrés
   function addRecentToSaved(srv: any) {
     const exists = appState.customServers.some((s: any) => s.ip === srv.ip && s.port === srv.port);
     if (exists) {
@@ -232,7 +236,6 @@
     saveServerState();
   }
 
-  // ⭐ Modifier un serveur enregistré
   function openEditModal(srv: any) {
     editingServer = srv;
     editName = srv.name;
@@ -255,7 +258,7 @@
     editingServer = null;
   }
 
-  // Parser BBCode (version avancée reprise de QACRL)
+  // Convertit les balises BBCode prises en charge en HTML pour la description du serveur.
   function bbcodeToHtml(input: string) {
     if (!input || typeof input !== 'string') return '';
 
@@ -264,7 +267,7 @@
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
 
-    // Code et citation
+    // Code et citations
     s = s.replace(/\[code\]([\s\S]*?)\[\/code\]/gi, '<pre class="bb-code">$1</pre>');
     s = s.replace(/\[quote\]([\s\S]*?)\[\/quote\]/gi, '<blockquote class="bb-quote">$1</blockquote>');
 
@@ -289,7 +292,7 @@
       return `<a class="bb-link" href="${cleanUrl}" target="_blank">${cleanUrl}</a>`;
     });
 
-    // Couleurs, tailles, alignement
+    // Couleurs, tailles et alignement
     s = s.replace(/\[color=([^\]]+)\]([\s\S]*?)\[\/color\]/gi, (m, color, text) => `<span style="color:${color}">${text}</span>`);
     s = s.replace(/\[size=(\d+)\]([\s\S]*?)\[\/size\]/gi, (m, size, text) => {
       const n = Math.max(8, Math.min(48, parseInt(size, 10) || 14));
@@ -299,41 +302,35 @@
     s = s.replace(/\[left\]([\s\S]*?)\[\/left\]/gi, '<div style="text-align:left">$1</div>');
     s = s.replace(/\[right\]([\s\S]*?)\[\/right\]/gi, '<div style="text-align:right">$1</div>');
 
-    // Style de texte
+    // Mise en forme du texte
     s = s.replace(/\[b\]([\s\S]*?)\[\/b\]/gi, '<strong>$1</strong>');
     s = s.replace(/\[i\]([\s\S]*?)\[\/i\]/gi, '<em>$1</em>');
     s = s.replace(/\[u\]([\s\S]*?)\[\/u\]/gi, '<u>$1</u>');
     s = s.replace(/\[s\]([\s\S]*?)\[\/s\]/gi, '<s>$1</s>');
 
-    // Nettoyage des balises orphelines
     s = s.replace(/\[(size|color|url|img|b|i|u|s|center|left|right|quote|code)=?[^\]]*\]/gi, '');
     s = s.replace(/\[\/(size|color|url|img|b|i|u|s|center|left|right|quote|code)\]/gi, '');
 
-    // Sauts de ligne
     s = s.replace(/\r\n/g, '\n').replace(/\n/g, '<br>');
 
     return s;
   }
 
-  // ⭐ Détecte si le texte est déjà du HTML (pour le Welcome Message de CM)
+  // Les descriptions peuvent être du HTML ou du BBCode.
   function formatServerDescription(text: string | null | undefined) {
     if (!text) return '';
     try {
       let formatted = text;
 
-      // Si c'est du HTML pur, on remplace les variables CM si elles sont présentes
       if (/<[a-z][\s\S]*>/i.test(formatted)) {
-        // Remplacement des variables CM courantes
         if (serverDetails) {
           formatted = formatted.replace(/\{\{\s*\.ServerName\s*\}\}/gi, serverDetails.name || '');
           formatted = formatted.replace(/\{\{\s*\.TrackName\s*\}\}/gi, serverDetails.track || '');
-          // Ajout d'une cible _blank pour les liens
           formatted = formatted.replace(/<a\s+(?!.*?target=)/gi, '<a target="_blank" ');
         }
         return formatted;
       }
       
-      // Sinon, on applique le parser BBCode classique
       return bbcodeToHtml(formatted);
     } catch (e) {
       console.error("Erreur parsing description:", e);
@@ -341,13 +338,12 @@
     }
   }
 
-  // Parseur de lien (acstuff, acmanager, IP:PORT)
+  // Accepte les liens avec paramètres et le format IP:PORT.
   function parseServerLink(raw: string) {
     let s = raw.trim().replace(/^["'<>\s]+|["'<>\s]+$/g, '');
     let ip = '', httpPort = 0, password = '';
     
     const ipMatch = s.match(/[?&]ip=([^&\s]+)/i);
-    // ⭐ On enlève le ^ (caret) et les espaces qui pourraient traîner à cause de CMD
     if (ipMatch) ip = decodeURIComponent(ipMatch[1]).replace(/\^/g, '').trim();
     
     const httpMatch = s.match(/[?&]httpPort=([^&\s]+)/i);
@@ -404,10 +400,8 @@
   }
 
   async function pingAllServers() {
-    // ⭐ On filtre pour ne garder que les serveurs qui n'ont pas encore été analysés
     const serversToPing = servers.filter(server => !serverInfos[server.ip + ':' + server.port]);
 
-    // ⭐ On lance TOUTES les requêtes en même temps au lieu de les faire une par une
     await Promise.all(serversToPing.map(async (server) => {
       const key = server.ip + ':' + server.port;
       try {
@@ -448,7 +442,6 @@
     }
     const port = parseInt(m[2], 10);
     
-    // ⭐ Enregistrement dans la liste
     const newServer = {
       id: 'srv_' + Date.now(),
       ip: m[1],
@@ -478,7 +471,6 @@
     selectedSkin = null;
     loadingDetails = true;
 
-    // ⭐ Pré-remplir le mot de passe sauvegardé
     const pwdKey = `${server.ip}:${server.port}`;
     serverPassword = (appState.serverPasswords || {})[pwdKey] || '';
 
@@ -486,44 +478,25 @@
       const info = await invoke<any>('get_server_details', { ip: server.ip, httpPort: server.port });
       serverDetails = info;
 
-      // ⭐ On récupère la description
       serverDescription = info.description || info.desc || '';
 
-      // 1. Détection circuit (en séparant le circuit et le layout)
+      // Vérifie la présence du circuit et de son layout.
       const rawTrack = info.track || '';
       
-      // ⭐ NETTOYAGE ROBUSTE : On isole le nom du dossier final (ex: "D:/../ks_nordschleife" -> "ks_nordschleife")
-      let cleanTrack = rawTrack.replace(/^csp\/[^/]*\/\.\.\//i, '').replace(/^csp\//i, '');
-      
-      // On prend le dernier élément du chemin après un slash (si c'est un chemin Windows)
-      const pathParts = cleanTrack.split('/');
-      cleanTrack = pathParts[pathParts.length - 1];
-      
-      // Si le chemin contenait le layout (ex: ks_nordschleife-touristenfahrten)
-      let trackId = cleanTrack;
-      let layoutId = '';
-
-      // On sépare sur le premier tiret (ex: "ks_nordschleife-touristenfahrten")
-      const dashIdx = cleanTrack.indexOf('-');
-      if (dashIdx > 0) {
-        trackId = cleanTrack.substring(0, dashIdx);
-        layoutId = cleanTrack.substring(dashIdx + 1);
-      }
+      const { trackId, layoutId } = getTrackAndLayout(rawTrack, info.track_config || '');
 
       if (trackId) {
-        const localTrack = appState.tracks.find(t => t.id.toLowerCase() === trackId.toLowerCase());
+        const tracks: LocalTrack[] = appState.tracks;
+        const localTrack = tracks.find(t => t.id.toLowerCase() === trackId.toLowerCase());
         if (!localTrack) {
           missingTracks.push(trackId);
         } else if (layoutId && localTrack.layouts && localTrack.layouts.length > 0) {
-          // Si on a un layout, on vérifie qu'il existe dans ce circuit
-          const hasLayout = localTrack.layouts.some((l: any) => l.id.toLowerCase() === layoutId.toLowerCase());
-          if (!hasLayout) {
+          if (!hasTrackLayout(localTrack, layoutId)) {
             missingTracks.push(`${trackId}-${layoutId}`);
           }
         }
       }
 
-      // 2. Croisement voitures
       if (info.cars && Array.isArray(info.cars)) {
         info.cars.forEach((carId: string) => {
           const localCar = appState.cars.find(c => c.id.toLowerCase() === carId.toLowerCase());
@@ -533,8 +506,6 @@
         commonCars.sort((a, b) => a.name.localeCompare(b.name));
       }
 
-      // 3. Description & features (AssettoServer ou Kunos)
-      serverDescription = info.description || info.desc || '';
       passwordRequired = !!(info.pass || info.passwordRequired);
       if (Array.isArray(info.features)) serverFeatures = info.features;
 
@@ -551,7 +522,6 @@
     selectedSkin = availableSkins.length > 0 ? availableSkins[0] : null;
   }
 
-  // ⭐ Helpers pour les serveurs récents / favoris
   function formatTimeAgo(timestamp: number) {
     if (!timestamp) return '—';
     const diff = Date.now() - timestamp;
@@ -582,7 +552,7 @@
   function pushRecentServer(server: any, info: any) {
     if (!server || !server.ip || !server.port) return;
     const key = `${server.ip}:${server.port}`;
-    // On retire l'ancienne entrée si elle existe
+    // Remplace une éventuelle entrée précédente pour ce serveur.
     appState.recentServers = appState.recentServers.filter((s: any) => `${s.ip}:${s.port}` !== key);
     
     appState.recentServers.unshift({
@@ -608,57 +578,41 @@
     isJoining = true;
 
     try {
-      // ⭐ On extrait les features du serveur (si l'API /api/details les a fournies)
       let features: string[] = [];
       if (serverDetails?.features && Array.isArray(serverDetails.features)) {
         features = serverDetails.features;
       }
 
-            // ⭐ Sécurité : si le SteamID est vide, on bloque pour éviter le Handshake Failed
+      // Le SteamID est requis pour établir la connexion au serveur.
       if (!appState.steamId) {
         alert($t('online_servers.error_steamid'));
         isJoining = false;
         return;
       }
 
-            // ⭐ On extrait l'ID du circuit et du layout pour le race.ini
       const rawTrack = serverDetails?.track || selectedServer.track || '';
-      let cleanTrack = rawTrack.replace(/^csp\/[^/]*\/\.\.\//i, '').replace(/^csp\//i, '');
-      
-      const pathParts = cleanTrack.split('/');
-      cleanTrack = pathParts[pathParts.length - 1];
-      
-      let trackId = cleanTrack;
-      let layoutId = '';
-      const dashIdx = cleanTrack.indexOf('-');
-      if (dashIdx > 0) {
-        trackId = cleanTrack.substring(0, dashIdx);
-        layoutId = cleanTrack.substring(dashIdx + 1);
-      }
+      const { trackId, layoutId } = getTrackAndLayout(rawTrack, serverDetails?.track_config || '');
 
       await invoke('join_server', {
         acPath: appState.acPath,
         documentsPath: appState.documentsPath,
         ip: selectedServer.ip,
-        // ⭐ On prend le port de jeu (UDP) qui est 'port' dans /INFO ou 'gamePort' dans /api/details
+        // Le port de jeu peut être fourni sous différents noms selon le serveur.
         port: serverDetails?.gamePort || serverDetails?.port || selectedServer.port,
-        // ⭐ Le port HTTP pour le launcher
         httpPort: serverDetails?.httpPort || serverDetails?.cport || selectedServer.port,
         carId: selectedCar.id,
         skinId: selectedSkin ? selectedSkin.name : "",
         onlineName: appState.onlineName || appState.driverName || "Player",
         steamId: appState.steamId || "", 
         serverName: selectedServer.name,
-        track: trackId,        // ⭐ Ex: "ks_nordschleife"
-        trackConfig: layoutId, // ⭐ Ex: "touristenfahrten"
+        track: trackId,
+        trackConfig: layoutId,
         password: serverPassword, 
         features: features,       
       });
       
-      // ⭐ Ajouter aux serveurs récents
       pushRecentServer(selectedServer, serverDetails);
 
-      // ⭐ Mémoriser le mot de passe pour la prochaine fois
       const pwdKey = `${selectedServer.ip}:${selectedServer.port}`;
       if (serverPassword) appState.serverPasswords[pwdKey] = serverPassword;
       else delete appState.serverPasswords[pwdKey];
@@ -676,18 +630,13 @@
     chargerServeurs(false);
   });
 
-  // ⭐ Écoute du Deep Link pour ouvrir automatiquement la modale
   $effect(() => {
     const handleDeepLink = (e: any) => {
       const url = e.detail?.url;
       if (!url) return;
 
-      console.log('🔗 OnlineTab traite le lien:', url);
-
-      // On utilise la fonction parseServerLink existante
       const parsed = parseServerLink(url);
       if (parsed) {
-        // On ouvre la modale de connexion avec les infos extraites
         openJoinModal({ 
           id: 'deeplink_' + Date.now(), 
           ip: parsed.ip, 
@@ -705,7 +654,7 @@
   });
 </script>
 
-<!-- PARTIE HAUTE : Coller un lien & Ajouter manuellement -->
+<!-- Liens de connexion et ajout manuel -->
 <div class="group">
   <div class="group-title" style="display: flex; justify-content: space-between; align-items: center;">
     <span>{$t('online.paste_title')}</span>
@@ -738,7 +687,7 @@
   </div>
 </div>
 
-<!-- ⭐ SERVEURS RÉCENTS -->
+<!-- Serveurs récents -->
 <div class="group" style="margin-top: 20px;">
   <div class="group-title" style="display: flex; justify-content: space-between; align-items: center;">
     <span>{$t('online.recent_title')}</span>
@@ -781,7 +730,7 @@
   </div>
 </div>
 
-<!-- ⭐ MES SERVEURS ENREGISTRÉS -->
+<!-- Serveurs enregistrés -->
 <div class="group">
   <div class="group-title" style="display: flex; justify-content: space-between; align-items: center;">
     <span>{$t('online.saved_title')}</span>
@@ -820,8 +769,7 @@
   </div>
 </div>
 
-<!-- LISTE DES SERVEURS PUBLICS -->
-<!-- ⭐ Conteneur Sticky pour le titre, les boutons et les filtres -->
+<!-- Serveurs publics et filtres -->
 <div style="position: sticky; top: -24px; z-index: 100; background: var(--bg-root); margin: -24px -24px 0 -24px; padding: 24px 24px 15px 24px; border-bottom: 1px solid var(--border-subtle); box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
   
   <div class="section-header" style="margin-bottom: 15px;">
@@ -838,7 +786,6 @@
     </div>
   </div>
 
-  <!-- ⭐ BARRE DE FILTRES -->
   <div class="group" style="padding: 12px; display: flex; flex-direction: row; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 0;">
     <div class="field" style="flex: 2; min-width: 200px;">
       <input type="text" bind:value={searchQuery} placeholder={$t('online_servers.search_placeholder')} />
@@ -870,7 +817,7 @@
     </div>
   </div>
 
-</div> <!-- Fin du conteneur sticky -->
+</div>
 
 {#if errorMsg}
   <div class="group" style="border-color: #a83a3a;"><p style="color: #e57373;">❌ {errorMsg}</p></div>
@@ -898,7 +845,6 @@
           <div class="server-meta">
             <code>{server.ip}:{server.port}</code>
             
-            <!-- ⭐ Affichage intelligent du Circuit et des Voitures -->
             {#if serverInfos[key]}
               {@const trackData = getTrackDisplay(serverInfos[key].track)}
               {@const carsData = getCarsDisplay(serverInfos[key].cars)}
@@ -935,7 +881,7 @@
   </div>
 {/if}
 
-<!-- MODALE DE CONNEXION (Style QACRL) -->
+<!-- Modale de connexion -->
 {#if selectedServer}
   <div class="modal" style="display: flex; z-index: 1000;">
     <div class="modal-content server-join-modal" style="width: 700px; max-width: 95vw; max-height: 90vh; overflow-y: auto;">
@@ -951,9 +897,9 @@
           {$t('online_servers.loading_details')}
         </div>
       {:else if serverDetails}
-        {@const trackInfo = getTrackDisplay(serverDetails.track)}
+        {@const trackInfo = getTrackDisplay(serverDetails.track, serverDetails.track_config || '')}
         
-        <!-- INFOS SERVEUR -->
+        <!-- Informations serveur -->
         <div class="server-join-info">
           <div class="item">
             <span class="label">{$t('online_servers.info_server')}</span>
@@ -977,7 +923,7 @@
           </div>
         </div>
 
-        <!-- CSP FEATURES -->
+        <!-- Fonctionnalités CSP -->
         {#if serverFeatures.length > 0}
           <div style="margin-top: 15px; padding: 10px 14px; background: var(--bg-elevated); border-radius: 6px;">
             <div style="font-size: 0.65rem; font-weight: 800; color: var(--text-tertiary); text-transform: uppercase; margin-bottom: 8px;">{$t('online_servers.features')}</div>
@@ -991,7 +937,7 @@
           </div>
         {/if}
 
-        <!-- DESCRIPTION -->
+        <!-- Description -->
         {#if serverDescription}
           <div class="server-description-wrap" style="margin-top: 15px;">
             <div class="server-description-label">{$t('online_servers.description')}</div>
@@ -1001,7 +947,7 @@
           </div>
         {/if}
 
-        <!-- WARNINGS (Mods manquants) -->
+        <!-- Éléments manquants -->
         <div style="margin-top: 15px;">
           {#if missingTracks.length > 0}
             <div class="server-join-warning error">
@@ -1048,7 +994,7 @@
           {/if}
         </div>
 
-        <!-- CHOIX VOITURE -->
+        <!-- Choix de la voiture -->
         <div class="field" style="margin-top: 15px;">
           <label>{$t('online_servers.choose_car')}</label>
           <div class="car-select-list">
@@ -1069,7 +1015,7 @@
           </div>
         </div>
 
-        <!-- CHOIX SKIN -->
+        <!-- Choix du skin -->
         {#if selectedCar && availableSkins.length > 0}
           <div class="field" style="margin-top: 15px;">
             <label>{$t('online_servers.choose_skin')}</label>
@@ -1088,7 +1034,7 @@
           </div>
         {/if}
 
-        <!-- MOT DE PASSE -->
+        <!-- Mot de passe -->
         {#if passwordRequired}
           <div class="field" style="margin-top: 15px;">
             <label>{$t('online_servers.password_label')}</label>
@@ -1102,7 +1048,7 @@
         </div>
       {/if}
 
-      <!-- BOUTONS -->
+      <!-- Actions -->
       <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; border-top: 1px solid var(--border-subtle); padding-top: 15px;">
         <button class="btn-secondary" onclick={() => selectedServer = null}>{$t('common.cancel')}</button>
         <button 
@@ -1119,7 +1065,7 @@
   </div>
 {/if}
 
-<!-- MODALE D'ÉDITION DE SERVEUR -->
+<!-- Modale d'édition du serveur -->
 {#if editingServer}
   <div class="modal" style="display: flex; z-index: 1000;">
     <div class="modal-content" style="width: 500px;">

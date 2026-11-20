@@ -23,7 +23,6 @@
     }
   }
 
-  // ⭐ LOGIQUE DU GUIDE VISUEL
   let activeModal = $state<number | null>(null);
   let slideIndex = $state(0);
   let isZoomed = $state(false);
@@ -174,6 +173,26 @@
   function prevSlide() {
     if (slideIndex > 0) slideIndex--;
   }
+
+  $effect(() => {
+    if (activeModal === null) return;
+
+    const closeOnBackdrop = (event: MouseEvent) => {
+      if (event.target instanceof Element && event.target.classList.contains('guide-overlay')) {
+        activeModal = null;
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') activeModal = null;
+    };
+
+    window.addEventListener('click', closeOnBackdrop);
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      window.removeEventListener('click', closeOnBackdrop);
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  });
 </script>
 
 <div class="group">
@@ -185,7 +204,6 @@
     {$t('settings.help.intro')}
   </p>
 
-  <!-- 🚀 DÉMARRAGE RAPIDE -->
   <div class="help-section-title">
     <Rocket size={18} /> {$t('settings.help.quick_start.title')}
   </div>
@@ -224,14 +242,24 @@
     </div>
   </div>
 
-  <!-- 🖼️ GUIDE VISUEL -->
   <div class="help-section-title" style="margin-top: 30px;">
     <MonitorPlay size={18} /> {$t('settings.help.guide.title')}
   </div>
   
   <div class="help-grid">
     {#each HELP_DATA as item, index}
-      <div class="help-card" onclick={() => openModal(index)}>
+      <div
+        class="help-card"
+        role="button"
+        tabindex="0"
+        onclick={() => openModal(index)}
+        onkeydown={(event) => {
+          if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) {
+            event.preventDefault();
+            openModal(index);
+          }
+        }}
+      >
         <div class="help-card-icon">{item.icon}</div>
         <div class="help-card-title">{$t(item.titleKey)}</div>
         <div class="help-card-desc">{$t(item.descKey)}</div>
@@ -240,12 +268,10 @@
     {/each}
   </div>
 
-  <!-- ❓ FAQ -->
   <div class="help-section-title" style="margin-top: 30px;">
     <HelpCircle size={18} /> {$t('settings.help.faq.title')}
   </div>
   <div class="faq-list">
-    <!-- FAQ 1 -->
     <div class="faq-item" class:open={openFaq[0]}>
       <button class="faq-question" onclick={() => toggleFaq(0)}>
         {$t('settings.help.faq.q_steering')}
@@ -253,7 +279,6 @@
       </button>
       <div class="faq-answer">{$t('settings.help.faq.a_steering')}</div>
     </div>
-    <!-- FAQ 2 -->
     <div class="faq-item" class:open={openFaq[1]}>
       <button class="faq-question" onclick={() => toggleFaq(1)}>
         {$t('settings.help.faq.q_files')}
@@ -261,7 +286,6 @@
       </button>
       <div class="faq-answer">{$t('settings.help.faq.a_files')}</div>
     </div>
-    <!-- FAQ 3 -->
     <div class="faq-item" class:open={openFaq[2]}>
       <button class="faq-question" onclick={() => toggleFaq(2)}>
         {$t('settings.help.faq.q_pure')}
@@ -269,7 +293,6 @@
       </button>
       <div class="faq-answer">{$t('settings.help.faq.a_pure')}</div>
     </div>
-    <!-- FAQ 4 -->
     <div class="faq-item" class:open={openFaq[3]}>
       <button class="faq-question" onclick={() => toggleFaq(3)}>
         {$t('settings.help.faq.q_steam')}
@@ -277,7 +300,6 @@
       </button>
       <div class="faq-answer">{$t('settings.help.faq.a_steam')}</div>
     </div>
-    <!-- FAQ 5 (CSP) -->
     <div class="faq-item" class:open={openFaq[4]}>
       <button class="faq-question" onclick={() => toggleFaq(4)}>
         {$t('settings.help.faq.q_csp')}
@@ -285,7 +307,6 @@
       </button>
       <div class="faq-answer">{$t('settings.help.faq.a_csp')}</div>
     </div>
-    <!-- FAQ 6 (CSP QARL) -->
     <div class="faq-item" class:open={openFaq[5]}>
       <button class="faq-question" onclick={() => toggleFaq(5)}>
         {$t('settings.help.faq.q_csp_qarl')}
@@ -295,7 +316,6 @@
     </div>
   </div>
 
-  <!-- 🌐 LIENS UTILES -->
   <div class="help-section-title" style="margin-top: 30px;">
     <LinkIcon size={18} /> {$t('settings.help.links.title')}
   </div>
@@ -321,26 +341,43 @@
   </div>
 </div>
 
-<!-- ⭐ MODALE DU GUIDE VISUEL -->
 {#if activeModal !== null}
   {@const item = HELP_DATA[activeModal]}
   {@const slide = item.slides[slideIndex]}
   
-  <div class="guide-overlay" onclick={(e) => { if (e.target === e.currentTarget) activeModal = null; }}>
-    <div class="guide-modal" class:zoomed={isZoomed}>
+  <div class="guide-overlay">
+    <div
+      class="guide-modal"
+      class:zoomed={isZoomed}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="guide-title"
+    >
       
-      <!-- ⭐ Header avec Titre et bouton Fermer -->
       <div class="guide-header">
-        <h3>{$t(item.titleKey)}</h3>
-        <button class="guide-close" onclick={() => activeModal = null}>✕</button>
+        <h3 id="guide-title">{$t(item.titleKey)}</h3>
+        <button class="guide-close" aria-label={$t('common.close')} onclick={() => activeModal = null}>✕</button>
       </div>
       
       <div class="guide-image-wrapper">
-        <div class="guide-image-container" onclick={() => isZoomed = !isZoomed} title={isZoomed ? "Réduire" : "Agrandir"}>
+        <div
+          class="guide-image-container"
+          role="button"
+          tabindex="0"
+          aria-label={isZoomed ? 'Réduire l’image' : 'Agrandir l’image'}
+          aria-pressed={isZoomed}
+          onclick={() => isZoomed = !isZoomed}
+          onkeydown={(event) => {
+            if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) {
+              event.preventDefault();
+              isZoomed = !isZoomed;
+            }
+          }}
+          title={isZoomed ? "Réduire" : "Agrandir"}
+        >
           <img src={slide.img} alt={$t(item.titleKey)} class:zoomed-img={isZoomed} />
         </div>
         
-        <!-- ⭐ Pagination par points -->
         {#if item.slides.length > 1}
           <div class="guide-dots">
             {#each item.slides as _, i}
@@ -368,7 +405,6 @@
 {/if}
 
 <style>
-  /* ⭐ Styles pour la grille et la modale du guide */
   .help-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -396,7 +432,6 @@
   .help-card-desc { font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4; flex-grow: 1; }
   .help-card-badge { font-size: 0.75rem; color: var(--accent); font-weight: 700; }
 
-  /* Modale */
   .guide-overlay {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(4px);
@@ -483,7 +518,6 @@
     max-height: calc(95vh - 160px);
   }
   
-  /* ⭐ Pagination points */
   .guide-dots {
     display: flex;
     justify-content: center;
@@ -522,8 +556,6 @@
     margin: 0;
   }
 
-  /* ... (Le reste de tes styles existants pour FAQ, liens, etc.) ... */
-  /* Titres de section avec effet lumineux */
   .help-section-title {
     display: flex;
     align-items: center;
@@ -547,17 +579,16 @@
     box-shadow: 0 0 8px var(--accent-glow);
     border-radius: 2px;
   }
-  .help-section-title svg {
+  .help-section-title :global(svg) {
     color: var(--accent);
     filter: drop-shadow(0 0 5px var(--accent-muted));
   }
 
-  /* Démarrage rapide - Effet de carte flottante */
   .quick-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 16px;
-    padding-top: 10px; /* Pour laisser de la place au badge numéro */
+    padding-top: 10px; /* Réserve la place au badge numérique. */
   }
   .quick-card {
     background: linear-gradient(145deg, var(--bg-panel), var(--bg-elevated));
@@ -626,7 +657,6 @@
     background: var(--accent-muted);
   }
 
-  /* FAQ - Accordéons lumineux */
   .faq-list {
     display: flex;
     flex-direction: column;
@@ -664,11 +694,11 @@
   .faq-item.open .faq-question {
     color: var(--accent);
   }
-  .faq-chevron {
+  :global(.faq-chevron) {
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     color: var(--text-tertiary);
   }
-  .faq-item.open .faq-chevron {
+  .faq-item.open :global(.faq-chevron) {
     transform: rotate(180deg);
     color: var(--accent);
   }
@@ -688,7 +718,6 @@
     opacity: 1;
   }
 
-  /* Liens utiles - Boutons vivants */
   .links-grid {
     display: flex;
     flex-wrap: wrap;

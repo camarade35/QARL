@@ -5,15 +5,37 @@
   import { t } from 'svelte-i18n';
   import { searchState } from '$lib/stores/searchState.svelte.js';
   import AutosaveBanner from '$lib/components/AutosaveBanner.svelte';
+  import {
+    getCspOptionTranslationKeys,
+    getCspSectionTranslationKey,
+    normalizeCspSearchText
+  } from '$lib/utils/cspTranslations';
 
-  let { show = false, filename = '', title = '', documentsPath = '', acPath = '', onClose = () => {}, onSaved = () => {} } = $props();
+  type Props = {
+    show?: boolean;
+    filename?: string;
+    title?: string;
+    documentsPath?: string;
+    acPath?: string;
+    onClose?: () => void;
+    onSaved?: () => void;
+  };
+
+  let {
+    show = false,
+    filename = '',
+    title = '',
+    documentsPath = '',
+    acPath = '',
+    onClose = () => {},
+    onSaved = () => {}
+  }: Props = $props();
 
   let loading = $state(true);
   let saving = $state(false);
   let errorMsg = $state('');
   let searchQuery = $state('');
   
-  // ⭐ Types correspondant à la structure Rust
   type Choice = { kind: 'separator' } | { kind: 'value', value: string, label: string };
   
   type ConditionExpr = 
@@ -35,7 +57,7 @@
     condition?: ConditionExpr;
     is_hidden: boolean;
     is_percentage: boolean;
-    file_filter?: string; // ⭐ NOUVEAU
+    file_filter?: string;
   };
 
   type CspSection = {
@@ -54,7 +76,6 @@
 
   let moduleData = $state<CspModuleData | null>(null);
 
-  // ⭐ Auto-save
   let hasChanges = $state(false);
   let lastSavedHash = $state('');
   let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -70,12 +91,11 @@
     return h;
   }
 
-  // ⭐ Évaluation récursive de l'AST de condition
   function evaluateCondition(expr: ConditionExpr | undefined, allSections: CspSection[], currentSectionName?: string): boolean {
     if (!expr) return true;
 
     const findValue = (key: string) => {
-      let targetSection = null;
+      let targetSection: string | null = null;
       let targetKey = key;
       
       if (key.includes('/')) {
@@ -87,7 +107,7 @@
       for (const sec of allSections) {
         if (targetSection && sec.name !== targetSection) continue;
         
-        // ⭐ CORRECTION : Si on cherche "ENABLED", on regarde l'état de la section
+        // L'état ENABLED est stocké sur la section, pas parmi ses options.
         if (targetKey === 'ENABLED') {
           if (targetSection && sec.name === targetSection) return sec.is_enabled ? '1' : '0';
           if (!targetSection) return sec.is_enabled ? '1' : '0';
@@ -104,7 +124,7 @@
     }
 
     if (expr.type === 'truthy') {
-      // ⭐ CORRECTION : Gestion spéciale pour ENABLED
+      // Sans section précisée, ENABLED désigne la section courante.
       if (expr.key === 'ENABLED' && currentSectionName) {
         const sec = allSections.find(s => s.name === currentSectionName);
         return sec?.is_enabled ?? false;
@@ -125,14 +145,13 @@
     return evaluateCondition(opt.condition, allSections, currentSectionName);
   }
 
-  // ⭐ NOUVEAU : Vérifie si la valeur est hors limites
   function isOutOfBounds(entry: CspOption): boolean {
     if (entry.option_type !== 'number') return false;
-    // ⭐ FIX : Utiliser != null pour gérer les null envoyés par Rust
+    // Rust renvoie null lorsqu'aucune borne numérique n'est définie.
     if (entry.min == null || entry.max == null) return false;
 
     const val = parseFloat(entry.value);
-    if (isNaN(val)) return true; // Si ce n'est pas un nombre valide
+    if (isNaN(val)) return true;
 
     return val < entry.min || val > entry.max;
   }
@@ -144,9 +163,9 @@
     
     try {
       const data = await invoke<CspModuleData>('read_csp_module_data', {
-        documentsPath: documentsPath,
+        documentsPath,
         acPath: acPath || '',
-        filename: filename
+        filename
       });
       moduleData = data;
       lastSavedHash = hashModuleData();
@@ -158,15 +177,15 @@
     }
   }
 
-  // ⭐ Auto-save : détecte les changements
   $effect(() => {
     if (!moduleData || !lastSavedHash) return;
     const current = hashModuleData();
     if (current === lastSavedHash) return;
     hasChanges = true;
     if (searchState.autosaveDelay > 0) {
-      if (autosaveTimer) clearTimeout(autosaveTimer);
+      if (autosaveTimer !== null) clearTimeout(autosaveTimer);
       autosaveTimer = setTimeout(() => {
+        autosaveTimer = null;
         if (hasChanges) saveModule(true);
       }, searchState.autosaveDelay * 1000);
     }
@@ -176,7 +195,6 @@
     if (!moduleData) return;
     
     try {
-      // On garde la logique de QARL (elle est robuste)
       const section = moduleData.sections.find(s => s.name === sectionName);
       const defaultEnabled = section?.is_enabled ?? true; 
 
@@ -203,11 +221,9 @@
     try {
       const updates: Array<{ section: string; key: string; value: string }> = [];
       
-      // On parcourt toutes les sections et options pour sauvegarder
       for (const sec of moduleData.sections) {
         for (const entry of sec.options) {
           // On sauvegarde même les options cachées pour ne pas perdre leur état
-          // ⭐ On force la conversion en String pour Rust
           updates.push({ section: sec.name, key: entry.key, value: String(entry.value) });
         }
       }
@@ -221,13 +237,16 @@
       
       lastSavedHash = hashModuleData();
       hasChanges = false;
-      if (autosaveTimer) { clearTimeout(autosaveTimer); autosaveTimer = null; }
+      if (autosaveTimer !== null) {
+        clearTimeout(autosaveTimer);
+        autosaveTimer = null;
+      }
 
       if (!silent) {
         onSaved();
         onClose();
       } else {
-        // Auto-save silencieux : on rafraîchit quand même le parent mais on garde la modale ouverte
+        // L'autosave rafraîchit le parent sans fermer la modale.
         onSaved();
       }
     } catch (e) {
@@ -248,43 +267,40 @@
     if (!moduleData) return [];
     if (!searchQuery.trim()) return moduleData.sections;
     
-    const q = searchQuery.toLowerCase();
-    return moduleData.sections.map(sec => ({
-      ...sec,
-      options: sec.options.filter(e => e.label.toLowerCase().includes(q) || e.key.toLowerCase().includes(q))
-    })).filter(sec => sec.options.length > 0 || sec.name.toLowerCase().includes(q));
+    const q = normalizeCspSearchText(searchQuery.trim());
+    return moduleData.sections.map(section => {
+      const sectionMatches = [section.name, trSectionName(section.name)]
+        .some(value => normalizeCspSearchText(value).includes(q));
+      const options = sectionMatches ? section.options : section.options.filter(entry => {
+        const label = trOptionLabel(entry.key, entry.label);
+        return [label, entry.label, entry.key].some(value => normalizeCspSearchText(value).includes(q));
+      });
+      return { ...section, options };
+    }).filter(section => section.options.length > 0);
   });
 
-  // ⭐ Transforme un label brut en clé i18n valide (minuscules, sans accents, sans points)
-  function labelToKey(label: string): string {
-    return label
-      .toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_+|_+$/g, '');
-  }
-
-  // ⭐ Résolution d'un label d'option : 4 niveaux (key → label brut → label sanitisé → fallback)
   function trOptionLabel(key: string, label: string): string {
-    const byKey = $t(`csp.option_labels.${key}`, { default: '' });
-    if (byKey) return byKey;
-    const byLabel = $t(`csp.option_labels.${label}`, { default: '' });
-    if (byLabel) return byLabel;
-    const bySanitized = $t(`csp.option_labels.${labelToKey(label)}`, { default: '' });
-    if (bySanitized) return bySanitized;
+    for (const translationKey of getCspOptionTranslationKeys(key, label)) {
+      const translated = $t(translationKey, { default: '' });
+      if (translated) return translated;
+    }
     return label || key;
   }
 
-  // ⭐ Résolution de la description du module via le filename (stable) au lieu du texte brut
+  function trSectionName(name: string): string {
+    return String($t(getCspSectionTranslationKey(name), { default: name }));
+  }
+
+  // Le nom de fichier reste stable d'une langue à l'autre.
   function trModuleDescription(data: CspModuleData | null): string {
     if (!data) return '';
     const fileKey = data.filename.replace(/\.ini$/i, '');
     
-    // ⭐ Priorité 1 : On utilise la description courte (qui est déjà traduite dans csp.modules)
+    // Priorité à la description courte déjà traduite.
     const byModule = $t(`csp.modules.${fileKey}.desc`, { default: '' });
     if (byModule) return byModule;
 
-    // Priorité 2 : On cherche une éventuelle description longue spécifique (ex: extra_fx)
+    // Sinon, utilise une description longue spécifique au module.
     const byFile = $t(`csp.module_descriptions.${fileKey}`, { default: '' });
     return byFile || data.description;
   }
@@ -303,7 +319,7 @@
             </p>
           {/if}
         </div>
-        <button class="modal-close" onclick={onClose}>&times;</button>
+        <button class="modal-close" onclick={() => onClose()}>&times;</button>
       </div>
 
       <div class="csp-module-modal-search">
@@ -330,7 +346,7 @@
                     style="transform: scale(1.2); cursor: pointer;"
                   />
                 {/if}
-                <span style="font-size: 1.1em; font-weight: bold;">{section.name}</span>
+                <span style="font-size: 1.1em; font-weight: bold;">{trSectionName(section.name)}</span>
               </div>
               
               {#each section.options as entry}
@@ -355,14 +371,14 @@
                         />
                       {:else if entry.option_type === 'number'}
                         <!-- Si pas de range défini, on affiche juste un champ texte pour éviter les bugs -->
-                                                {#if entry.min != null && entry.max != null}
+                        {#if entry.min != null && entry.max != null}
                           {@const pct = entry.is_percentage ? 100 : 1}
                           {@const displayMin = entry.min * pct}
                           {@const displayMax = entry.max * pct}
                           <!-- On limite à 3 décimales pour éviter les bugs d'affichage flottant -->
                           {@const displayVal = Number((parseFloat(entry.value) * pct).toFixed(3))}
                           
-                          <!-- ⭐ Si c'est un pourcentage, on IGNORE le step du Rust et on applique la règle visuelle -->
+                          <!-- Les pourcentages utilisent un pas d'affichage plus fin que leur valeur stockée. -->
                           {@const baseStep = (
                             entry.is_percentage 
                               ? (entry.max <= 1.0 ? 0.001 : (entry.max <= 10 ? 0.01 : 1.0))
@@ -400,7 +416,7 @@
                             </div>
                           </div>
                         {:else if entry.option_type === 'number'}
-                          <!-- ⭐ Saisie libre pour les nombres sans limites -->
+                          <!-- Sans bornes, le nombre est saisi librement. -->
                           <input type="number" class="ini-text" step="any" bind:value={entry.value} />
                         {:else}
                           <input type="text" class="ini-text" bind:value={entry.value} />
@@ -492,8 +508,8 @@
           >
             {$t('csp.btn_reset')}
           </button>
-          <button class="filter-btn" onclick={loadModule} disabled={saving}>{$t('csp.refresh')}</button>
-          <button class="filter-btn ini-btn-save" onclick={saveModule} disabled={saving || loading}>
+          <button class="filter-btn" onclick={() => loadModule()} disabled={saving}>{$t('csp.refresh')}</button>
+          <button class="filter-btn ini-btn-save" onclick={() => saveModule()} disabled={saving || loading}>
             {saving ? $t('csp.saving') : $t('common.save')}
           </button>
         </div>
@@ -503,7 +519,6 @@
 {/if}
 
 <style>
-  /* ⭐ NOUVEAU : Style d'alerte pour les valeurs hors limites */
   .csp-opt-row.has-error {
     background-color: rgba(255, 76, 76, 0.08) !important;
     border-left: 3px solid var(--danger, #ff4c4c) !important;

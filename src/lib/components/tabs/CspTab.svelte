@@ -8,7 +8,11 @@
   import { open } from '@tauri-apps/plugin-dialog';
   import * as dialog from '$lib/stores/dialog.svelte.js';
 
-  // ⭐ État pour l'import CM
+  type ModuleState = { exists: boolean; enabled: boolean };
+  type CspModuleStatus = { sections: { name: string; is_enabled: boolean }[] };
+  type ConfigDownloadEvent = { type: 'info' | 'progress'; msg: string };
+  type OpenSectionDetail = { tab: string; cspFile?: string | null };
+
   let showCmModal = $state(false);
   let cmPresets = $state<Array<{name: string, path: string}>>([]);
   let loadingCm = $state(false);
@@ -16,54 +20,58 @@
   let showModal = $state(false);
   let modalFilename = $state('');
   let modalTitle = $state('');
+  let sectionOpenTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // ⭐ Écouteur pour la recherche globale
   $effect(() => {
-    const handler = (e: CustomEvent) => {
-      if (e.detail.tab !== 'subtab-csp') return;
-      const cspFile = e.detail.cspFile;
+    const handler = (event: Event) => {
+      const { tab, cspFile } = (event as CustomEvent<OpenSectionDetail>).detail;
+      if (tab !== 'subtab-csp') return;
       if (cspFile) {
-        const mod = MODULES.find((m: any) => `${m.id}.ini` === cspFile);
+        const mod = MODULES.find(m => `${m.id}.ini` === cspFile);
         if (mod) {
           if (mod.category) openCategories[mod.category] = true;
-          setTimeout(() => {
+          if (sectionOpenTimer !== null) clearTimeout(sectionOpenTimer);
+          sectionOpenTimer = setTimeout(() => {
             modalFilename = `${mod.id}.ini`;
             modalTitle = mod.label;
             showModal = true;
+            sectionOpenTimer = null;
           }, 120);
         }
       }
     };
-    window.addEventListener('qarl-open-section', handler as EventListener);
-    return () => window.removeEventListener('qarl-open-section', handler as EventListener);
+    window.addEventListener('qarl-open-section', handler);
+    return () => {
+      window.removeEventListener('qarl-open-section', handler);
+      if (sectionOpenTimer !== null) {
+        clearTimeout(sectionOpenTimer);
+        sectionOpenTimer = null;
+      }
+    };
   });
 
   let loading = $state(true);
   let isDownloadingConfigs = $state(false);
-  let downloadStatus = $state(''); // ⭐ Pour afficher le message en cours
+  let downloadStatus = $state('');
   let errorMsg = $state('');
-  let moduleInfos = $state<Record<string, boolean>>({}); // ⭐ Déplacé ici
+  let moduleInfos = $state<Record<string, boolean>>({});
   
-  // État des fichiers sur le disque { filename: { exists, enabled, size } }
-  let modulesState = $state<Record<string, { exists: boolean; enabled: boolean; size: number }>>({});
+  let modulesState = $state<Record<string, ModuleState>>({});
   
-  // État des accordéons (repliés par défaut, mémorisés)
   let openCategories = $state<Record<string, boolean>>({});
 
-  // ⭐ État des presets
   let presets = $state<string[]>([]);
   let selectedPreset = $state('');
-  let isPresetMenuOpen = $state(false);
 
-  // ⭐ Système de notification (Toast)
   let toastMessage = $state('');
-  let toastTimeout: ReturnType<typeof setTimeout>;
+  let toastTimeout: ReturnType<typeof setTimeout> | null = null;
 
   function showToast(msg: string) {
     toastMessage = msg;
-    clearTimeout(toastTimeout);
+    if (toastTimeout !== null) clearTimeout(toastTimeout);
     toastTimeout = setTimeout(() => {
       toastMessage = '';
+      toastTimeout = null;
     }, 3000); // Disparaît après 3 secondes
   }
 
@@ -76,7 +84,6 @@
     }
   }
 
-  // ⭐ NOUVEAU : Écraser le preset sélectionné sans demander de nom
   async function handleOverwritePreset() {
     if (!selectedPreset) return;
     const ok = await dialog.confirm(
@@ -98,7 +105,6 @@
     }
   }
 
-  // ⭐ Enregistrer sous un nouveau nom
   async function handleSaveAsPreset() {
     const name = await dialog.prompt($t('csp.prompt_save_as'), '', $t('csp.dialog_title_save_as'));
     if (!name || !name.trim()) return;
@@ -132,11 +138,9 @@
         presetName: selectedPreset 
       });
       
-      // ⭐ On force le rafraîchissement
       modulesState = {}; 
       await loadModules(); 
       
-      // ⭐ On prévient l'onglet Vidéo de se mettre à jour
       window.dispatchEvent(new CustomEvent('qarl-csp-preset-loaded'));
       
       showToast($t('csp.toast_loaded'));
@@ -165,7 +169,6 @@
     }
   }
 
-  // ⭐ Importation depuis un fichier local
   async function handleImportFile() {
     try {
       const selected = await open({
@@ -175,23 +178,21 @@
         title: $t('csp.btn_import_file_title')
       });
       
-      if (!selected) return;
+      if (typeof selected !== 'string') return;
       
       await invoke('import_csp_preset_from_path', {
         documentsPath: appState.documentsPath,
         acPath: appState.acPath || '',
-        sourcePath: selected as string, // ⭐ CORRECTION ICI
+        sourcePath: selected,
         saveToQarl: true
       });
       
       showCmModal = false;
       await loadPresets();
       
-      // ⭐ On force un rechargement complet pour mettre à jour les cases à cocher
       modulesState = {}; 
       await loadModules();
       
-      // ⭐ On prévient l'onglet Vidéo de se mettre à jour
       window.dispatchEvent(new CustomEvent('qarl-csp-preset-loaded'));
       
       showToast($t('csp.toast_imported'));
@@ -200,7 +201,6 @@
     }
   }
 
-  // ⭐ Importation depuis Content Manager
   async function handleOpenCmImport() {
     loadingCm = true;
     try {
@@ -226,10 +226,8 @@
       showCmModal = false;
       await loadPresets();
       
-      // ⭐ On force un rechargement complet de la liste des modules
       await loadModules(); 
       
-      // ⭐ On prévient l'onglet Vidéo de se mettre à jour
       window.dispatchEvent(new CustomEvent('qarl-csp-preset-loaded'));
       
       showToast($t('csp.toast_cm_imported'));
@@ -246,25 +244,22 @@
   }
 
   async function loadModules() {
-    if (!appState.documentsPath || !appState.acPath) return; // ⭐ On vérifie aussi acPath
+    if (!appState.documentsPath || !appState.acPath) return;
     loading = true;
     errorMsg = '';
     
     try {
-      // 1. On demande à Rust quels templates existent et leur état par défaut
       const existing = await invoke<Array<{ filename: string; default_enabled: boolean }>>('list_csp_templates', {
         acPath: appState.acPath || ''
       });
 
-      // ⭐ On stocke les infos pour les utiliser plus tard
       const newInfos: Record<string, boolean> = {};
       for (const info of existing) {
         newInfos[info.filename] = info.default_enabled;
       }
       moduleInfos = newInfos;
 
-      // 2. Pour chaque fichier existant, on lit son état (ENABLED ou non)
-      const newState: Record<string, any> = {};
+      const newState: Record<string, ModuleState> = {};
       
       for (const mod of MODULES) {
         const filename = `${mod.id}.ini`;
@@ -272,23 +267,22 @@
         
         if (templateExists) {
           try {
-            const data = await invoke<any>('read_csp_module_data', {
+            const data = await invoke<CspModuleStatus>('read_csp_module_data', {
               documentsPath: appState.documentsPath,
               acPath: appState.acPath || '',
               filename: filename
             });
             
-            // On regarde si la section BASIC est activée
-            const basicSection = data.sections.find((s: any) => s.name === 'BASIC');
+            const basicSection = data.sections.find(section => section.name === 'BASIC');
             const isEnabled = basicSection ? basicSection.is_enabled : true;
 
-            newState[filename] = { exists: true, enabled: isEnabled, size: 0 };
+            newState[filename] = { exists: true, enabled: isEnabled };
           } catch (e) {
             console.warn(`Erreur lecture ${filename}`, e);
-            newState[filename] = { exists: true, enabled: true, size: 0 };
+            newState[filename] = { exists: true, enabled: true };
           }
         } else {
-          newState[filename] = { exists: false, enabled: false, size: 0 };
+          newState[filename] = { exists: false, enabled: false };
         }
       }
       
@@ -304,12 +298,10 @@
   async function toggleModule(modId: string, currentlyEnabled: boolean) {
     if (!appState.documentsPath) return;
     const filename = `${modId}.ini`;
-    const newState = !currentlyEnabled;
+    const nextEnabled = !currentlyEnabled;
     
-    // Optimistic UI update
-    modulesState[filename] = { ...modulesState[filename], enabled: newState };
+    modulesState[filename] = { ...modulesState[filename], enabled: nextEnabled };
     
-    // On détermine le type du module depuis les infos de Rust
     const isDefaultEnabled = moduleInfos[filename] ?? true;
     
     try {
@@ -317,13 +309,12 @@
         documentsPath: appState.documentsPath,
         acPath: appState.acPath || '',
         filename: filename,
-        section: 'BASIC', // L'activation globale passe par la section BASIC
-        enabled: newState,
+        section: 'BASIC',
+        enabled: nextEnabled,
         defaultEnabled: isDefaultEnabled
       });
     } catch (e) {
       dialog.alert($t('csp.error_modify', { values: { filename } }) + e, $t('common.error'), "error");
-      // Revert on failure
       modulesState[filename] = { ...modulesState[filename], enabled: currentlyEnabled };
     }
   }
@@ -336,8 +327,7 @@
     isDownloadingConfigs = true;
     downloadStatus = "Démarrage...";
 
-    // ⭐ Création du canal pour recevoir les logs
-    const onEvent = new Channel<any>();
+    const onEvent = new Channel<ConfigDownloadEvent>();
     onEvent.onmessage = (message) => {
       if (message.type === 'info' || message.type === 'progress') {
         downloadStatus = message.msg;
@@ -365,7 +355,6 @@
     showModal = true;
   }
 
-  // ⭐ NOUVEAU : On recharge les données dès que les chemins deviennent disponibles
   $effect(() => {
     if (appState.documentsPath && appState.acPath) {
       loadModules();
@@ -381,11 +370,16 @@
         if (saved) {
           openCategories = JSON.parse(saved);
         } else {
-          // Par défaut, on ouvre la première catégorie pour montrer qu'il y a du contenu
           openCategories = { graphics: true };
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn("Impossible de restaurer l'état des catégories CSP:", e);
+      }
     }
+
+    return () => {
+      if (toastTimeout !== null) clearTimeout(toastTimeout);
+    };
   });
 </script>
 
@@ -397,7 +391,6 @@
     </button>
   </div>
   
-  <!-- ⭐ Gestionnaire de presets -->
   <div style="display: flex; gap: 8px; align-items: center; background: var(--bg-elevated); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border);">
     <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">{$t('csp.presets_title')}</span>
     
@@ -425,7 +418,7 @@
     
     <div style="flex: 1;"></div>
     
-        <div style="display: flex; align-items: center; gap: 10px;">
+    <div style="display: flex; align-items: center; gap: 10px;">
       {#if isDownloadingConfigs}
         <span style="font-size: 0.75rem; color: var(--success); font-weight: 600; font-style: italic;">
           {downloadStatus}
@@ -448,7 +441,19 @@
   <div class="csp-container">
     {#each CATEGORIES as category}
       <div class="csp-category" class:collapsed={!openCategories[category.id]}>
-        <div class="csp-category-header" onclick={() => toggleCategory(category.id)}>
+        <div
+          class="csp-category-header"
+          role="button"
+          tabindex="0"
+          aria-expanded={openCategories[category.id] ?? false}
+          onclick={() => toggleCategory(category.id)}
+          onkeydown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              toggleCategory(category.id);
+            }
+          }}
+        >
           <span class="csp-category-arrow">▸</span>
           <span class="csp-category-label">{$t(category.label)}</span>
         </div>
@@ -509,18 +514,16 @@
   </div>
 {/if}
 
-<!-- ⭐ La Modale des options -->
-<CspModuleModal 
-  bind:show={showModal} 
+<CspModuleModal
+  show={showModal}
   filename={modalFilename} 
   title={modalTitle} 
-  documentsPath={appState.documentsPath} 
-  acPath={appState.acPath} 
+  documentsPath={appState.documentsPath || ''}
+  acPath={appState.acPath || ''}
   onClose={() => showModal = false} 
   onSaved={() => loadModules()} 
 />
 
-<!-- ⭐ Notification Toast -->
 {#if toastMessage}
   <div style="
     position: fixed; 
@@ -552,7 +555,6 @@
   }
 </style>
 
-<!-- ⭐ Modale d'import Content Manager -->
 {#if showCmModal}
   <div class="modal visible" style="display: flex;">
     <div class="modal-content" style="width: 600px; max-width: 90vw; max-height: 80vh;">

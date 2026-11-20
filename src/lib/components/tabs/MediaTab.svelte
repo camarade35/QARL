@@ -1,36 +1,54 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
-  import { listen } from '@tauri-apps/api/event';
+  import { listen, type UnlistenFn } from '@tauri-apps/api/event';
   import { appState } from '$lib/stores/appState.svelte.js';
+  import { onMount } from 'svelte';
   import { t, locale } from 'svelte-i18n';
   import { convertFileSrc } from '@tauri-apps/api/core';
   import { alert, confirm } from '$lib/stores/dialog.svelte';
   import { openUrl } from '@tauri-apps/plugin-opener';
-  // ⭐ NOUVEAU : Import des fonctions météo
   import { getWeatherIcon, translateWeatherName } from '$lib/utils/weatherUtils.js';
 
+  type MediaFile = {
+    name: string;
+    path: string;
+    thumbnail_path: string;
+    size: number;
+    date: number;
+    file_type: 'photo' | 'replay';
+  };
+
+  type MediaFiles = { screens: MediaFile[]; replays: MediaFile[] };
+  type ReplayCar = { id: string; name: string; image_path: string };
+  type ReplayTrackLayout = {
+    id: string;
+    name: string;
+    outline_path: string | null;
+    preview_path: string | null;
+  };
+  type ReplayTrack = {
+    id: string;
+    name: string;
+    outline_path: string | null;
+    preview_path: string | null;
+    layouts: ReplayTrackLayout[];
+  };
+
   let activeSubTab = $state<'photos' | 'replays'>('photos');
-  
-  let mediaFiles = $state<{ screens: any[], replays: any[] }>({ screens: [], replays: [] });
-  let isLoading = $state(false);
+  let mediaFiles = $state<MediaFiles>({ screens: [], replays: [] });
   let lightboxIndex = $state(-1);
-  
-  // États pour la vue détaillée des replays
-  let selectedReplay = $state<any>(null);
-  let replayCar = $state<any>(null);
-  let replayTrack = $state<any>(null);
-  let replayLayout = $state<any>(null);
+  let selectedReplay = $state<MediaFile | null>(null);
+  let replayCar = $state<ReplayCar | null>(null);
+  let replayTrack = $state<ReplayTrack | null>(null);
+  let replayLayout = $state<ReplayTrackLayout | null>(null);
   let replayWeather = $state<string | null>(null);
 
-  // Pagination
   let visiblePhotos = $state(48);
   let visibleReplays = $state(24);
 
-  // Accordéons (repliés par défaut, mémorisés)
   let openPhotoAccordions = $state<Record<string, boolean>>({});
   let openReplayAccordions = $state<Record<string, boolean>>({});
 
-  // États des paramètres
   let replayIni = $state({ 
     MAX_SIZE_MB: 2000, 
     QUALITY: 4, 
@@ -41,49 +59,40 @@
     MIN_TIME_SECONDS: 120 
   });
 
-  let photoIni = $state<any>({});
+  let photoIni = $state<Record<string, string | number>>({});
   let screenshotFormat = $state('JPG');
 
-  // ⭐ NOUVEAU : Variables locales pour forcer la réactivité de Svelte 5
   let selectedMode = $state('ORIGINAL');
   let customFormat = $state('');
 
-  // Hints (commentaires INI) pour tooltips
   let photoHints = $state<Record<string, string>>({});
   let replayHints = $state<Record<string, string>>({});
 
   async function loadData() {
     if (!appState.documentsPath) return;
-    isLoading = true;
     try {
-      // 1. Médias
-      mediaFiles = await invoke('get_media_files', { documentsPath: appState.documentsPath });
-      
-      // 2. Replay INI
+      mediaFiles = await invoke<MediaFiles>('get_media_files', { documentsPath: appState.documentsPath });
+
       try {
         const replayContent = await invoke<string>('read_ini_file', { documentsPath: appState.documentsPath, filename: 'replay.ini' });
         parseReplayIni(replayContent);
-      } catch (e) { console.warn("replay.ini introuvable"); }
+      } catch (e) { console.warn('Impossible de lire replay.ini', e); }
 
-      // Charger les hints du replay.ini
       try {
-        replayHints = await invoke('get_ini_hints_from_documents', { documentsPath: appState.documentsPath, filename: 'replay.ini' });
-      } catch (e) { console.warn("Hints replay indisponibles", e); }
+        replayHints = await invoke<Record<string, string>>('get_ini_hints_from_documents', { documentsPath: appState.documentsPath, filename: 'replay.ini' });
+      } catch (e) { console.warn('Hints replay indisponibles', e); }
 
-      // 3. Photos INI
       if (appState.acPath) {
         const photoPath = `${appState.acPath}/extension/config/nice_screenshots.ini`;
         try {
           const photoContent = await invoke<string>('read_specific_ini', { filePath: photoPath });
           parsePhotoIni(photoContent);
-        } catch (e) { console.warn("nice_screenshots.ini introuvable"); }
+        } catch (e) { console.warn('Impossible de lire nice_screenshots.ini', e); }
 
-        // Charger les hints du nice_screenshots.ini
         try {
-          photoHints = await invoke('get_ini_hints', { filePath: photoPath });
-        } catch (e) { console.warn("Hints photo indisponibles", e); }
+          photoHints = await invoke<Record<string, string>>('get_ini_hints', { filePath: photoPath });
+        } catch (e) { console.warn('Hints photo indisponibles', e); }
 
-        // Lecture du format dans assetto_corsa.ini
         const mainIniPath = `${appState.acPath}/system/cfg/assetto_corsa.ini`;
         try {
           const mainContent = await invoke<string>('read_specific_ini', { filePath: mainIniPath });
@@ -98,13 +107,10 @@
               break;
             }
           }
-        } catch (e) { console.warn("assetto_corsa.ini introuvable"); }
+        } catch (e) { console.warn('Impossible de lire assetto_corsa.ini', e); }
       }
-
     } catch (err) {
-      console.error(err);
-    } finally {
-      isLoading = false;
+      console.error('Impossible de charger les médias', err);
     }
   }
 
@@ -135,7 +141,7 @@
   function parsePhotoIni(content: string) {
     const lines = content.split('\n');
     let currentSec = '';
-    let res: any = {};
+    const res: Record<string, string> = {};
     for (const line of lines) {
       const tLine = line.trim();
       if (tLine.startsWith('[') && tLine.endsWith(']')) currentSec = tLine.slice(1, -1);
@@ -147,7 +153,6 @@
     }
     photoIni = res;
 
-    // ⭐ On initialise nos variables locales
     selectedMode = res['NAME_FORMAT.MODE'] || 'ORIGINAL';
     customFormat = res['NAME_FORMAT.FORMAT_CUSTOM'] || '';
   }
@@ -155,8 +160,12 @@
   async function saveReplayIni() {
     if (!appState.documentsPath) return;
     
-    let content = "";
-    try { content = await invoke<string>('read_ini_file', { documentsPath: appState.documentsPath, filename: 'replay.ini' }); } catch(e){}
+    let content = '';
+    try {
+      content = await invoke<string>('read_ini_file', { documentsPath: appState.documentsPath, filename: 'replay.ini' });
+    } catch (e) {
+      console.warn('Impossible de lire replay.ini avant sa sauvegarde', e);
+    }
     
     if (!content) {
       content = `[REPLAY]\nMAX_SIZE_MB=${replayIni.MAX_SIZE_MB}\n[QUALITY]\nLEVEL=${replayIni.QUALITY}\n[AUTOSAVE]\nENABLED=${replayIni.ENABLED}\nRACE=${replayIni.RACE}\nQUALIFY=${replayIni.QUALIFY}\nOTHERS=${replayIni.OTHERS}\nMIN_TIME_SECONDS=${replayIni.MIN_TIME_SECONDS}`;
@@ -170,63 +179,61 @@
       content = updateIniValue(content, 'AUTOSAVE', 'MIN_TIME_SECONDS', replayIni.MIN_TIME_SECONDS.toString());
     }
 
-    await invoke('write_ini_file', { documentsPath: appState.documentsPath, filename: 'replay.ini', content });
-    alert($t('media.replay.settings.save_success'));
+    try {
+      await invoke('write_ini_file', { documentsPath: appState.documentsPath, filename: 'replay.ini', content });
+      alert($t('media.replay.settings.save_success'));
+    } catch (e) {
+      console.error('Impossible de sauvegarder replay.ini', e);
+      alert('Erreur : ' + e);
+    }
   }
 
   async function savePhotoIni() {
     if (!appState.acPath) return;
     const path = `${appState.acPath}/extension/config/nice_screenshots.ini`;
-    
-    let content = "";
-    try { content = await invoke<string>('read_specific_ini', { filePath: path }); } catch(e){}
-
-    if (content) {
+    try {
+      let content = await invoke<string>('read_specific_ini', { filePath: path });
       for (const [key, val] of Object.entries(photoIni)) {
         const [sec, k] = key.split('.');
         content = updateIniValue(content, sec, k, String(val));
       }
-    }
-    await invoke('write_specific_ini', { filePath: path, content });
 
-    // Sauvegarde du format dans assetto_corsa.ini
-    if (appState.acPath) {
+      await invoke('write_specific_ini', { filePath: path, content });
+
       const mainIniPath = `${appState.acPath}/system/cfg/assetto_corsa.ini`;
-      try {
-        let mainContent = await invoke<string>('read_specific_ini', { filePath: mainIniPath });
-        let lines = mainContent.split('\n');
-        let inScreenshot = false;
-        let foundFormat = false;
+      let mainContent = await invoke<string>('read_specific_ini', { filePath: mainIniPath });
+      const lines = mainContent.split('\n');
+      let inScreenshot = false;
+      let foundFormat = false;
 
-        for (let i = 0; i < lines.length; i++) {
-          const tLine = lines[i].trim();
-          if (tLine.startsWith('[') && tLine.endsWith(']')) {
-            inScreenshot = tLine.toUpperCase() === '[SCREENSHOT]';
-          } else if (inScreenshot && tLine.toUpperCase().startsWith('FORMAT=')) {
-            lines[i] = `FORMAT=${screenshotFormat}`;
-            foundFormat = true;
-            break;
-          }
+      for (let i = 0; i < lines.length; i++) {
+        const tLine = lines[i].trim();
+        if (tLine.startsWith('[') && tLine.endsWith(']')) {
+          inScreenshot = tLine.toUpperCase() === '[SCREENSHOT]';
+        } else if (inScreenshot && tLine.toUpperCase().startsWith('FORMAT=')) {
+          lines[i] = `FORMAT=${screenshotFormat}`;
+          foundFormat = true;
+          break;
         }
-
-        if (!foundFormat) {
-          if (!mainContent.includes('[SCREENSHOT]')) {
-            lines.push('', '[SCREENSHOT]', `FORMAT=${screenshotFormat}`);
-          } else {
-            const secIdx = lines.findIndex(l => l.trim().toUpperCase() === '[SCREENSHOT]');
-            if (secIdx !== -1) {
-              lines.splice(secIdx + 1, 0, `FORMAT=${screenshotFormat}`);
-            }
-          }
-        }
-
-        await invoke('write_specific_ini', { filePath: mainIniPath, content: lines.join('\n') });
-      } catch (e) {
-        console.error("Erreur de mise à jour de assetto_corsa.ini", e);
       }
-    }
 
-    alert($t('media.photo.settings.save_success'));
+      if (!foundFormat) {
+        if (!mainContent.includes('[SCREENSHOT]')) {
+          lines.push('', '[SCREENSHOT]', `FORMAT=${screenshotFormat}`);
+        } else {
+          const secIdx = lines.findIndex(l => l.trim().toUpperCase() === '[SCREENSHOT]');
+          if (secIdx !== -1) {
+            lines.splice(secIdx + 1, 0, `FORMAT=${screenshotFormat}`);
+          }
+        }
+      }
+
+      await invoke('write_specific_ini', { filePath: mainIniPath, content: lines.join('\n') });
+      alert($t('media.photo.settings.save_success'));
+    } catch (e) {
+      console.error('Impossible de sauvegarder les paramètres photo', e);
+      alert('Erreur : ' + e);
+    }
   }
 
   function updateIniValue(content: string, section: string, key: string, newValue: string): string {
@@ -261,17 +268,17 @@
     return lines.join('\n');
   }
 
-  async function deleteMedia(file: any) {
+  async function deleteMedia(file: MediaFile) {
     const msg = $t('media.replay.delete_confirm', { values: { name: file.name } });
     if (await confirm(msg, $t('dialog.confirm'), "warning")) {
       try {
         await invoke('delete_media_file', { filePath: file.path });
-        loadData();
+        await loadData();
       } catch (e) { alert("Erreur : " + e); }
     }
   }
 
-  async function selectReplay(file: any) {
+  async function selectReplay(file: MediaFile) {
     selectedReplay = file;
     replayCar = null;
     replayTrack = null;
@@ -280,28 +287,25 @@
 
     try {
       const extractedStrings = await invoke<string[]>('get_replay_info', { filePath: file.path });
-      
       const fileNameLower = file.name.toLowerCase();
+      const cars: ReplayCar[] = appState.cars;
+      const tracks: ReplayTrack[] = appState.tracks;
 
-      replayCar = appState.cars.find(c => {
+      replayCar = cars.find(c => {
         const idLower = c.id.toLowerCase();
         return extractedStrings.some(s => s.toLowerCase() === idLower) || fileNameLower.includes(idLower);
-      });
+      }) ?? null;
 
-      replayTrack = appState.tracks.find(t => {
+      replayTrack = tracks.find(t => {
         const idLower = t.id.toLowerCase();
         return extractedStrings.some(s => s.toLowerCase() === idLower) || fileNameLower.includes(idLower);
-      });
+      }) ?? null;
 
-      replayLayout = null;
-      if (replayTrack && replayTrack.layouts) {
-        replayLayout = replayTrack.layouts.find((l: any) => {
-          const lId = l.id.toLowerCase();
-          return fileNameLower.includes(lId) || extractedStrings.some(s => s.toLowerCase() === lId);
-        });
-      }
+      replayLayout = replayTrack?.layouts.find(layout => {
+        const layoutId = layout.id.toLowerCase();
+        return fileNameLower.includes(layoutId) || extractedStrings.some(s => s.toLowerCase() === layoutId);
+      }) ?? null;
 
-      replayWeather = null;
       const weatherKeywords = extractedStrings.find(s => {
         const sl = s.toLowerCase();
         return sl.includes('clear') || sl.includes('rain') || sl.includes('cloud') || sl.includes('sol_') || sl.includes('pure_') || sl.includes('weather') || sl.includes('fog');
@@ -311,43 +315,49 @@
         replayWeather = weatherKeywords.replace(/[^a-zA-Z0-9_\s-]/g, '').trim();
       }
 
-    } catch (e) {
-      console.warn("Impossible d'analyser le replay", e);
-    }
+    } catch (e) { console.warn('Impossible d’analyser le replay', e); }
   }
 
-  async function playReplay(file: any) {
+  async function playReplay(file: MediaFile) {
     if (!appState.acPath) return;
     try {
       await invoke('launch_replay', { acPath: appState.acPath, replayFilename: file.name });
-    } catch (e) { alert("Erreur de lancement : " + e); }
+    } catch (e) { alert('Erreur de lancement : ' + e); }
   }
 
-  function openFolder(file: any) {
+  async function openFolder(file: MediaFile) {
     const dir = file.path.substring(0, file.path.lastIndexOf('/'));
-    invoke('open_folder', { acPath: appState.acPath, documentsPath: appState.documentsPath, folderType: 'absolute', folderId: dir });
+    try {
+      await invoke('open_folder', { acPath: appState.acPath, documentsPath: appState.documentsPath, folderType: 'absolute', folderId: dir });
+    } catch (e) {
+      console.error('Impossible d’ouvrir le dossier du média', e);
+      alert('Erreur : ' + e);
+    }
   }
 
   $effect(() => {
     if (appState.documentsPath) loadData();
   });
 
-  import { onMount } from 'svelte';
   onMount(() => {
-    let unlistenThumbs: any;
-    let unlistenClosed: any;
+    let disposed = false;
+    let unlistenThumbs: UnlistenFn | undefined;
+    let unlistenClosed: UnlistenFn | undefined;
 
-    // On recharge quand les miniatures sont prêtes
     listen('thumbs-ready', () => {
       loadData();
-    }).then(u => unlistenThumbs = u);
+    }).then(unlisten => {
+      if (disposed) unlisten();
+      else unlistenThumbs = unlisten;
+    }).catch(e => console.error('Impossible d’écouter thumbs-ready', e));
 
-    // On recharge quand AC se ferme (pour avoir les nouveaux ralentis)
     listen('ac-closed', () => {
       loadData();
-    }).then(u => unlistenClosed = u);
+    }).then(unlisten => {
+      if (disposed) unlisten();
+      else unlistenClosed = unlisten;
+    }).catch(e => console.error('Impossible d’écouter ac-closed', e));
 
-    // ⭐ Restauration de l'état des accordéons (MÊME LOGIQUE QUE CSP)
     if (typeof localStorage !== 'undefined') {
       try {
         const savedPhoto = localStorage.getItem('qarl_media_photo_categories');
@@ -359,12 +369,15 @@
         if (savedReplay) {
           openReplayAccordions = JSON.parse(savedReplay);
         }
-      } catch (e) {}
+      } catch (e) {
+        console.error('Impossible de restaurer les accordéons média', e);
+      }
     }
 
-    return () => { 
-      if (unlistenThumbs) unlistenThumbs(); 
-      if (unlistenClosed) unlistenClosed();
+    return () => {
+      disposed = true;
+      unlistenThumbs?.();
+      unlistenClosed?.();
     };
   });
 
@@ -389,18 +402,22 @@
     }
   }
 
-  // ⭐ Traduit un hint INI en utilisant la clé i18n (fallback sur l'anglais brut si absente)
-    function tHint(key: string, fallback: string | undefined): string | undefined {
+  function handleAccordionKeydown(event: KeyboardEvent, toggle: () => void) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      toggle();
+    }
+  }
+
+  function tHint(key: string, fallback: string | undefined): string | undefined {
     if (!fallback) return undefined;
     const i18nKey = `media.hints.${key}`;
     const translated = $t(i18nKey);
     return translated === i18nKey ? fallback : translated;
   }
 
-  // ⭐ NOUVEAU : Liste des photos actuellement affichées (pour la navigation)
   let displayedPhotos = $derived(mediaFiles.screens.slice(0, visiblePhotos));
 
-  // ⭐ NOUVEAU : Fonctions de navigation pour la Lightbox
   function openLightbox(index: number) {
     lightboxIndex = index;
   }
@@ -414,7 +431,7 @@
     if (lightboxIndex < displayedPhotos.length - 1) {
       lightboxIndex++;
     } else {
-      lightboxIndex = 0; // Boucler à la fin
+      lightboxIndex = 0;
     }
   }
 
@@ -423,7 +440,7 @@
     if (lightboxIndex > 0) {
       lightboxIndex--;
     } else {
-      lightboxIndex = displayedPhotos.length - 1; // Boucler au début
+      lightboxIndex = displayedPhotos.length - 1;
     }
   }
 
@@ -437,11 +454,10 @@
 
 <svelte:window on:keydown={handleKeydown} />
 
-<!-- Snippet réutilisable : Label avec tooltip natif au survol -->
 {#snippet optLabel(text: string, hint: string | undefined)}
-  <label class="csp-opt-label" class:has-hint={!!hint} title={hint || undefined}>
+  <span class="csp-opt-label" class:has-hint={!!hint} title={hint || undefined}>
     {text}
-  </label>
+  </span>
 {/snippet}
 
 <div class="media-container">
@@ -460,9 +476,10 @@
 
     <div class="csp-container" style="margin-bottom: 30px;">
       
-      <!-- Général -->
       <div class="csp-category" class:collapsed={!openPhotoAccordions.general}>
-        <div class="csp-category-header" onclick={() => togglePhotoAccordion('general')}>
+        <div class="csp-category-header" role="button" tabindex="0" aria-expanded={!!openPhotoAccordions.general}
+          onclick={() => togglePhotoAccordion('general')}
+          onkeydown={(event) => handleAccordionKeydown(event, () => togglePhotoAccordion('general'))}>
           <span class="csp-category-arrow">▸</span>
           <span class="csp-category-label">{$t('media.photo.settings.general')}</span>
         </div>
@@ -484,9 +501,10 @@
         {/if}
       </div>
 
-      <!-- Format des captures & Noms -->
       <div class="csp-category" class:collapsed={!openPhotoAccordions.compression}>
-        <div class="csp-category-header" onclick={() => togglePhotoAccordion('compression')}>
+        <div class="csp-category-header" role="button" tabindex="0" aria-expanded={!!openPhotoAccordions.compression}
+          onclick={() => togglePhotoAccordion('compression')}
+          onkeydown={(event) => handleAccordionKeydown(event, () => togglePhotoAccordion('compression'))}>
           <span class="csp-category-arrow">▸</span>
           <span class="csp-category-label">{$t('media.photo.settings.format_title')}</span>
         </div>
@@ -494,7 +512,7 @@
           <div class="csp-category-content">
             
             <div class="csp-opt-row">
-              <label class="csp-opt-label">{$t('media.photo.settings.format')}</label>
+              <span class="csp-opt-label">{$t('media.photo.settings.format')}</span>
               <div class="csp-opt-widget">
                 <select class="ini-select" bind:value={screenshotFormat}>
                   <option value="JPG">{$t('media.photo.settings.format_jpg')}</option>
@@ -568,9 +586,10 @@
         {/if}
       </div>
 
-      <!-- Accumulation AA -->
       <div class="csp-category" class:collapsed={!openPhotoAccordions.accumulation}>
-        <div class="csp-category-header" onclick={() => togglePhotoAccordion('accumulation')}>
+        <div class="csp-category-header" role="button" tabindex="0" aria-expanded={!!openPhotoAccordions.accumulation}
+          onclick={() => togglePhotoAccordion('accumulation')}
+          onkeydown={(event) => handleAccordionKeydown(event, () => togglePhotoAccordion('accumulation'))}>
           <span class="csp-category-arrow">▸</span>
           <span class="csp-category-label">{$t('media.photo.settings.aa_title')}</span>
         </div>
@@ -610,10 +629,11 @@
       {:else}
         <div class="photo-grid">
           {#each displayedPhotos as photo, index}
-            <div class="photo-card" onclick={() => openLightbox(index)} oncontextmenu={(e) => { e.preventDefault(); openFolder(photo); }}>
+            <button type="button" class="photo-card" aria-label={photo.name} onclick={() => openLightbox(index)}
+              oncontextmenu={(event) => { event.preventDefault(); openFolder(photo); }}>
               <img src={convertFileSrc(photo.thumbnail_path)} alt={photo.name} loading="lazy" />
               <div class="photo-name" title={photo.name}>{photo.name}</div>
-            </div>
+            </button>
           {/each}
         </div>
         
@@ -632,9 +652,10 @@
     </div>
 
     <div class="csp-container" style="margin-bottom: 30px;">
-      <!-- Section Général -->
       <div class="csp-category" class:collapsed={!openReplayAccordions.general}>
-        <div class="csp-category-header" onclick={() => toggleReplayAccordion('general')}>
+        <div class="csp-category-header" role="button" tabindex="0" aria-expanded={!!openReplayAccordions.general}
+          onclick={() => toggleReplayAccordion('general')}
+          onkeydown={(event) => handleAccordionKeydown(event, () => toggleReplayAccordion('general'))}>
           <span class="csp-category-arrow">▸</span>
           <span class="csp-category-label">{$t('media.replay.settings.general')}</span>
         </div>
@@ -664,9 +685,10 @@
         {/if}
       </div>
 
-      <!-- Section Sauvegarde Auto -->
       <div class="csp-category" class:collapsed={!openReplayAccordions.autosave}>
-        <div class="csp-category-header" onclick={() => toggleReplayAccordion('autosave')}>
+        <div class="csp-category-header" role="button" tabindex="0" aria-expanded={!!openReplayAccordions.autosave}
+          onclick={() => toggleReplayAccordion('autosave')}
+          onkeydown={(event) => handleAccordionKeydown(event, () => toggleReplayAccordion('autosave'))}>
           <span class="csp-category-arrow">▸</span>
           <span class="csp-category-label">{$t('media.replay.settings.autosave_title')}</span>
         </div>
@@ -726,12 +748,16 @@
           <!-- Colonne de gauche : La liste -->
           <div class="replay-list-col">
             {#each mediaFiles.replays.slice(0, visibleReplays) as replay}
-              <div class="replay-item" class:selected={selectedReplay?.path === replay.path} onclick={() => selectReplay(replay)}>
+              <div class="replay-item" class:selected={selectedReplay?.path === replay.path}>
+                <button type="button" class="replay-item-select" aria-pressed={selectedReplay?.path === replay.path}
+                  onclick={() => selectReplay(replay)}>
                 <div style="flex: 1; min-width: 0;">
                   <div style="font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{replay.name}</div>
                   <div style="font-size: 0.75rem; color: var(--text-secondary);">{formatSize(replay.size)} • {new Date(replay.date * 1000).toLocaleString()}</div>
                 </div>
-                <button class="filter-btn" onclick={(e) => { e.stopPropagation(); playReplay(replay); }} style="border-color: var(--accent); color: var(--accent);">▶</button>
+                </button>
+                <button type="button" class="filter-btn" aria-label={`${$t('media.replay.detail.play_btn')} ${replay.name}`}
+                  onclick={() => playReplay(replay)} style="border-color: var(--accent); color: var(--accent);">▶</button>
               </div>
             {/each}
 
@@ -778,7 +804,7 @@
                     <div style="background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 8px;">
                       <!-- ⭐ Utilisation des fonctions de traduction -->
                       <span style="font-size: 1.2rem;">{getWeatherIcon(replayWeather)}</span>
-                      <span style="text-transform: capitalize;">{translateWeatherName(replayWeather, replayWeather, $locale)}</span>
+                      <span style="text-transform: capitalize;">{translateWeatherName(replayWeather, replayWeather, $locale ?? undefined)}</span>
                     </div>
                   </div>
                 {/if}
@@ -787,8 +813,8 @@
                 <div>
                   <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-tertiary); text-transform: uppercase; margin-bottom: 8px;">{$t('media.replay.detail.track')}</div>
                   {#if replayTrack}
-                    {@const bgImage = replayLayout?.preview_path || replayTrack.preview_path || replayTrack.layouts?.[0]?.preview_path}
-                    {@const outlineImage = replayLayout?.outline_path || replayTrack.outline_path || replayTrack.layouts?.[0]?.outline_path}
+                    {@const bgImage = replayLayout?.preview_path || replayTrack.preview_path || replayTrack.layouts[0]?.preview_path || undefined}
+                    {@const outlineImage = replayLayout?.outline_path || replayTrack.outline_path || replayTrack.layouts[0]?.outline_path || undefined}
                     <div style="background: var(--bg-elevated); border-radius: 8px; overflow: hidden; border: 1px solid var(--border);">
                       <div style="position: relative; height: 140px; background: #0f1219;">
                         {#if bgImage}
@@ -814,8 +840,8 @@
 
                 <!-- Actions -->
                 <div style="display: flex; gap: 10px; margin-top: auto;">
-                  <button class="filter-btn" onclick={() => playReplay(selectedReplay)} style="flex: 1; justify-content: center; border-color: var(--accent); color: var(--accent);">{$t('media.replay.detail.play_btn')}</button>
-                  <button class="filter-btn" onclick={() => deleteMedia(selectedReplay)} style="color: #e57373; border-color: rgba(229, 115, 115, 0.3);">🗑️</button>
+                  <button class="filter-btn" onclick={() => { if (selectedReplay) playReplay(selectedReplay); }} style="flex: 1; justify-content: center; border-color: var(--accent); color: var(--accent);">{$t('media.replay.detail.play_btn')}</button>
+                  <button class="filter-btn" onclick={() => { if (selectedReplay) deleteMedia(selectedReplay); }} style="color: #e57373; border-color: rgba(229, 115, 115, 0.3);">🗑️</button>
                 </div>
 
               </div>
@@ -833,11 +859,13 @@
 </div>
 
 {#if lightboxIndex >= 0 && displayedPhotos[lightboxIndex]}
-  <div class="lightbox" onclick={closeLightbox}>
+  <div class="lightbox" role="dialog" aria-modal="true" aria-label={displayedPhotos[lightboxIndex].name} tabindex="-1"
+    onclick={(event) => { if (event.target === event.currentTarget) closeLightbox(); }}
+    onkeydown={(event) => { if (event.key === 'Escape') closeLightbox(); }}>
     <!-- Bouton Précédent -->
     <button class="lightbox-nav-btn prev" onclick={prevPhoto} title={$t('media.lightbox.prev')}>‹</button>
     
-    <div class="lightbox-content" onclick={(e) => e.stopPropagation()}>
+    <div class="lightbox-content">
       <img src={convertFileSrc(displayedPhotos[lightboxIndex].path)} alt="Preview" />
       <div class="lightbox-caption">
         {displayedPhotos[lightboxIndex].name} 
@@ -855,8 +883,9 @@
   
   /* Grille photos */
   .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px; margin-top: 10px; }
-  .photo-card { background: var(--bg-panel); border: 1px solid var(--border-subtle); border-radius: 6px; overflow: hidden; cursor: pointer; transition: transform 0.2s, border-color 0.2s; position: relative; }
+  .photo-card { width: 100%; padding: 0; color: inherit; text-align: left; font: inherit; background: var(--bg-panel); border: 1px solid var(--border-subtle); border-radius: 6px; overflow: hidden; cursor: pointer; transition: transform 0.2s, border-color 0.2s; position: relative; }
   .photo-card:hover { transform: scale(1.02); border-color: var(--accent); z-index: 10; }
+  .photo-card:focus-visible, .replay-item-select:focus-visible, .csp-category-header:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .photo-card img { width: 100%; height: 130px; object-fit: cover; display: block; }
   .photo-name { padding: 8px; font-size: 0.72rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--bg-elevated); }
 
@@ -941,10 +970,15 @@
   .replay-item { 
     display: flex; align-items: center; gap: 12px; padding: 12px; 
     background: var(--bg-elevated); border: 1px solid var(--border-subtle); 
-    border-radius: 6px; cursor: pointer; transition: all 0.2s;
+    border-radius: 6px; transition: all 0.2s;
   }
   .replay-item:hover { border-color: var(--border-strong); background: var(--bg-hover); }
   .replay-item.selected { border-color: var(--accent); background: var(--accent-muted); box-shadow: 0 0 0 1px var(--accent); }
+  .replay-item-select {
+    display: flex; flex: 1; align-items: center; min-width: 0;
+    padding: 0; border: 0; background: transparent; color: inherit;
+    font: inherit; text-align: left; cursor: pointer;
+  }
   
   .detail-placeholder {
     background: var(--bg-elevated);

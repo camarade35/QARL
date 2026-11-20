@@ -9,18 +9,29 @@
   import { getCurrentWebview } from '@tauri-apps/api/webview';
   import { alert } from '$lib/stores/dialog.svelte.js';
 
+  type SetupStatus = {
+    has_csp: boolean;
+    has_sol: boolean;
+    has_pure: boolean;
+    csp_version: string;
+    sol_version: string;
+    pure_version: string;
+    cars_count: number;
+    tracks_count: number;
+  };
+  type InstallProgress = { type: string; percent?: number; current_file?: string };
+
   let { onContinue = () => {} } = $props();
 
   let loading = $state(true);
-  let status = $state<any>(null);
+  let status = $state<SetupStatus | null>(null);
   
-  // ⭐ États pour l'installateur
   let isDragging = $state(false);
   let isInstalling = $state(false);
-  let forceShowDropzone = $state(false); // ⭐ NOUVEAU
+  let forceShowDropzone = $state(false);
   let installProgress = $state(0);
   let currentFile = $state('');
-  let unlistenDragDrop: any;
+  let unlistenDragDrop: (() => void) | null = null;
 
   async function handleFileSelect(filePath: string) {
     if (!filePath) return;
@@ -34,7 +45,7 @@
     currentFile = 'Initialisation...';
 
     try {
-      const channel = new Channel<{ type: string, percent?: number, current_file?: string }>();
+      const channel = new Channel<InstallProgress>();
       channel.onmessage = (msg) => {
         if (msg.type === 'progress') {
           installProgress = msg.percent || 0;
@@ -48,7 +59,7 @@
         onEvent: channel
       });
 
-      await load(); // On rafraîchit le statut
+      await load();
       alert($t('setup.csp.install_success'), $t('common.success'), 'success');
     } catch (e) {
       alert($t('setup.csp.install_error') + e, $t('common.error'), 'error');
@@ -64,44 +75,41 @@
       multiple: false,
       filters: [{ name: 'Archive', extensions: ['zip', 'rar', '7z'] }]
     });
-    if (selected) {
-      handleFileSelect(selected as string);
+    if (typeof selected === 'string') {
+      handleFileSelect(selected);
     }
   }
 
   async function load() {
     loading = true;
     try {
-      const res = await invoke<any>('detect_setup_status');
+      const res = await invoke<SetupStatus>('detect_setup_status');
       status = res;
-      if (res) {
-        setupState.data.hasCsp = res.has_csp;
-        setupState.data.hasSol = res.has_sol;
-        setupState.data.hasPure = res.has_pure;
-        setupState.data.cspVersion = res.csp_version;
-        setupState.data.solVersion = res.sol_version;
-        setupState.data.pureVersion = res.pure_version;
-        setupState.data.carsCount = res.cars_count;
-        setupState.data.tracksCount = res.tracks_count;
-      }
+      setupState.data.hasCsp = res.has_csp;
+      setupState.data.hasSol = res.has_sol;
+      setupState.data.hasPure = res.has_pure;
+      setupState.data.cspVersion = res.csp_version;
+      setupState.data.solVersion = res.sol_version;
+      setupState.data.pureVersion = res.pure_version;
+      setupState.data.carsCount = res.cars_count;
+      setupState.data.tracksCount = res.tracks_count;
     } finally {
       loading = false;
     }
   }
 
   function goToCspTab() {
+    // Ouvre les paramètres CSP puis masque le bandeau flottant du wizard.
     appState.activeTab = 'tab-settings';
     window.dispatchEvent(new CustomEvent('qarl-open-section', {
       detail: { tab: 'subtab-csp', group: '', cspFile: null }
     }));
-    // ⭐ On demande au wizard de se cacher (bandeau flottant)
     window.dispatchEvent(new CustomEvent('qarl-setup-hide'));
   }
 
   onMount(() => {
     load();
 
-    // ⭐ Écouteur pour le Drag & Drop
     getCurrentWebview().onDragDropEvent((event) => {
       if (event.payload.type === 'over') {
         isDragging = true;
@@ -157,9 +165,9 @@
   {/if}
 
   {#if state === 'none' || state === 'csp_only' || forceShowDropzone}
-    <!-- ⭐ CARTES D'INSTALLATION -->
+    <!-- Options d'installation -->
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
-      <!-- Carte Gratuit (CSP + Sol) -->
+      <!-- Offre gratuite avec Sol -->
       <div style="background: var(--bg-elevated); border: 1px solid #3b82f6; border-radius: var(--r); padding: 16px; text-align: center; display: flex; flex-direction: column;">
         <div style="font-size: 2rem; margin-bottom: 8px;">🟢</div>
         <h3 style="margin: 0; font-size: 1.1rem; color: #3b82f6;">{$t('setup.csp.card_free_title')}</h3>
@@ -175,7 +183,7 @@
         </div>
       </div>
 
-      <!-- Carte Premium (CSP + Pure) -->
+      <!-- Offre Pure -->
       <div style="background: var(--bg-elevated); border: 1px solid #e6a33b; border-radius: var(--r); padding: 16px; text-align: center; display: flex; flex-direction: column;">
         <div style="font-size: 2rem; margin-bottom: 8px;">👑</div>
         <h3 style="margin: 0; font-size: 1.1rem; color: #e6a33b;">{$t('setup.csp.card_premium_title')}</h3>
@@ -192,7 +200,7 @@
       </div>
     </div>
 
-    <!-- ⭐ DROP ZONE -->
+    <!-- Installation d'une archive locale -->
     <div 
       style="
         border: 2px dashed {isDragging ? 'var(--accent)' : 'var(--border)'}; 

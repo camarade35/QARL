@@ -1,18 +1,19 @@
 <script lang="ts">
   import { t } from 'svelte-i18n';
-  import { alert } from '$lib/stores/dialog.svelte'; // ⭐ AJOUT IMPORT QARL
+  import { alert } from '$lib/stores/dialog.svelte';
   import { searchState } from '$lib/stores/searchState.svelte.js';
   import AutosaveBanner from '$lib/components/AutosaveBanner.svelte';
   import { invoke } from '@tauri-apps/api/core';
   import { onMount } from 'svelte';
   import { appState } from '$lib/stores/appState.svelte.js';
 
-  // État pour les sections pliables (repliées par défaut)
   let openGroups = $state<Record<string, boolean>>({
-    levels: false, levels_ext: false, settings: false, skids: false
+    levels: false,
+    levels_ext: false,
+    settings: false,
+    skids: false
   });
 
-  // Mémoriser l'état des sections
   function toggleGroup(group: string) {
     openGroups[group] = !openGroups[group];
     if (typeof localStorage !== 'undefined') {
@@ -20,7 +21,14 @@
     }
   }
 
-  // État des paramètres audio (fidèle à iniSchema.js)
+  function handleGroupKeydown(event: KeyboardEvent, group: string) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      toggleGroup(group);
+    }
+  }
+
+  // Valeurs utilisées lorsqu'une clé est absente de audio.ini.
   let audioData = $state({
     LEVELS: {
       BRAKES: 0.8, DIRT_BOTTOM: 1.0, ENGINE: 1.0, MASTER: 0.64, MUSIC: 0.5,
@@ -42,7 +50,6 @@
   let lastSavedJson = '';
   let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // Charger la liste des périphériques audio
   async function loadAudioDevices() {
     try {
       const devices = await invoke<string[]>('list_audio_devices');
@@ -52,7 +59,6 @@
     }
   }
 
-  // Charger audio.ini
   async function loadAudioIni() {
     if (!appState.documentsPath) return;
     try {
@@ -66,7 +72,10 @@
         let currentSec = '';
         for (const line of lines) {
           const l = line.trim();
-          if (l.startsWith('[') && l.endsWith(']')) { currentSec = l.slice(1, -1).toUpperCase(); continue; }
+          if (l.startsWith('[') && l.endsWith(']')) {
+            currentSec = l.slice(1, -1).toUpperCase();
+            continue;
+          }
           const parts = l.split('=');
           if (parts.length >= 2) {
             const k = parts[0].trim().toUpperCase();
@@ -74,14 +83,11 @@
             
             if (currentSec === 'LEVELS') {
               if (k in audioData.LEVELS) audioData.LEVELS[k] = parseFloat(v);
-            }
-            if (currentSec === 'LEVELS_EXT') {
+            } else if (currentSec === 'LEVELS_EXT') {
               if (k in audioData.LEVELS_EXT) audioData.LEVELS_EXT[k] = parseFloat(v);
-            }
-            if (currentSec === 'SETTINGS') {
+            } else if (currentSec === 'SETTINGS') {
               if (k === 'DRIVER_NAME') audioData.SETTINGS.DRIVER_NAME = v;
-            }
-            if (currentSec === 'SKIDS') {
+            } else if (currentSec === 'SKIDS') {
               if (k === 'ENTRY_POINT') audioData.SKIDS.ENTRY_POINT = parseInt(v);
             }
           }
@@ -95,11 +101,10 @@
     }
   }
 
-  // Sauvegarder audio.ini
   async function saveAudioIni(silent = false) {
     try {
       const a = audioData;
-      // On reconstruit le fichier section par section
+      // Écrit les sections prises en charge au format audio.ini.
       const content = `[HEADER]
 VERSION=2
 
@@ -139,11 +144,12 @@ ENTRY_POINT=${a.SKIDS.ENTRY_POINT}
       if (autosaveTimer) { clearTimeout(autosaveTimer); autosaveTimer = null; }
       if (!silent) alert($t('audio.save_success'));
     } catch (e) {
+      console.error("Erreur sauvegarde audio.ini:", e);
       if (!silent) alert($t('audio.save_error') + e);
     }
   }
 
-  // ⭐ Auto-save : détecte les modifications
+  // Regroupe les changements rapprochés en une seule sauvegarde.
   $effect(() => {
     const current = JSON.stringify(audioData);
     if (!lastSavedJson) return;
@@ -158,7 +164,7 @@ ENTRY_POINT=${a.SKIDS.ENTRY_POINT}
   });
 
   onMount(() => {
-    // ⭐ Restauration de l'état des menus
+    // Restaure les sections ouvertes et répond aux demandes de navigation globale.
     if (typeof localStorage !== 'undefined') {
       try {
         const saved = localStorage.getItem('qarl_audio_groups');
@@ -174,7 +180,6 @@ ENTRY_POINT=${a.SKIDS.ENTRY_POINT}
     loadAudioIni();
     loadAudioDevices();
 
-    // ⭐ Écouteur pour la recherche globale
     const handler = (e: CustomEvent) => {
       if (e.detail.tab !== 'subtab-audio') return;
       const g = e.detail.group;
@@ -193,9 +198,9 @@ ENTRY_POINT=${a.SKIDS.ENTRY_POINT}
   </button>
 </div>
 
-<!-- ⭐ VOLUMES PRINCIPAUX -->
+<!-- Volumes principaux -->
 <div class="group" style="margin-bottom: 20px; border: 1px solid var(--border); background: var(--bg-panel);">
-  <div class="group-title" style="color: var(--accent); display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;" onclick={() => toggleGroup('levels')}>
+  <div class="group-title" role="button" tabindex="0" aria-expanded={openGroups.levels} style="color: var(--accent); display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;" onclick={() => toggleGroup('levels')} onkeydown={(event) => handleGroupKeydown(event, 'levels')}>
     <span style="transform: rotate({openGroups.levels ? '90deg' : '0deg'}); transition: transform 0.2s; font-size: 1.1rem; line-height: 1;">▸</span>
     🔊 {$t('audio.levels_title')} <span class="ini-section-raw" style="margin-left: 8px;">[LEVELS]</span>
   </div>
@@ -276,9 +281,9 @@ ENTRY_POINT=${a.SKIDS.ENTRY_POINT}
   {/if}
 </div>
 
-<!-- ⭐ VOLUMES ÉTENDUS -->
+<!-- Volumes étendus -->
 <div class="group" style="margin-bottom: 20px; border: 1px solid var(--border); background: var(--bg-panel);">
-  <div class="group-title" style="color: var(--accent); display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;" onclick={() => toggleGroup('levels_ext')}>
+  <div class="group-title" role="button" tabindex="0" aria-expanded={openGroups.levels_ext} style="color: var(--accent); display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;" onclick={() => toggleGroup('levels_ext')} onkeydown={(event) => handleGroupKeydown(event, 'levels_ext')}>
     <span style="transform: rotate({openGroups.levels_ext ? '90deg' : '0deg'}); transition: transform 0.2s; font-size: 1.1rem; line-height: 1;">▸</span>
     🔊 {$t('audio.levels_ext_title')} <span class="ini-section-raw" style="margin-left: 8px;">[LEVELS_EXT]</span>
   </div>
@@ -317,9 +322,9 @@ ENTRY_POINT=${a.SKIDS.ENTRY_POINT}
   {/if}
 </div>
 
-<!-- ⭐ PARAMÈTRES (Périphérique) -->
+<!-- Périphérique audio -->
 <div class="group" style="margin-bottom: 20px; border: 1px solid var(--border); background: var(--bg-panel);">
-  <div class="group-title" style="color: var(--accent); display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;" onclick={() => toggleGroup('settings')}>
+  <div class="group-title" role="button" tabindex="0" aria-expanded={openGroups.settings} style="color: var(--accent); display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;" onclick={() => toggleGroup('settings')} onkeydown={(event) => handleGroupKeydown(event, 'settings')}>
     <span style="transform: rotate({openGroups.settings ? '90deg' : '0deg'}); transition: transform 0.2s; font-size: 1.1rem; line-height: 1;">▸</span>
     ⚙️ {$t('audio.settings_title')} <span class="ini-section-raw" style="margin-left: 8px;">[SETTINGS]</span>
   </div>
@@ -334,7 +339,7 @@ ENTRY_POINT=${a.SKIDS.ENTRY_POINT}
             {#each availableDevices as device}
               <option value={device}>{device}</option>
             {/each}
-            <!-- ⭐ Si le périphérique mémorisé n'est pas branché/introuvable, on l'affiche quand même -->
+            <!-- Garde visible le périphérique enregistré même s'il n'est pas connecté. -->
             {#if audioData.SETTINGS.DRIVER_NAME && !availableDevices.includes(audioData.SETTINGS.DRIVER_NAME)}
               <option value={audioData.SETTINGS.DRIVER_NAME}>{audioData.SETTINGS.DRIVER_NAME} ({$t('audio.not_found')})</option>
             {/if}
@@ -345,9 +350,9 @@ ENTRY_POINT=${a.SKIDS.ENTRY_POINT}
   {/if}
 </div>
 
-<!-- ⭐ DÉRAPAGES -->
+<!-- Dérapages -->
 <div class="group" style="margin-bottom: 20px; border: 1px solid var(--border); background: var(--bg-panel);">
-  <div class="group-title" style="color: var(--accent); display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;" onclick={() => toggleGroup('skids')}>
+  <div class="group-title" role="button" tabindex="0" aria-expanded={openGroups.skids} style="color: var(--accent); display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;" onclick={() => toggleGroup('skids')} onkeydown={(event) => handleGroupKeydown(event, 'skids')}>
     <span style="transform: rotate({openGroups.skids ? '90deg' : '0deg'}); transition: transform 0.2s; font-size: 1.1rem; line-height: 1;">▸</span>
     🛞 {$t('audio.skids_title')} <span class="ini-section-raw" style="margin-left: 8px;">[SKIDS]</span>
   </div>

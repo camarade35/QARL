@@ -3,28 +3,31 @@
   import { invoke } from '@tauri-apps/api/core';
   import { onMount } from 'svelte';
   import { setupState } from '$lib/stores/setupState.svelte.js';
-  import { appState } from '$lib/stores/appState.svelte.js'; // ⭐ Import pour le chemin
+
+  type AcInitStatus = {
+    initialized: boolean;
+    hasRace: boolean;
+    hasControls: boolean;
+    hasControllers: boolean;
+    controllersCount: number;
+  };
 
   let { onContinue = () => {} } = $props();
 
-  let status = $state<any>(null);
+  let status = $state<AcInitStatus | null>(null);
   let checking = $state(false);
-  let isLaunching = $state(false); // ⭐ Nouvel état pour le bouton
-  let autoPoll: ReturnType<typeof setInterval> | null = null;
+  let isLaunching = $state(false);
 
   async function checkStatus() {
     checking = true;
     try {
-      // ⭐ On passe le chemin du dossier Documents trouvé à l'étape 1
-      const res = await invoke<any>('check_ac_initialized', { 
+      const res = await invoke<AcInitStatus>('check_ac_initialized', {
         documentsPath: setupState.data.documentsPath || null 
       });
       status = res;
-      if (res) {
-        setupState.data.isAcInitialized = res.initialized;
-        setupState.data.hasControllers = res.hasControllers;
-        setupState.data.controllersCount = res.controllersCount;
-      }
+      setupState.data.isAcInitialized = res.initialized;
+      setupState.data.hasControllers = res.hasControllers;
+      setupState.data.controllersCount = res.controllersCount;
     } catch (e) {
       console.warn(e);
     } finally {
@@ -36,8 +39,7 @@
     isLaunching = true;
     try {
       await invoke('launch_ac_only');
-      // On met le statut à null pour forcer un refresh visuel quand le jeu se ferme
-      status = null; 
+      status = null;
     } catch (e) {
       alert("Erreur lors du lancement d'AC via Steam : " + e);
     } finally {
@@ -45,15 +47,16 @@
     }
   }
 
+  // AC crée race.ini au premier lancement ; le contrôle continue jusqu'à son apparition.
   onMount(() => {
     checkStatus();
-    autoPoll = setInterval(() => {
+    const autoPoll = setInterval(() => {
       if (!status?.initialized) checkStatus();
     }, 3000);
-    return () => { if (autoPoll) clearInterval(autoPoll); };
+    return () => clearInterval(autoPoll);
   });
 
-  // ⭐ On ne bloque plus sur hasControllers. QARL s'en occupe à l'étape 3.
+  // La configuration des contrôleurs se fait à l'étape 3 et ne bloque pas celle-ci.
   let ready = $derived(status && status.initialized);
 </script>
 
@@ -75,7 +78,6 @@
         {#if !status.hasRace}
           <li>❌ {$t('setup.ac_init.missing_race')}</li>
         {/if}
-        <!-- ⭐ On ne signale plus controls.ini comme une erreur bloquante -->
         {#if status.hasControls && !status.hasControllers}
           <li>ℹ️ {$t('setup.ac_init.missing_controllers')}</li>
         {/if}

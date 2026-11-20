@@ -1403,6 +1403,19 @@
       "custom_rendering_modes": { "label": "Custom Rendering Modes", "desc": "Modes de rendu alternatifs" },
       "weather_fx": { "label": "Weather FX", "desc": "Nouvelle météo" }
     },
+    "section_names": {
+      "BASIC": "Général",
+      "BRAKEDISC_FX": "Effets des disques de frein",
+      "SHADOWED_WHEELS": "Ombres des roues",
+      "FAKESHADOWSFX_BODY_SHADOW": "Ombre de carrosserie",
+      "EXTRAS": "Options supplémentaires",
+      "PHYSICAL_DAMAGE": "Dégâts physiques",
+      "BLURRED_RIMS": "Jantes floutées",
+      "SMOOTH_CASCADES": "Cascades lissées",
+      "NO_CAR_SHADOWS_IN_THIRD_CASCADE": "Pas d’ombres de voitures dans la troisième cascade",
+      "CUSTOM_SHADOW_MATRICES": "Matrices d’ombres personnalisées",
+      "WITHOUT_SHADOWS": "Sans ombres"
+    },
     "option_labels": {
       "Density": "Densité",
       "Quality": "Qualité",

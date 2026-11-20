@@ -3,22 +3,35 @@
   import { appState, toggleFavorite, bumpUsedCount } from '$lib/stores/appState.svelte.js';
   import { getFlagUrl, getCountryName } from '$lib/utils/assets.js';
   import { t } from 'svelte-i18n';
-  import { onMount, onDestroy } from 'svelte';
-  import { listen } from '@tauri-apps/api/event';
+  import { onMount } from 'svelte';
+  import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
-  let cars = $derived(appState.cars);
-  let isLoading = $state(false);
+  type CarSkin = { name: string; image_path: string };
+  type CarInfo = {
+    id: string;
+    name: string;
+    brand: string;
+    image_path: string;
+    flag_path: string | null;
+    brand_logo_path: string | null;
+    tags: string[];
+    skins: CarSkin[];
+    is_kunos: boolean;
+    car_class: string;
+    bhp: number;
+    pwratio: number;
+    year: number;
+  };
+
+  let cars: CarInfo[] = $derived(appState.cars);
   let searchQuery = $state('');
   let showTags = $state(false);
   
-  // Filtres
   let selectedBrand = $state('');
   let selectedCountry = $state('');
   let selectedClass = $state('');
 
-  // ⭐ (Scroll infini supprimé)
-
-  // ⭐ Les catégories exactes de Content Manager avec des mots-clés pour le matching
+  // Mots-clés utilisés pour rapprocher les voitures des catégories de Content Manager.
   const CM_CATEGORIES = [
     { id: 'Classic', keywords: ['classic', 'historic', 'old'] },
     { id: 'Drift', keywords: ['drift'] },
@@ -31,13 +44,12 @@
   ];
 
   $effect(() => {
-    // ⭐ On ne recharge que si le chemin AC a changé (le chargement initial est fait par AppLoadingScreen)
+    // AppLoadingScreen charge déjà les voitures au démarrage.
     if (appState.acPath && appState.dataLoadedForPath !== appState.acPath) {
       loadCars();
     }
   });
 
-  // ⭐ Effet séparé : le watcher ne démarre qu'une seule fois par chemin
   $effect(() => {
     const path = appState.acPath;
     if (path) {
@@ -45,49 +57,49 @@
     }
   });
 
-  // ⭐ Écouter les changements de contenu
-  let debounceTimer: any;
-  let unlistenPromise: any;
-  let unlistenCarFound: any;
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let unlistenContentChanged: Promise<UnlistenFn> | null = null;
+  let unlistenCarFound: Promise<UnlistenFn> | null = null;
 
   onMount(() => {
-    unlistenPromise = listen('content-changed', () => {
-      // On attend 2 secondes après le dernier événement pour éviter de spammer
-      clearTimeout(debounceTimer);
+    unlistenContentChanged = listen('content-changed', () => {
+      if (debounceTimer !== null) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         loadCars();
       }, 2000);
     });
 
-    // ⭐ Écoute du chargement progressif des voitures
-    unlistenCarFound = listen<any>('car-found', (event) => {
+    unlistenCarFound = listen<CarInfo>('car-found', (event) => {
       const newCar = event.payload;
       if (!appState.cars.some(c => c.id === newCar.id)) {
-        // ⭐ FIX SVELTE 5 : On réassigne le tableau pour forcer la réactivité
         appState.cars = [...appState.cars, newCar];
       }
     });
 
     return () => {
-      clearTimeout(debounceTimer);
-      if (unlistenPromise) unlistenPromise.then((unlisten: any) => unlisten());
-      if (unlistenCarFound) unlistenCarFound.then((unlisten: any) => unlisten());
+      if (debounceTimer !== null) clearTimeout(debounceTimer);
+      if (unlistenContentChanged) {
+        void unlistenContentChanged.then(unlisten => unlisten()).catch(console.error);
+      }
+      if (unlistenCarFound) {
+        void unlistenCarFound.then(unlisten => unlisten()).catch(console.error);
+      }
     };
   });
 
-  let isRefreshing = $state(false); // ⭐ NOUVEAU
+  let isRefreshing = $state(false);
 
   async function loadCars(force = false) {
     if (force) isRefreshing = true;
-    isLoading = true;
-    appState.cars = []; // ⭐ On vide la liste avant de commencer le stream
+    // The backend emits car-found events while loading the complete list.
+    appState.cars = [];
     try {
-      const result = await invoke<any[]>('get_ac_cars', { 
+      const result = await invoke<CarInfo[]>('get_ac_cars', {
         acPath: appState.acPath,
-        forceRefresh: force // ⭐ NOUVEAU
+        forceRefresh: force
       });
       
-      // ⭐ On ne remplace la liste QUE si le stream n'a rien rempli (sécurité)
+      // Use the returned list only when no streamed event populated the store.
       if (appState.cars.length === 0) {
         appState.cars = result;
       }
@@ -95,14 +107,14 @@
     } catch (e) {
       console.error("Loading error:", e);
     } finally {
-      isLoading = false;
-      isRefreshing = false; // ⭐ NOUVEAU
+      isRefreshing = false;
     }
   }
 
   let allBrands = $derived.by(() => {
     const brands = new Set<string>();
     cars.forEach(c => {
+      // "Mod" is a generic fallback, not a manufacturer.
       if (c.brand && c.brand !== 'Mod') brands.add(c.brand);
     });
     return Array.from(brands).sort();
@@ -117,10 +129,7 @@
     return Array.from(countries).sort();
   });
 
-    // (Variable allYears supprimée)
-
-  // ⭐ Fonction pour deviner la catégorie CM d'une voiture
-  function getCarCMCategory(car: any) {
+  function getCarCMCategory(car: CarInfo) {
     const carClass = (car.car_class || '').toLowerCase();
     const carTags = (car.tags || []).map((t: string) => t.toLowerCase());
     const allStrings = [carClass, ...carTags];
@@ -132,7 +141,7 @@
         }
       }
     }
-    return null; // Ne rentre dans aucune catégorie CM
+    return null;
   }
 
   let filteredCars = $derived(
@@ -149,15 +158,11 @@
         if (cCountry !== selectedCountry) return false;
       }
 
-      // ⭐ Filtre par catégorie CM
       if (selectedClass) {
         const cmCat = getCarCMCategory(c);
         if (cmCat !== selectedClass) return false;
       }
 
-            // (Filtre Année supprimé)
-
-      // ⭐ Filtre par Puissance
       if (appState.carFilters.power) {
         const p = c.bhp;
         if (appState.carFilters.power === 'under_200' && p >= 200) return false;
@@ -174,7 +179,7 @@
     })
   );
 
-  // ⭐ Action Svelte pour le Lazy Loading natif
+  // Charge les images uniquement lorsqu'elles approchent de la zone visible.
   function lazySrc(node: HTMLImageElement, src: string) {
     let currentSrc = src;
     let observer: IntersectionObserver | null = null;
@@ -192,7 +197,7 @@
           observer?.disconnect();
           observer = null;
         }
-      }, { rootMargin: '400px' }); // Déclenche 400px avant l'écran
+      }, { rootMargin: '400px' });
       observer.observe(node);
     } else {
       load();
@@ -209,7 +214,7 @@
     };
   }
 
-  function handleCarClick(car) {
+  function handleCarClick(car: CarInfo) {
     appState.selectedCar = car;
     bumpUsedCount('cars', car.id);
     if (car.skins && car.skins.length > 1) {
@@ -221,6 +226,13 @@
     } else {
       appState.selectedCarSkin = null;
     }
+  }
+
+  function handleCarKeydown(event: KeyboardEvent, car: CarInfo) {
+    // Leave keyboard events from the nested favorite button to that button.
+    if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
+    event.preventDefault();
+    handleCarClick(car);
   }
 </script>
 
@@ -260,7 +272,7 @@
 {/if}
 
 <div class="toolbar" style="margin-top: 15px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
-  <!-- Recherche à gauche -->
+  <!-- Recherche -->
   <div style="display: flex; gap: 8px; align-items: stretch; flex: 1; min-width: 250px; max-width: 400px;">
     <div class="search-input" style="flex: 1;">
       <input type="text" placeholder={$t('cars.search_placeholder')} bind:value={searchQuery} style="width: 100%; height: 100%;" />
@@ -281,7 +293,7 @@
     </button>
   </div>
 
-  <!-- Filtres à droite -->
+  <!-- Filtres -->
   <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
     <select class="manufacturer-select" bind:value={selectedBrand} style="min-width: 150px; width: auto;">
       <option value="">{$t('cars.all_brands')}</option>
@@ -304,8 +316,6 @@
       {/each}
     </select>
 
-        <!-- Filtre Année supprimé -->
-
     <select class="manufacturer-select" bind:value={appState.carFilters.power} style="min-width: 160px; width: auto;">
       <option value="">{$t('cars.all_powers')}</option>
       <option value="under_200">{$t('cars.power_under_200')}</option>
@@ -315,7 +325,7 @@
     </select>
   </div>
 </div>
-</div> <!-- ⭐ Fermeture du sticky-header-wrapper -->
+</div>
 
 {#if !appState.acPath}
   <div style="padding: 30px; color: var(--text-secondary); text-align: center; border: 1px dashed var(--border); border-radius: var(--r); background: var(--bg-elevated); margin-top: 20px;">
@@ -335,11 +345,12 @@
       class="card" 
       class:selected={appState.selectedCar?.id === car.id}
       onclick={() => handleCarClick(car)}
+      onkeydown={(event) => handleCarKeydown(event, car)}
       oncontextmenu={(e) => { 
         e.preventDefault(); 
         invoke('open_folder', { 
           acPath: appState.acPath, 
-          documentsPath: appState.documentsPath, // ⭐ Ajout du paramètre manquant
+          documentsPath: appState.documentsPath,
           folderType: 'cars', 
           folderId: car.id 
         }).catch(err => console.error(err)); 
@@ -360,6 +371,7 @@
         <img 
           use:lazySrc={convertFileSrc(car.image_path)} 
           class="car-preview" 
+          alt={car.name}
           onload={(e) => e.currentTarget.classList.add('loaded')} 
         />
       {:else}

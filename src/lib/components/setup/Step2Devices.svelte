@@ -5,23 +5,26 @@
   import { appState } from '$lib/stores/appState.svelte.js';
   import { setupState } from '$lib/stores/setupState.svelte.js';
 
+  type InputMethod = 'X360' | 'KEYBOARD';
+  type DeviceInfo = { name: string; pguid: string; iguid: string; dinput_index: number };
+  type ControllerPreset = { filename: string; name: string; product: string };
+  type ControllerEntry = { con_index: number; name: string; iguid: string; pguid: string };
+
   let { onContinue = () => {} } = $props();
 
-  let devices = $state<any[]>([]);
-  let presets = $state<any[]>([]);
+  let devices = $state<DeviceInfo[]>([]);
+  let presets = $state<ControllerPreset[]>([]);
   let mappedGuids = $state<string[]>([]);
   let loading = $state(true);
   
-  // ⭐ Nouveau : Choix du périphérique principal
-  let inputMethod = $state<'X360' | 'KEYBOARD' | null>(null);
+  let inputMethod = $state<InputMethod | null>(null);
 
-  async function setMethod(method: 'X360' | 'KEYBOARD') {
+  async function setMethod(method: InputMethod) {
     inputMethod = method;
-    // On appelle la future fonction Rust (on la fera juste après)
     try {
-      await invoke('set_input_method', { 
+      await invoke('set_input_method', {
         documentsPath: setupState.data.documentsPath, 
-        method: method 
+        method
       });
     } catch (e) {
       console.error("Erreur lors de la modification du header:", e);
@@ -32,15 +35,15 @@
     loading = true;
     try {
       const [devs, pres, entries] = await Promise.all([
-        invoke<any[]>('get_directinput_devices').catch(() => []),
-        invoke<any[]>('list_controller_presets', { acPath: setupState.data.acPath }).catch(() => []),
-        invoke<any[]>('parse_controllers_section', { documentsPath: setupState.data.documentsPath }).catch(() => []),
+        invoke<DeviceInfo[]>('get_directinput_devices').catch(() => []),
+        invoke<ControllerPreset[]>('list_controller_presets', { acPath: setupState.data.acPath }).catch(() => []),
+        invoke<ControllerEntry[]>('parse_controllers_section', { documentsPath: setupState.data.documentsPath }).catch(() => []),
       ]);
       devices = devs;
       presets = pres;
       
-      // ⭐ On aplatit la liste pour avoir tous les IGUID et PGUID valides (en minuscules pour comparer sans souci de casse)
-      mappedGuids = entries.flatMap((e: any) => [
+      // Normalise les identifiants pour comparer les contrôleurs sans tenir compte de la casse.
+      mappedGuids = entries.flatMap(e => [
         (e.iguid || '').toLowerCase(), 
         (e.pguid || '').toLowerCase()
       ]).filter(Boolean);
@@ -50,10 +53,10 @@
     }
   }
 
-  function findPresetForDevice(deviceName: string): any | null {
+  function findPresetForDevice(deviceName: string): ControllerPreset | null {
     if (!deviceName) return null;
     const lower = deviceName.toLowerCase();
-    // Match partiel : "Fanatec ClubSport V2.5" matche "Fanatec ClubSport V2.5.ini"
+    // Compare au nom du preset et à son nom de fichier.
     for (const p of presets) {
       const pn = (p.name || '').toLowerCase();
       const pf = (p.filename || '').toLowerCase().replace('.ini', '');
@@ -65,12 +68,11 @@
   }
 
   function openControls() {
-    // Redirige vers Paramètres > Contrôles
+    // Ouvre les paramètres de contrôle puis masque le bandeau du wizard.
     appState.activeTab = 'tab-settings';
     window.dispatchEvent(new CustomEvent('qarl-open-section', {
       detail: { tab: 'subtab-controls', group: '', cspFile: null }
     }));
-    // Demande au wizard de se cacher (bandeau flottant)
     window.dispatchEvent(new CustomEvent('qarl-setup-hide'));
   }
 
@@ -124,7 +126,7 @@
   </div>
 {/if}
 
-  <!-- ⭐ NOUVEAU : Choix du périphérique principal -->
+  <!-- Choix du périphérique principal -->
   <div style="background: var(--bg-elevated); border: 1px solid var(--border); padding: 16px; border-radius: var(--r-sm); margin-top: 20px;">
     <div style="font-weight: 700; font-size: 0.9rem; margin-bottom: 12px; color: var(--text-primary); text-align: center;">
       {$t('setup.devices.input_method_title')}

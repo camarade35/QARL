@@ -2,13 +2,12 @@
   import { invoke } from '@tauri-apps/api/core';
   import { appState } from '$lib/stores/appState.svelte.js';
   import { onMount } from 'svelte';
-  import { listen } from '@tauri-apps/api/event';
-  import { alert, confirm } from '$lib/stores/dialog.svelte'; // ⭐ On importe confirm aussi !
+  import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+  import { alert, confirm } from '$lib/stores/dialog.svelte';
   import { t } from 'svelte-i18n';
   import { searchState } from '$lib/stores/searchState.svelte.js';
   import AutosaveBanner from '$lib/components/AutosaveBanner.svelte';
-  // ⭐ Import des icônes Lucide
-    import { 
+  import {
     Lightbulb, Zap, Megaphone, CloudRain, CloudDrizzle, Sun, 
     BatteryCharging, Wind, Timer, Power, Camera, 
     ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ScanEye, ArrowLeftRight,
@@ -19,10 +18,13 @@
     ChevronRight, ChevronLeft, User
   } from 'lucide-svelte';
 
-  // ⭐ Récupération de la prop "active" depuis SettingsTab
+  type ControllerMapping = {
+    name: string;
+    axis?: Record<string, string> | string[] | null;
+  };
+
   let { active = false } = $props();
 
-  // États généraux
   let deviceType = $state<'wheel' | 'x360' | 'keyboard'>('wheel');
   let currentMode = $state<'simple' | 'advanced' | 'expert'>('simple');
   let iniContent = $state('');
@@ -31,34 +33,26 @@
   let hasChanges = $state(false);
   let lastSavedIniContent = '';
   let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
-  // ⭐ Pour le clavier : savoir si on assigne Gauche ou Droite
   let keyboardDirCapture = $state<'LEFT' | 'RIGHT' | null>(null);
-  // ⭐ NOUVEAU : État en direct des touches du clavier
   let liveKeyStates = $state<Record<string, boolean>>({});
 
-  // Profils
   let profiles = $state<{name: string, path: string, profile_type: string}[]>([]);
   let selectedProfilePath = $state('');
   let saveAsName = $state('');
   let showSaveAs = $state(false);
 
-  // Wizard de capture
   let isCapturing = $state(false);
   let capturingSection = $state('');
   let capturingActionName = $state('');
   let isAssigning = false; // Verrou anti-double assignation
   
-  // ⭐ Nouveau : Option Hold Mode pour la modale
   let capturingHoldMode = $state(false);
   
-  // ⭐ État pour basculer entre boîte en H et mode séquentiel
   let useHPattern = $state(true);
 
-  // Cache des fichiers JSON de traduction des axes
-  let controllerMappings = $state<Record<string, any>>({});
+  let controllerMappings = $state<Record<string, ControllerMapping>>({});
   let loadingMappings = new Set<string>();
 
-  // Parseur INI
   function parseIni(text: string) {
     const result: Record<string, Record<string, string>> = {};
     let currentSection = '';
@@ -103,7 +97,6 @@
 
   let parsedIni = $derived(parseIni(iniContent));
 
-  // Charger les profils
   async function loadProfiles() {
     if (!appState.documentsPath) return;
     try {
@@ -113,11 +106,10 @@
     }
   }
 
-  // ⭐ NOUVEAU : Gestion du changement d'onglet avec Auto-save
   async function changeDeviceType(newType: 'wheel' | 'x360' | 'keyboard') {
     if (deviceType === newType) return;
     
-    // 1. On sauvegarde le profil actuel SANS l'appliquer au jeu (applyToGame: false)
+    // Conserve l'ancien profil sans modifier le controls.ini actif.
     if (appState.documentsPath && iniContent) {
       try {
         await invoke('write_controls_ini', {
@@ -125,19 +117,18 @@
           deviceType: deviceType,
           content: iniContent,
           saveAsName: null,
-          applyToGame: false // ⭐ On ne touche pas au controls.ini global ici
+          applyToGame: false
         });
       } catch (e) {
         console.warn("Erreur auto-save:", e);
       }
     }
     
-    // 2. On change l'onglet et on charge le nouveau
     deviceType = newType;
     selectedProfilePath = '';
     await loadIni();
 
-    // 3. ⭐ On applique le NOUVEAU profil au jeu pour que controls.ini soit synchronisé
+    // Applique le profil du périphérique sélectionné au jeu.
     if (appState.documentsPath && iniContent) {
       try {
         await invoke('write_controls_ini', {
@@ -145,7 +136,7 @@
           deviceType: deviceType,
           content: iniContent,
           saveAsName: null,
-          applyToGame: true // ⭐ Le nouveau périphérique devient actif
+          applyToGame: true
         });
       } catch (e) {
         console.warn("Erreur application profil:", e);
@@ -153,7 +144,6 @@
     }
   }
 
-  // Charger le fichier INI
   async function loadIni(profilePath: string = '') {
     if (!appState.documentsPath) return;
     isLoading = true;
@@ -180,7 +170,6 @@
     }
   }
 
-  // Sauvegarder
   async function saveIni(silent = false) {
     if (!appState.documentsPath) return;
     isSaving = true;
@@ -212,12 +201,11 @@
     }
   }
 
-  // ⭐ Auto-save
   $effect(() => {
     const current = iniContent;
     if (!lastSavedIniContent) { lastSavedIniContent = current; return; }
     if (current === lastSavedIniContent) return;
-    // On ne déclenche PAS l'autosave si un profil est sélectionné ou si on crée un profil
+    // Les profils sauvegardés ne doivent pas modifier le controls.ini actif.
     if (selectedProfilePath || showSaveAs) return;
     hasChanges = true;
     if (searchState.autosaveDelay > 0) {
@@ -228,7 +216,6 @@
     }
   });
 
-  // Appliquer un profil existant
   async function applyProfile() {
     if (!selectedProfilePath) {
       alert($t('settings.controls.err_select_profile'));
@@ -256,14 +243,12 @@
     hasChanges = true;
   }
 
-  // Gestion de la capture
   function openCapture(sectionId: string, actionName: string) {
     capturingSection = sectionId;
     capturingActionName = actionName;
     isCapturing = true;
 
-    // ⭐ On lit si le Hold Mode est déjà actif dans le fichier INI
-    // (on vérifie aussi la section miroir pour les clignotants)
+    // Les clignotants utilisent une section miroir dans controls.ini.
     let targetSection = sectionId;
     if (sectionId === '__EXT_TURNLIGHTS_LEFT') targetSection = '__EXT_TURNSIGNAL_LEFT';
     if (sectionId === '__EXT_TURNLIGHTS_RIGHT') targetSection = '__EXT_TURNSIGNAL_RIGHT';
@@ -279,7 +264,6 @@
   }
 
   function handleKeyDown(e: KeyboardEvent) {
-    // ⭐ Cas spécial : Capture direction clavier
     if (keyboardDirCapture) {
       e.preventDefault();
       e.stopPropagation();
@@ -315,51 +299,24 @@
     return (btn && btn !== '-1') || (key && key !== '-1') || (axl && axl !== '-1');
   }
 
-  // ⭐ Cache des périphériques DirectInput (PGUID)
-  let dinputDevices = $state<any[]>([]);
-  
-  // ⭐ Nouveau : Liste parsée de [CONTROLLERS]
-  let controllersSection = $state<any[]>([]);
+  type DInputDevice = { name: string; pguid: string; iguid: string; dinput_index: number };
+  type DirectInputState = { buttons?: boolean[]; axes?: number[] };
+
+  let dinputDevices = $state<DInputDevice[]>([]);
 
   async function loadDInputDevices() {
     try {
-      dinputDevices = await invoke('get_directinput_devices');
+      dinputDevices = await invoke<DInputDevice[]>('get_directinput_devices');
     } catch (e) {
       console.warn("Impossible de charger les périphériques DirectInput:", e);
     }
   }
 
-  async function loadControllersSection() {
-    if (!appState.documentsPath) return;
-    try {
-      controllersSection = await invoke('parse_controllers_section', { documentsPath: appState.documentsPath });
-    } catch (e) {
-      console.warn("Impossible de lire [CONTROLLERS]:", e);
-    }
-  }
-
-    // ⭐ Extrait le PGUID depuis un Gamepad de la WebView
-  function getPguidFromGamepad(gp: Gamepad): string | null {
-    // L'ID ressemble à : "FANATEC Wheel (Vendor: 0eb7 Product: 0020)"
-    const vendorMatch = gp.id.match(/Vendor:\s*([0-9a-fA-F]+)/i);
-    const productMatch = gp.id.match(/Product:\s*([0-9a-fA-F]+)/i);
-    if (!vendorMatch || !productMatch) return null;
-    
-    const vid = vendorMatch[1].toUpperCase().padStart(4, '0');
-    const pid = productMatch[1].toUpperCase().padStart(4, '0');
-    
-    // Format standard des PGUID dans controls.ini : ProductID + VendorID + suffixe
-    return `${pid}${vid}-0000-0000-0000-504944564944`;
-  }
-
-  // ⭐ LECTURE DU FICHIER INI
   function getAcJoyIndex(webviewIndex: number, gp: Gamepad | null): number {
     if (!gp || !parsedIni['CONTROLLERS']) return -1;
 
-    // Extraire le nom du gamepad sans les infos Vendor/Product
     const gpName = gp.id.split(' (')[0].trim();
     
-    // ⭐ 1. Fallback de sécurité : Recherche par nom du périphérique dans le fichier INI
     const controllers = parsedIni['CONTROLLERS'];
     for (const key in controllers) {
       if (key.startsWith('CON')) {
@@ -370,7 +327,6 @@
       }
     }
 
-    // Trouver le device DirectInput correspondant par nom (plus fiable que le faux PGUID)
     let targetDevice = dinputDevices.find(d => d.name === gpName);
     if (!targetDevice) {
       targetDevice = dinputDevices.find(d => d.name.includes(gpName));
@@ -378,7 +334,6 @@
 
     if (!targetDevice) return -1;
 
-    // ⭐ 2. Recherche par PGUID réel (celui lu par Rust dans Windows)
     const dinputPguid = targetDevice.pguid.toUpperCase();
     for (const key in controllers) {
       if (key.startsWith('PGUID')) {
@@ -389,7 +344,6 @@
       }
     }
 
-    // ⭐ 3. Recherche par __IGUID (si présent)
     if (targetDevice.dinput_index !== undefined) {
       for (const key in controllers) {
         if (key.startsWith('__IGUID')) {
@@ -404,15 +358,12 @@
     return -1;
   }
 
-  // ⭐ RÉSOLUTION INFaillible : On matche par index direct !
   async function resolveAcJoyFromGamepad(webviewIndex: number, gp: Gamepad | null, isButton: boolean = false): Promise<number> {
     if (!gp) return -1;
 
-    // ⭐ 1. On cherche TOUJOURS par nom en priorité
     const gpName = gp.id.split(' (')[0].trim().toLowerCase();
     let targetDev = dinputDevices.find(d => d.name.toLowerCase() === gpName);
     
-    // ⭐ 2. Recherche par inclusion
     if (!targetDev) {
       targetDev = dinputDevices.find(d => {
         const dName = d.name.toLowerCase();
@@ -420,17 +371,14 @@
       });
     }
 
-    // ⭐ 3. Sécurité spéciale Xbox (si "Controller (XBOX...)" vs "Xbox 360 Controller")
     if (!targetDev && gpName.includes('xbox')) {
       targetDev = dinputDevices.find(d => d.name.toLowerCase().includes('xbox'));
     }
 
-    // ⭐ 4. En DERNIER RECOURS seulement, on utilise l'index WebView
     if (!targetDev) {
       targetDev = dinputDevices[webviewIndex];
     }
 
-    // ⭐ 3. Si on a trouvé le périphérique, on l'enregistre dans controls.ini et on renvoie son index AC
     if (targetDev && appState.documentsPath) {
       try {
         const idx = await invoke<number>('ensure_controller_registered', {
@@ -449,13 +397,12 @@
       }
     }
 
-    // ⭐ 4. En dernier recours, on tente la vieille méthode
     try {
-      const currentStates = await invoke<any[]>('get_directinput_states');
+      const currentStates = await invoke<DirectInputState[]>('get_directinput_states');
       let bestMatchIndex = -1;
       if (isButton) {
         for (let i = 0; i < currentStates.length; i++) {
-          if (currentStates[i].buttons && currentStates[i].buttons.some((b: boolean) => b)) {
+          if (currentStates[i]?.buttons?.some(Boolean)) {
             bestMatchIndex = i; break;
           }
         }
@@ -476,12 +423,13 @@
           return idx;
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn("Impossible de lire l'état DirectInput pour identifier le périphérique:", e);
+    }
 
     return getAcJoyIndex(webviewIndex, gp);
   }
 
-  // ⭐ LOGIQUE DE TRADUCTION DES AXES (JSON)
   async function loadMappingForGamepad(gp: Gamepad) {
     if (controllerMappings[gp.id] || loadingMappings.has(gp.id)) return;
     loadingMappings.add(gp.id);
@@ -491,14 +439,16 @@
     
     if (vendorMatch && productMatch) {
       try {
-        const mapping = await invoke('get_controller_mapping', {
+        const mapping = await invoke<ControllerMapping | null>('get_controller_mapping', {
           vendorId: vendorMatch[1],
           productId: productMatch[1]
         });
         if (mapping) {
           controllerMappings[gp.id] = mapping;
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn("Impossible de charger le mapping du contrôleur:", e);
+      }
     }
     loadingMappings.delete(gp.id);
   }
@@ -507,8 +457,9 @@
     const mapping = controllerMappings[gp.id];
     if (mapping && mapping.axis) {
       const key = webviewAxis.toString();
-      if (mapping.axis[key] !== undefined) {
-        const acAxis = parseInt(mapping.axis[key]);
+      const axisMapping = Array.isArray(mapping.axis) ? mapping.axis[webviewAxis] : mapping.axis[key];
+      if (axisMapping !== undefined) {
+        const acAxis = parseInt(axisMapping);
         if (!isNaN(acAxis)) return acAxis;
       }
     }
@@ -519,7 +470,7 @@
     const mapping = controllerMappings[gp.id];
     if (mapping && mapping.axis) {
       for (const [webviewKey, acValue] of Object.entries(mapping.axis)) {
-        if (parseInt(acValue as string) === acAxis) {
+        if (parseInt(acValue) === acAxis) {
           return parseInt(webviewKey);
         }
       }
@@ -527,30 +478,31 @@
     return acAxis;
   }
 
-  // ⭐ BOUCLE DE CAPTURE
-  let gamepadInterval: any;
+  let gamepadInterval: ReturnType<typeof setInterval> | null = null;
   let captureStartTime = 0;
-  let initialGamepadState: any[] = [];
+  let initialGamepadState: ({ buttons: boolean[]; axes: number[] } | null)[] = [];
   let liveGamepadData = $state<{ gp: Gamepad, originalIndex: number }[]>([]);
-  let refreshInterval: any;
+  let refreshInterval: ReturnType<typeof setInterval> | null = null;
 
-  // ⭐ Force la WebView à rescanner les périphériques
   function refreshGamepads() {
     const currentGamepads = navigator.getGamepads();
     liveGamepadData = Array.from(currentGamepads)
       .map((gp, idx) => ({ gp, originalIndex: idx }))
-      .filter(item => item.gp !== null) as { gp: Gamepad, originalIndex: number }[];
+      .filter((item): item is { gp: Gamepad; originalIndex: number } => item.gp !== null);
   }
 
   function startGamepadPolling() {
-    if (gamepadInterval) return;
+    if (gamepadInterval !== null) return;
     captureStartTime = Date.now(); 
     
     const gamepads = navigator.getGamepads();
     initialGamepadState = [];
     for (let i = 0; i < gamepads.length; i++) {
       const gp = gamepads[i];
-      if (!gp) { initialGamepadState.push(null); continue; }
+      if (!gp) {
+        initialGamepadState.push(null);
+        continue;
+      }
       initialGamepadState.push({
         buttons: gp.buttons.map(b => b.pressed),
         axes: Array.from(gp.axes)
@@ -563,7 +515,7 @@
       
       liveGamepadData = Array.from(currentGamepads)
         .map((gp, idx) => ({ gp, originalIndex: idx }))
-        .filter(item => item.gp !== null) as { gp: Gamepad, originalIndex: number }[];
+        .filter((item): item is { gp: Gamepad; originalIndex: number } => item.gp !== null);
 
       if (Date.now() - captureStartTime < 300) return;
 
@@ -595,13 +547,13 @@
     }, 50);
   }
 
-    async function assignGamepadInput(section: string, type: 'BUTTON'|'AXLE', webviewIndex: number, joyIndex: number, gp: Gamepad, isInverted: boolean = false) {
+  async function assignGamepadInput(section: string, type: 'BUTTON' | 'AXLE', webviewIndex: number, joyIndex: number, gp: Gamepad, isInverted = false) {
     
-    // ⭐ On utilise la version asynchrone qui enregistre le device s'il est absent
-    // ⭐ On passe l'info si c'est un bouton ou un axe
+    // On utilise la version asynchrone qui enregistre le device s'il est absent
+    // On passe l'info si c'est un bouton ou un axe
     const realJoyIndex = await resolveAcJoyFromGamepad(joyIndex, gp, type === 'BUTTON');
     
-    // ⭐ GARDE-FOU ULTIME : Si même l'enregistrement automatique échoue (périphérique exotique DirectInput)
+    // GARDE-FOU ULTIME : Si même l'enregistrement automatique échoue (périphérique exotique DirectInput)
     if (realJoyIndex === -1) {
       alert($t('settings.controls.err_map_device'));
       closeCapture();
@@ -613,7 +565,7 @@
     let finalIndex = webviewIndex;
     if (type === 'AXLE') finalIndex = getAcAxis(webviewIndex, gp);
 
-    // ⭐ NOUVEAU : Conversion des boutons Thumb pour Assetto Corsa (XInput)
+    // Conversion des boutons Thumb pour Assetto Corsa (XInput)
     if (deviceType === 'x360' && type === 'BUTTON') {
       const acThumbMap: Record<number, number> = { 10: 8, 11: 9 }; // 10(LS) -> 8, 11(RS) -> 9
       if (acThumbMap[webviewIndex] !== undefined) {
@@ -621,7 +573,7 @@
       }
     }
 
-    // ⭐ NOUVEAU : GESTION DU XBOXBUTTON POUR LA MANETTE
+    // GESTION DU XBOXBUTTON POUR LA MANETTE
     if (deviceType === 'x360') {
       if (type === 'BUTTON') {
         const xboxMap: Record<number, string> = {
@@ -642,7 +594,7 @@
       }
     }
 
-    // ⭐ GESTION SPECIALE SHIFTER (Boîte en H) - CORRIGÉ
+    // GESTION SPECIALE SHIFTER (Boîte en H) - CORRIGÉ
     if (section.startsWith('GEAR_') && type === 'BUTTON') {
       // 1. On initialise la section SHIFTER si elle n'existe pas
       if (!parsedIni['SHIFTER']) parsedIni['SHIFTER'] = { _raw: {} };
@@ -654,7 +606,7 @@
       // 3. On synchronise le numéro de bouton pour cette vitesse dans SHIFTER
       parsedIni['SHIFTER'][section] = finalIndex.toString();
       
-      // 4. ⭐ NOUVEAU : On assigne AUSSI normalement dans GEAR_X (comme le fait Content Manager)
+      // 4. On assigne AUSSI normalement dans GEAR_X (comme le fait Content Manager)
       // C'est ce qui manquait pour que ça marche !
       parsedIni[section][type] = finalIndex.toString();
       parsedIni[section]['JOY'] = realJoyIndex.toString();
@@ -675,13 +627,13 @@
       parsedIni[section][type] = finalIndex.toString();
       parsedIni[section]['JOY'] = realJoyIndex.toString();
       
-      // ⭐ NOUVEAU : On ajoute les modificateurs requis par CSP (comme le fait CM)
+      // On ajoute les modificateurs requis par CSP (comme le fait CM)
       parsedIni[section]['BUTTON_MODIFICATOR'] = '-1';
       parsedIni[section]['JOY_MODIFICATOR'] = '-1';
 
       const holdValue = capturingHoldMode ? '1' : '0';
 
-      // ⭐ GESTION CLIGNOTANTS (Double assignation)
+      // GESTION CLIGNOTANTS (Double assignation)
       if (section === '__EXT_TURNLIGHTS_LEFT') {
         if (!parsedIni['__EXT_TURNSIGNAL_LEFT']) parsedIni['__EXT_TURNSIGNAL_LEFT'] = { _raw: {} };
         parsedIni['__EXT_TURNSIGNAL_LEFT']['BUTTON'] = finalIndex.toString();
@@ -700,7 +652,7 @@
         parsedIni['__EXT_TURNSIGNAL_RIGHT']['JOY_MODIFICATOR'] = '-1';
         parsedIni['__EXT_TURNSIGNAL_RIGHT']['__CM_POV'] = '-1';
       }
-      // ⭐ GESTION DES FEUX (HIGH/LOW BEAM) : Double assignation pour CSP
+      // GESTION DES FEUX (HIGH/LOW BEAM) : Double assignation pour CSP
       else if (section === 'ACTION_HEADLIGHTS_HIGH_LOW') {
         if (!parsedIni['__EXT_LOW_BEAM']) parsedIni['__EXT_LOW_BEAM'] = { _raw: {} };
         parsedIni['__EXT_LOW_BEAM']['BUTTON'] = finalIndex.toString();
@@ -713,13 +665,13 @@
 
       if (type === 'BUTTON') {
         parsedIni[section]['KEY'] = '-1';
-        parsedIni[section]['AXLE'] = '-1'; // ⭐ On nettoie l'axe si on assigne un bouton
+        parsedIni[section]['AXLE'] = '-1'; // On nettoie l'axe si on assigne un bouton
       } else { 
-        // ⭐ Si c'est un axe, on nettoie le bouton et la touche
+        // Si c'est un axe, on nettoie le bouton et la touche
         parsedIni[section]['BUTTON'] = '-1';
         parsedIni[section]['KEY'] = '-1';
 
-        // ⭐ Auto-calibration pour les axes directionnels (Joystick)
+        // Auto-calibration pour les axes directionnels (Joystick)
         if (section.startsWith('GLANCE')) {
           // On lit la valeur exacte de l'axe à l'instant où tu bouges le joystick
           const currentVal = gp.axes[webviewIndex];
@@ -735,7 +687,7 @@
           parsedIni[section]['MIN'] = calcMin.toFixed(2);
           parsedIni[section]['MAX'] = calcMax.toFixed(2);
 
-          // ⭐ LA LIGNE MAGIQUE POUR CSP : On dit que cet axe est un POV (chapeau)
+          // LA LIGNE MAGIQUE POUR CSP : On dit que cet axe est un POV (chapeau)
           parsedIni[section]['__CM_POV'] = '0';
           
           if (section === 'GLANCELEFT') {
@@ -763,7 +715,7 @@
     closeCapture();
   }
 
-  // ⭐ NOUVEAU : Désassigner une touche
+  // Désassigner une touche
   function unbindAction(section: string) {
     // On sépare la section de base et le suffixe _ALT
     let baseSection = section;
@@ -781,7 +733,7 @@
       parsedIni[baseSection]['__CM_ALT_BUTTON'] = '-1';
       parsedIni[baseSection]['__CM_ALT_JOY'] = '-1';
     } else {
-      // ⭐ Si c'est une vitesse, on la retire aussi du SHIFTER
+      // Si c'est une vitesse, on la retire aussi du SHIFTER
       if (baseSection.startsWith('GEAR_') && parsedIni['SHIFTER']) {
         delete parsedIni['SHIFTER'][baseSection];
         // Si plus aucune vitesse n'est assignée, on désactive le shifter
@@ -797,14 +749,14 @@
       parsedIni[baseSection]['JOY'] = '-1';
       parsedIni[baseSection]['KEY'] = '-1';
 
-      // ⭐ Nettoyage des sections miroirs pour les clignotants
+      // Nettoyage des sections miroirs pour les clignotants
       if (baseSection === '__EXT_TURNLIGHTS_LEFT') {
         delete parsedIni['__EXT_TURNSIGNAL_LEFT'];
       } else if (baseSection === '__EXT_TURNLIGHTS_RIGHT') {
         delete parsedIni['__EXT_TURNSIGNAL_RIGHT'];
       }
 
-      // ⭐ Nettoyage pour les feux (High/Low)
+      // Nettoyage pour les feux (High/Low)
       if (baseSection === 'ACTION_HEADLIGHTS_HIGH_LOW') {
         delete parsedIni['__EXT_LOW_BEAM'];
       }
@@ -833,7 +785,10 @@
   }
 
   function stopGamepadPolling() {
-    if (gamepadInterval) { clearInterval(gamepadInterval); gamepadInterval = null; }
+    if (gamepadInterval !== null) {
+      clearInterval(gamepadInterval);
+      gamepadInterval = null;
+    }
   }
 
   $effect(() => {
@@ -841,29 +796,28 @@
     else stopGamepadPolling();
   });
 
-  // ⭐ TEMPS RÉEL POUR L'AFFICHAGE
   let demoValues = $state({ brake: 0, throttle: 0, clutch: 0, handbrake: 0, steer: 50 });
-  let animationFrameId: number;
+  let animationFrameId: number | null = null;
   let gamepadStatus = $state($t('settings.controls.status_searching'));
   let liveAxisValues = $state<Record<string, number>>({});
   let liveButtonStates = $state<Record<string, boolean>>({});
 
   function updateLiveInputs() {
     const currentGamepads = navigator.getGamepads();
-    let connectedDevice = null;
+    let connectedDevice: Gamepad | null = null;
 
     liveGamepadData = Array.from(currentGamepads)
       .map((gp, idx) => ({ gp, originalIndex: idx }))
-      .filter(item => item.gp !== null) as { gp: Gamepad, originalIndex: number }[];
+      .filter((item): item is { gp: Gamepad; originalIndex: number } => item.gp !== null);
 
-        for (let i = 0; i < currentGamepads.length; i++) {
+    for (let i = 0; i < currentGamepads.length; i++) {
       const gp = currentGamepads[i];
       if (!gp) continue;
       
       if (!connectedDevice) connectedDevice = gp;
       const acJoyIdx = getAcJoyIndex(i, gp);
 
-      // ⭐ On filtre le bon périphérique selon l'onglet actif
+      // On filtre le bon périphérique selon l'onglet actif
       const gpLower = gp.id.toLowerCase();
       const isWheelName = gpLower.includes('wheel') || gpLower.includes('fanatec') || gpLower.includes('logitech') || gpLower.includes('thrustmaster');
       const isPadName = gpLower.includes('xbox') || gpLower.includes('gamepad') || gpLower.includes('controller') || gpLower.includes('dualshock');
@@ -907,7 +861,7 @@
         }
       });
 
-          // ⭐ NOUVEAU : Gestion visuelle de la Boîte en H via la section [SHIFTER] d'Assetto Corsa
+          // Gestion visuelle de la Boîte en H via la section [SHIFTER] d'Assetto Corsa
           const shifter = parsedIni['SHIFTER'];
           if (shifter && shifter['ACTIVE'] === '1' && shifter['JOY'] === acJoyIdx.toString()) {
             const gears = ['GEAR_1', 'GEAR_2', 'GEAR_3', 'GEAR_4', 'GEAR_5', 'GEAR_6', 'GEAR_7', 'GEAR_R'];
@@ -957,23 +911,21 @@
       gamepadStatus = $t('settings.controls.status_no_device');
     }
 
-    // ⭐ On ne continue la boucle que si le composant est actif
+    // On ne continue la boucle que si le composant est actif
     if (active) {
       animationFrameId = requestAnimationFrame(updateLiveInputs);
     }
   }
 
   onMount(() => {
-    loadMenuState(); // ⭐ On restaure l'état des menus
+    loadMenuState();
     loadProfiles();
     loadIni();
     loadDInputDevices();
-    loadControllersSection(); // ⭐ Nouveau : On charge la section [CONTROLLERS]
 
-    // ⭐ LOT 3 : Écoute du Watchdog
-    let unlistenControllers: any;
+    let unlistenControllers: UnlistenFn | undefined;
+    let disposed = false;
     listen('controllers-changed', async () => {
-      // ⭐ On utilise confirm au lieu d'alert pour avoir 2 boutons
       const shouldRestart = await confirm(
         $t('settings.controls.device_changed_msg'),
         $t('settings.controls.device_changed_title'),
@@ -985,16 +937,19 @@
       if (shouldRestart) {
         window.location.reload();
       }
-    }).then(unlisten => { unlistenControllers = unlisten; });
+    }).then(unlisten => {
+      if (disposed) unlisten();
+      else unlistenControllers = unlisten;
+    }).catch(e => {
+      console.error("Impossible d'écouter les changements de contrôleurs:", e);
+    });
     
-    // ⭐ On ne lance la boucle au démarrage que si on est sur le bon onglet
     if (active) {
       animationFrameId = requestAnimationFrame(updateLiveInputs);
     }
     
     window.addEventListener('keydown', handleKeyDown);
     
-    // ⭐ NOUVEAU : Écoute en direct pour l'affichage des touches
     const handleLiveKeyDown = (e: KeyboardEvent) => {
       if (!isCapturing && !keyboardDirCapture) {
         const hex = '0x' + e.keyCode.toString(16).toUpperCase();
@@ -1008,31 +963,42 @@
     window.addEventListener('keydown', handleLiveKeyDown);
     window.addEventListener('keyup', handleLiveKeyUp);
 
-    // ⭐ Rafraîchissement automatique toutes les 2 secondes
     refreshInterval = setInterval(() => {
       if (!isCapturing) refreshGamepads();
     }, 2000);
     
-    window.addEventListener('gamepadconnected', (e) => {
+    const handleGamepadConnected = (e: GamepadEvent) => {
       gamepadStatus = $t('settings.controls.status_connected', { values: { id: e.gamepad.id.substring(0, 30) } });
       loadMappingForGamepad(e.gamepad);
-    });
+    };
+    const handleGamepadDisconnected = () => {
+      gamepadStatus = $t('settings.controls.status_disconnected');
+    };
+    window.addEventListener('gamepadconnected', handleGamepadConnected);
 
     const initialGamepads = navigator.getGamepads();
     for (let i = 0; i < initialGamepads.length; i++) {
-      if (initialGamepads[i]) loadMappingForGamepad(initialGamepads[i]!);
+      const gamepad = initialGamepads[i];
+      if (gamepad) loadMappingForGamepad(gamepad);
     }
-    window.addEventListener('gamepaddisconnected', () => {
-      gamepadStatus = $t('settings.controls.status_disconnected');
-    });
+    window.addEventListener('gamepaddisconnected', handleGamepadDisconnected);
     
     return () => {
+      disposed = true;
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keydown', handleLiveKeyDown);
       window.removeEventListener('keyup', handleLiveKeyUp);
-      if (animationFrameId) cancelAnimationFrame(animationFrameId);
-      if (refreshInterval) clearInterval(refreshInterval);
-      if (unlistenControllers) unlistenControllers(); // ⭐ Nettoyage du Watchdog
+      window.removeEventListener('gamepadconnected', handleGamepadConnected);
+      window.removeEventListener('gamepaddisconnected', handleGamepadDisconnected);
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+      }
+      if (refreshInterval !== null) {
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+      }
+      if (unlistenControllers) unlistenControllers();
       stopGamepadPolling();
     };
   });
@@ -1041,7 +1007,7 @@
     if (!selectedProfilePath) { deviceType; loadIni(); }
   });
 
-      const actionDefinitions = {
+  const actionDefinitions = {
     // Axes
     'STEER': { label: 'settings.controls.actions.STEER', cat: 'settings.controls.categories.axes', type: 'axis' },
     'THROTTLE': { label: 'settings.controls.actions.THROTTLE', cat: 'settings.controls.categories.axes', type: 'axis' },
@@ -1108,7 +1074,7 @@
     'PREVIOUS_CAR': { label: 'settings.controls.actions.PREVIOUS_CAR', cat: 'settings.controls.categories.replay', type: 'button' }
   };
 
-  // ⭐ GESTION DE LA PERSISTANCE DES MENUS (localStorage)
+  // GESTION DE LA PERSISTANCE DES MENUS (localStorage)
   function loadMenuState() {
     try {
       const saved = localStorage.getItem('qarl_controls_menu_state');
@@ -1137,7 +1103,7 @@
     }
   }
 
-  // ⭐ État pour gérer l'ouverture/fermeture des catégories
+  // État pour gérer l'ouverture/fermeture des catégories
   // (Fermé par défaut au premier lancement)
   let openCategories = $state<Record<string, boolean>>({});
   let openDinputDevices = $state(false);
@@ -1154,16 +1120,16 @@
     };
   });
 
-  // ⭐ Écouteur de visibilité : Stop la boucle si on quitte l'onglet, relance si on revient
+  // Écouteur de visibilité : Stop la boucle si on quitte l'onglet, relance si on revient
   $effect(() => {
     if (active) {
-      if (!animationFrameId) {
+      if (animationFrameId === null) {
         animationFrameId = requestAnimationFrame(updateLiveInputs);
       }
     } else {
-      if (animationFrameId) {
+      if (animationFrameId !== null) {
         cancelAnimationFrame(animationFrameId);
-        animationFrameId = undefined as any;
+        animationFrameId = null;
       }
     }
   });
@@ -1252,7 +1218,7 @@
 
         <div style="display: flex; flex-direction: column; gap: 20px; margin-top: 10px;">
           
-          <!-- ⭐ SNIPPET POUR LES BOUTONS -->
+          <!-- SNIPPET POUR LES BOUTONS -->
                     {#snippet cockpitBtn(section, IconComponent, label)}
             {@const assigned = isAssigned(section)}
             {@const axisVal = liveAxisValues[section]}
@@ -1261,19 +1227,19 @@
             {@const isInverted = min > max}
             {@const isDpad = parsedIni[section]?.['__CM_POV'] !== undefined && parsedIni[section]?.['__CM_POV'] !== '-1'}
             
-            <!-- ⭐ NOUVEAU : Calcul du pourcentage basé sur MIN et MAX (Option A) -->
+            <!-- Calcul du pourcentage basé sur MIN et MAX (Option A) -->
             {@const mappedVal = (axisVal !== undefined && min !== max)
                 ? Math.max(0, Math.min(100, ((axisVal - min) / (max - min)) * 100)) 
                 : 0}
 
-            <!-- ⭐ NOUVEAU : Gestion spéciale pour le D-Pad (__CM_POV) -->
+            <!-- Gestion spéciale pour le D-Pad (__CM_POV) -->
             {@const isAxisActive = axisVal !== undefined && parsedIni[section]?.['AXLE'] !== '-1' && (
                 isDpad 
                     ? (axisVal >= Math.min(min, max) && axisVal <= Math.max(min, max))
                     : (section === 'STEER' ? Math.abs(mappedVal - 50) > 5 : mappedVal > 5)
             )}
             
-            <!-- ⭐ On vérifie aussi si la touche clavier est pressée -->
+            <!-- On vérifie aussi si la touche clavier est pressée -->
             {@const assignedKey = parsedIni[section]?.['KEY']}
             {@const isKeyPressed = deviceType === 'keyboard' && assignedKey && assignedKey !== '-1' && liveKeyStates[assignedKey] === true}
             
@@ -1299,11 +1265,11 @@
                 justify-content: center; 
                 cursor: pointer; 
                 transition: all 0.15s ease; 
-                /* ⭐ Bordure plus contrastée */
+                /* Bordure plus contrastée */
                 border: 1px solid {isPressed ? 'var(--accent)' : (assigned ? 'var(--border-strong)' : 'var(--border)')}; 
-                /* ⭐ Fond plus clair pour détacher le bouton de la carte */
+                /* Fond plus clair pour détacher le bouton de la carte */
                 background: {isPressed ? 'var(--accent-muted)' : 'var(--bg-elevated)'}; 
-                /* ⭐ Ombre portée pour l'effet de relief */
+                /* Ombre portée pour l'effet de relief */
                 box-shadow: {isPressed ? '0 0 15px var(--accent-glow), inset 0 0 10px var(--accent-muted)' : '0 4px 6px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05)'}; 
                 transform: {isPressed ? 'scale(0.95)' : 'scale(1)'}; 
                 padding: 8px 4px; 
@@ -1366,7 +1332,7 @@
             </button>
           {/snippet}
 
-          <!-- ⭐ SNIPPET POUR LES PÉDALES (Style Image 3D) -->
+          <!-- SNIPPET POUR LES PÉDALES (Style Image 3D) -->
           {#snippet pedalCard(section, imagePath, label, color, isAlt = false)}
             {@const demoKey = section === 'BRAKES' ? 'brake' : section.toLowerCase()}
             {@const altPressed = liveButtonStates['HANDBRAKE_ALT'] === true}
@@ -1386,10 +1352,10 @@
                   alt={label} 
                   style="
                     width: 100%; height: 85px; object-fit: contain;
-                    /* ⭐ Effet visuel : s'enfonce légèrement quand on appuie */
+                    /* Effet visuel : s'enfonce légèrement quand on appuie */
                     transform: translateY({currentVal > 5 ? '3px' : '0px'}) rotate({currentVal > 5 ? '1deg' : '0deg'});
                     transition: transform 0.1s ease, filter 0.1s ease;
-                    /* ⭐ Halo lumineux de la couleur de la pédale quand elle est pressée */
+                    /* Halo lumineux de la couleur de la pédale quand elle est pressée */
                     filter: {currentVal > 5 ? `drop-shadow(0 0 15px ${color})` : `drop-shadow(0 4px 8px rgba(0,0,0,0.5))`};
                   " 
                 />
@@ -1451,7 +1417,7 @@
             </div>
           {/snippet}
           
-          <!-- ⭐ LIGNE DU HAUT : Matériel (Pédales, Volant, Boîte) - SEULEMENT POUR LE VOLANT -->
+          <!-- LIGNE DU HAUT : Matériel (Pédales, Volant, Boîte) - SEULEMENT POUR LE VOLANT -->
           {#if deviceType === 'wheel'}
           <div style="display: grid; grid-template-columns: 1.3fr 1.6fr 1.2fr; gap: 20px; width: 100%; align-items: stretch;">
             
@@ -1494,7 +1460,7 @@
                   </div>
                   
 
-                  <!-- ⭐ NOUVELLE BARRE DE MOUVEMENT HORIZONTALE -->
+                  <!-- NOUVELLE BARRE DE MOUVEMENT HORIZONTALE -->
                   <div class="calib-wheel-bar" style="width: 100%; max-width: 280px; margin-top: 12px;">
                     <div class="calib-wheel-center"></div>
                     <div class="calib-wheel-indicator" style="left: {demoValues.steer}%; transition: left 0.1s linear;"></div>
@@ -1506,7 +1472,7 @@
                   <input type="checkbox" checked={parsedIni['STEER']?.['MIN'] === '1'} onchange={() => toggleInvert('STEER')} /> {$t('settings.controls.invert_steering')}
                 </label>
 
-                <!-- ⭐ Valeur LOCK du volant (Curseur + Saisie) -->
+                <!-- Valeur LOCK du volant (Curseur + Saisie) -->
                 <div style="display: flex; align-items: center; gap: 12px; margin-top: 15px; width: 100%; max-width: 320px; background: var(--bg-elevated); padding: 8px 14px; border-radius: var(--r-sm); border: 1px solid var(--border-subtle);">
                   <span style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600; white-space: nowrap;">{$t('settings.controls.wheel_lock')}</span>
                   <input 
@@ -1554,7 +1520,7 @@
                   <div style="font-weight: 800; color: var(--accent); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">{$t('settings.controls.gearbox_title')}</div>
                 </div>
                 
-                <!-- ⭐ NOUVEAU BOUTON TOGGLE BOÎTE EN H -->
+                <!-- Bouton de bascule pour la boîte en H -->
                 <label style="display: flex; align-items: center; gap: 8px; font-size: 0.75rem; cursor: pointer; color: var(--text-secondary); background: var(--bg-panel); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-subtle); width: 100%;">
                   <div style="position: relative; width: 28px; height: 16px; background: {useHPattern ? 'var(--accent)' : 'var(--border-strong)'}; border-radius: 8px; transition: background 0.2s;">
                     <div style="position: absolute; top: 2px; left: {useHPattern ? '14px' : '2px'}; width: 12px; height: 12px; background: #fff; border-radius: 50%; transition: left 0.2s;"></div>
@@ -1572,7 +1538,7 @@
                     <!-- Image de fond (la base) -->
                     <img src="/assets/base_levier.png" alt={$t('settings.controls.gearbox_alt')} style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;" />
 
-                    <!-- ⭐ Lumières de la boîte colorées dynamiquement selon le thème -->
+                    <!-- Lumières de la boîte colorées dynamiquement selon le thème -->
                     <div style="
                       position: absolute; inset: 0; width: 100%; height: 100%;
                       background-color: var(--accent);
@@ -1589,14 +1555,14 @@
                       z-index: 1;
                     "></div>
 
-                    <!-- ⭐ Le Pommeau (Base + Lumières dynamiques) -->
+                    <!-- Le Pommeau (Base + Lumières dynamiques) -->
                     <div 
                       style="
                         position: absolute; width: 68px; height: 68px;
                         transform: translate(-50%, -50%);
                         transition: top 0.15s cubic-bezier(0.4, 0, 0.2, 1), left 0.15s cubic-bezier(0.4, 0, 0.2, 1);
                         filter: drop-shadow(0 5px 5px rgba(0,0,0,0.6));
-                        z-index: 30; /* ⭐ Passe AU-DESSUS des gear-hitbox (qui sont à 20) */
+                        z-index: 30; /* Passe AU-DESSUS des gear-hitbox (qui sont à 20) */
                         
                         left: {
                           liveButtonStates['GEAR_1'] ? '32.6%' :
@@ -1664,7 +1630,7 @@
 
                 </div>
 
-                <!-- ⭐ PALLETS (Toujours visibles) -->
+                <!-- PALLETS (Toujours visibles) -->
                 <div style="display: flex; justify-content: space-between; width: 100%; max-width: 300px; margin-top: 20px;">
                   <!-- Palette Gauche (Descendre) -->
                   <button 
@@ -1697,7 +1663,7 @@
               </div>
           </div>
           
-          <!-- ⭐ NOUVEAU : Option Combiner avec le clavier pour le volant -->
+          <!-- Option Combiner avec le clavier pour le volant -->
           <div style="margin-top: 10px; padding: 16px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--r); display: flex; align-items: center; justify-content: space-between; box-shadow: var(--shadow);">
             <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">{$t('settings.controls.combine_keyboard')}</span>
             <label style="display: flex; align-items: center; cursor: pointer;">
@@ -1712,7 +1678,7 @@
           </div>
 
           {:else}
-            <!-- ⭐ NOUVEAU : Vue simplifiée pour Manette / Clavier avec les commandes de base -->
+            <!-- Vue simplifiée pour Manette / Clavier avec les commandes de base -->
             <div style="background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--r); padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; border-top: 3px solid var(--accent); box-shadow: var(--shadow);">
               
               <div style="text-align: center;">
@@ -1730,7 +1696,7 @@
               <!-- Grille des commandes essentielles -->
               <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 15px; width: 100%; max-width: 900px; justify-items: center;">
                 
-                <!-- ⭐ Bouton Direction -->
+                <!-- Bouton Direction -->
                 {#if deviceType === 'x360'}
                   {@render cockpitBtn('STEER', ArrowLeftRight, 'settings.controls.actions.STEER')}
                 {:else}
@@ -1782,7 +1748,7 @@
 
 
 
-              <!-- ⭐ NOUVEAU : Réglages de la direction (Steering Settings) Uniquement pour la manette -->
+              <!-- Réglages de la direction (Steering Settings) Uniquement pour la manette -->
               {#if deviceType === 'x360'}
               <div style="width: 100%; max-width: 600px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 16px; margin-top: 10px;">
                 <div style="font-weight: 800; font-size: 0.85rem; color: var(--text-primary); margin-bottom: 16px; text-align: center; text-transform: uppercase; letter-spacing: 1px;">
@@ -1851,7 +1817,7 @@
             </div>
           {/if}
                     {#if deviceType === 'wheel'}
-          <!-- ⭐ LIGNE DU BAS : 6 Cartes Harmonieuses avec Pastille de Couleur (Uniquement pour le volant) -->
+          <!-- LIGNE DU BAS : 6 Cartes Harmonieuses avec Pastille de Couleur (Uniquement pour le volant) -->
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; width: 100%; align-items: stretch;">
             
             {#snippet cardHeader(titleKey, dotColor)}
@@ -1975,7 +1941,7 @@
 
           </div>
           {/if}
-          <!-- ⭐ FIN DE LA LIGNE DU BAS -->
+          <!-- FIN DE LA LIGNE DU BAS -->
 
         </div>
       </div>
@@ -2102,7 +2068,7 @@
                                 <option value="8">{$t('settings.controls.axis_slider', { values: { id: 3, num: 8 } })}</option>
                                 <option value="9">{$t('settings.controls.axis_slider', { values: { id: 4, num: 9 } })}</option>
                                 </select>
-                                <!-- ⭐ NOUVEAU : Bouton d'apprentissage d'axe -->
+                                <!-- Bouton d'apprentissage d'axe -->
                                 <button class="filter-btn" onclick={() => openCapture(action.id, $t(action.label))} title="Apprendre l'axe" style="padding: 0 10px; background: var(--accent); color: #fff;">
                                   🎯
                                 </button>
@@ -2162,7 +2128,7 @@
     {/if}
   {/if}
 
-  <!-- ⭐ MODALE SPÉCIALE DIRECTION CLAVIER -->
+  <!-- MODALE SPÉCIALE DIRECTION CLAVIER -->
   {#if keyboardDirCapture}
     <div class="qacrl-dialog-overlay visible">
       <div class="qacrl-dialog">
@@ -2195,7 +2161,7 @@
         <div class="qacrl-dialog-body" style="text-align: center; padding: 20px;">
           <p style="font-size: 1.1rem; font-weight: 600; color: var(--accent);">{$t('settings.controls.capture_hint')}</p>
           
-          <!-- ⭐ NOUVELLE CASE À COCHER HOLD MODE -->
+          <!-- NOUVELLE CASE À COCHER HOLD MODE -->
           {#if capturingSection.includes('TURNSIGNAL') || capturingSection.includes('TURNLIGHTS') || capturingSection.includes('HEADLIGHTS') || capturingSection.includes('BEAM')}
             <div style="margin: 15px 0; padding: 10px; background: var(--bg-elevated); border-radius: 8px; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; gap: 10px;">
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9rem; color: var(--text-primary);">
