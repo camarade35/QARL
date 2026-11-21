@@ -1,39 +1,49 @@
 # English
 
-## QARL {{VERSION}} — CSP search in your interface language
+## QARL {{VERSION}} — Controls, selection and fixes
 
-CSP searches now match translated labels as well as English labels and INI keys. Section headings and search results are displayed in the selected interface language.
+Restored visual button feedback for controls mapped in QARL.
 
-Joining an online server no longer reports an installed track as missing when the server uses one of its layouts.
+Added filters and larger thumbnails to custom-grid car selection, and enlarged the car and track selection dialogs and previews.
+
+Corrected the CrashFX download link.
 
 # Français
 
-## QARL {{VERSION}} — Recherche CSP dans la langue de l’interface
+## QARL {{VERSION}} — Contrôles, sélections et correctifs
 
-La recherche CSP reconnaît désormais les libellés traduits, les libellés anglais et les clés INI. Les titres de section et les résultats s’affichent dans la langue choisie.
+Le retour visuel des boutons fonctionne à nouveau pour les commandes mappées dans QARL.
 
-La connexion à un serveur en ligne ne signale plus à tort qu’un circuit installé est manquant lorsque le serveur utilise l’un de ses layouts.
+Ajout de filtres et agrandissement des vignettes pour la sélection des voitures en grille personnalisée. Les modales de sélection de livrée et de tracé ainsi que leurs aperçus ont également été agrandis.
+
+Lien de téléchargement CrashFX corrigé.
 
 # Deutsch
 
-## QARL {{VERSION}} — CSP-Suche in der Sprache der Benutzeroberfläche
+## QARL {{VERSION}} — Steuerung, Auswahl und Fehlerbehebungen
 
-Die CSP-Suche findet jetzt übersetzte und englische Bezeichnungen sowie INI-Schlüssel. Abschnittsüberschriften und Suchergebnisse werden in der ausgewählten Sprache angezeigt.
+Die visuelle Rückmeldung der Tasten funktioniert wieder für in QARL zugewiesene Steuerungen.
 
-Beim Beitritt zu einem Online-Server wird eine installierte Strecke nicht mehr fälschlich als fehlend gemeldet, wenn der Server eines ihrer Layouts verwendet.
+Die Fahrzeugauswahl für benutzerdefinierte Startaufstellungen bietet jetzt Filter und größere Vorschaubilder. Außerdem wurden die Auswahlfenster und Vorschauen für Fahrzeuge und Strecken vergrößert.
+
+Der CrashFX-Downloadlink wurde korrigiert.
 
 # Español
 
-## QARL {{VERSION}} — Búsqueda de CSP en el idioma de la interfaz
+## QARL {{VERSION}} — Controles, selección y correcciones
 
-La búsqueda de CSP ahora reconoce las etiquetas traducidas, las etiquetas en inglés y las claves INI. Los títulos de sección y los resultados se muestran en el idioma seleccionado.
+Se ha restablecido la respuesta visual de los botones para los controles asignados en QARL.
 
-Al unirse a un servidor en línea, una pista instalada ya no aparece erróneamente como ausente cuando el servidor utiliza uno de sus trazados.
+La selección de coches para la parrilla personalizada ahora incluye filtros y miniaturas más grandes. También se han ampliado las ventanas y vistas previas de selección de coches y circuitos.
+
+Se ha corregido el enlace de descarga de CrashFX.
 
 # Italiano
 
-## QARL {{VERSION}} — Ricerca CSP nella lingua dell’interfaccia
+## QARL {{VERSION}} — Comandi, selezione e correzioni
 
-La ricerca CSP ora riconosce le etichette tradotte, quelle in inglese e le chiavi INI. I titoli delle sezioni e i risultati vengono mostrati nella lingua selezionata.
+È stato ripristinato il feedback visivo dei pulsanti per i comandi assegnati in QARL.
 
-Quando ci si unisce a un server online, una pista installata non viene più segnalata erroneamente come mancante se il server usa uno dei suoi layout.
+La selezione delle auto per la griglia personalizzata include ora filtri e miniature più grandi. Sono state inoltre ampliate le finestre e le anteprime di selezione di auto e circuiti.
+
+È stato corretto il link per scaricare CrashFX.

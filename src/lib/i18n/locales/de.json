@@ -318,6 +318,7 @@
     "power_400_600": "400 - 600 PS",
     "power_over_600": "Über 600 PS",
     "no_image": "Kein Bild",
+    "empty": "Keine Autos entsprechen diesen Filtern.",
     "no_ac_path_title": "Bitte konfiguriere zuerst den Assetto Corsa-Installationsordner.",
     "go_settings": "⚙️ Zu den Einstellungen",
     "context_menu_open_folder": "Rechtsklick zum Öffnen des Ordners",

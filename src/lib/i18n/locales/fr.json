@@ -318,6 +318,7 @@
       "power_400_600": "400 - 600 ch",
       "power_over_600": "Plus de 600 ch",
       "no_image": "Pas d'image",
+      "empty": "Aucune voiture ne correspond aux filtres.",
       "no_ac_path_title": "Veuillez d'abord configurer le dossier d'installation d'Assetto Corsa.",
       "go_settings": "⚙️ Aller aux Paramètres",
       "context_menu_open_folder": "Clic droit pour ouvrir le dossier",

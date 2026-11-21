@@ -318,6 +318,7 @@
       "power_400_600": "400 - 600 hp",
       "power_over_600": "Over 600 hp",
       "no_image": "No image",
+      "empty": "No cars match these filters.",
       "no_ac_path_title": "Please configure the Assetto Corsa installation folder first.",
       "go_settings": "⚙️ Go to Settings",
       "context_menu_open_folder": "Right-click to open folder",

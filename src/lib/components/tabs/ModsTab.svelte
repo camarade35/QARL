@@ -108,7 +108,7 @@
 
   async function openCrashFxPage() {
     try {
-      await openUrl('https://www.overtake.gg/');
+      await openUrl('https://www.overtake.gg/downloads/crashfx.88154/');
     } catch (e) {
       crashFxError = String(e);
     }

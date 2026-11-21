@@ -318,6 +318,7 @@
       "power_400_600": "400 - 600 cv",
       "power_over_600": "Más de 600 cv",
       "no_image": "Sin imagen",
+      "empty": "Ningún coche coincide con estos filtros.",
       "no_ac_path_title": "Por favor, configura primero la carpeta de instalación de Assetto Corsa.",
       "go_settings": "⚙️ Ir a Ajustes",
       "context_menu_open_folder": "Clic derecho para abrir la carpeta",

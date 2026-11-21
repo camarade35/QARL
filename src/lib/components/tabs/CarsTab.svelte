@@ -2,6 +2,7 @@
   import { invoke, convertFileSrc } from '@tauri-apps/api/core';
   import { appState, toggleFavorite, bumpUsedCount } from '$lib/stores/appState.svelte.js';
   import { getFlagUrl, getCountryName } from '$lib/utils/assets.js';
+  import { CM_CATEGORIES, getCarCMCategory, matchesCarFilters } from '$lib/utils/carFilters.js';
   import { t } from 'svelte-i18n';
   import { onMount } from 'svelte';
   import { listen, type UnlistenFn } from '@tauri-apps/api/event';
@@ -30,18 +31,6 @@
   let selectedBrand = $state('');
   let selectedCountry = $state('');
   let selectedClass = $state('');
-
-  // Mots-clés utilisés pour rapprocher les voitures des catégories de Content Manager.
-  const CM_CATEGORIES = [
-    { id: 'Classic', keywords: ['classic', 'historic', 'old'] },
-    { id: 'Drift', keywords: ['drift'] },
-    { id: 'Open-wheel', keywords: ['open-wheel', 'openwheel', 'formula', 'f1'] },
-    { id: 'Prototype', keywords: ['prototype', 'lmp', 'hypercar'] },
-    { id: 'Race', keywords: ['race', 'gt3', 'gt4', 'gt2', 'touring'] },
-    { id: 'Rally', keywords: ['rally'] },
-    { id: 'Sportscars', keywords: ['sportscar', 'sports car', 'supercar'] },
-    { id: 'Street', keywords: ['street', 'road', 'production'] }
-  ];
 
   $effect(() => {
     // AppLoadingScreen charge déjà les voitures au démarrage.
@@ -129,54 +118,18 @@
     return Array.from(countries).sort();
   });
 
-  function getCarCMCategory(car: CarInfo) {
-    const carClass = (car.car_class || '').toLowerCase();
-    const carTags = (car.tags || []).map((t: string) => t.toLowerCase());
-    const allStrings = [carClass, ...carTags];
-
-    for (const cat of CM_CATEGORIES) {
-      for (const kw of cat.keywords) {
-        if (allStrings.some(s => s.includes(kw))) {
-          return cat.id;
-        }
-      }
-    }
-    return null;
-  }
-
   let filteredCars = $derived(
-    cars.filter(c => {
-      if (appState.carFilters.type === 'kunos' && !c.is_kunos) return false;
-      if (appState.carFilters.type === 'mods' && c.is_kunos) return false;
-      if (appState.carFilters.type === 'favorites' && !appState.favorites.cars.includes(c.id)) return false;
-      if (appState.carFilters.type === 'used' && !appState.used.cars[c.id]) return false;
-      
-      if (selectedBrand && c.brand !== selectedBrand) return false;
-      
-      if (selectedCountry) {
-        const cCountry = getCountryName(c.tags);
-        if (cCountry !== selectedCountry) return false;
-      }
-
-      if (selectedClass) {
-        const cmCat = getCarCMCategory(c);
-        if (cmCat !== selectedClass) return false;
-      }
-
-      if (appState.carFilters.power) {
-        const p = c.bhp;
-        if (appState.carFilters.power === 'under_200' && p >= 200) return false;
-        if (appState.carFilters.power === '200_400' && (p < 200 || p > 400)) return false;
-        if (appState.carFilters.power === '400_600' && (p < 400 || p > 600)) return false;
-        if (appState.carFilters.power === 'over_600' && p <= 600) return false;
-      }
-      
-      if (appState.carFilters.tags.length > 0) {
-        if (!c.tags || !appState.carFilters.tags.every((t: string) => c.tags.includes(t))) return false;
-      }
-      if (searchQuery && !c.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-      return true;
-    })
+    cars.filter(car => matchesCarFilters(car, {
+      type: appState.carFilters.type,
+      brand: selectedBrand,
+      country: selectedCountry,
+      carClass: selectedClass,
+      power: appState.carFilters.power,
+      tags: appState.carFilters.tags,
+      search: searchQuery,
+      favoriteIds: appState.favorites.cars,
+      usedCars: appState.used.cars
+    }))
   );
 
   // Charge les images uniquement lorsqu'elles approchent de la zone visible.

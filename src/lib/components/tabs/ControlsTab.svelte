@@ -312,46 +312,37 @@
     }
   }
 
-  function getAcJoyIndex(webviewIndex: number, gp: Gamepad | null): number {
+  function getAcJoyIndex(_webviewIndex: number, gp: Gamepad | null): number {
     if (!gp || !parsedIni['CONTROLLERS']) return -1;
 
     const gpName = gp.id.split(' (')[0].trim();
-    
     const controllers = parsedIni['CONTROLLERS'];
-    for (const key in controllers) {
-      if (key.startsWith('CON')) {
-        const conIdx = parseInt(key.replace('CON', ''));
-        if (!isNaN(conIdx) && controllers[key] === gpName) {
-          return conIdx;
-        }
-      }
+
+    const findControllerIndexByGuid = (prefix: '__IGUID' | 'PGUID', guid: string) => {
+      const normalizedGuid = guid.replace(/[{}]/g, '').trim().toUpperCase();
+      const matches = Object.entries(controllers).filter(([key, value]) => {
+        return key.startsWith(prefix)
+          && /^\d+$/.test(key.slice(prefix.length))
+          && value.replace(/[{}]/g, '').trim().toUpperCase() === normalizedGuid;
+      });
+      return matches.length === 1 ? Number(matches[0][0].slice(prefix.length)) : -1;
+    };
+
+    const normalizedName = gpName.toLowerCase();
+    const targetDevice = dinputDevices.find(d => d.name.toLowerCase() === normalizedName)
+      ?? dinputDevices.find(d => d.name.toLowerCase().includes(normalizedName));
+
+    if (targetDevice) {
+      const byInstanceGuid = findControllerIndexByGuid('__IGUID', targetDevice.iguid);
+      if (byInstanceGuid !== -1) return byInstanceGuid;
+
+      const byProductGuid = findControllerIndexByGuid('PGUID', targetDevice.pguid);
+      if (byProductGuid !== -1) return byProductGuid;
     }
 
-    let targetDevice = dinputDevices.find(d => d.name === gpName);
-    if (!targetDevice) {
-      targetDevice = dinputDevices.find(d => d.name.includes(gpName));
-    }
-
-    if (!targetDevice) return -1;
-
-    const dinputPguid = targetDevice.pguid.toUpperCase();
-    for (const key in controllers) {
-      if (key.startsWith('PGUID')) {
-        const conIdx = parseInt(key.replace('PGUID', ''));
-        if (!isNaN(conIdx) && controllers[key].toUpperCase() === dinputPguid) {
-          return conIdx;
-        }
-      }
-    }
-
-    if (targetDevice.dinput_index !== undefined) {
-      for (const key in controllers) {
-        if (key.startsWith('__IGUID')) {
-          const conIdx = parseInt(key.replace('__IGUID', ''));
-          if (!isNaN(conIdx) && conIdx === targetDevice.dinput_index) {
-            return conIdx;
-          }
-        }
+    for (const [key, value] of Object.entries(controllers)) {
+      if (/^CON\d+$/.test(key) && value.trim().toLowerCase() === normalizedName) {
+        return Number(key.slice(3));
       }
     }
 
