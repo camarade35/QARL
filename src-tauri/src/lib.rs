@@ -13,6 +13,7 @@ use cpal::traits::{DeviceTrait, HostTrait};
 
 mod kunos_lobby;
 mod server_slots;
+mod featured_timings;
 
 // ⭐ Listes officielles des IDs de dossiers Kunos basées sur les captures
 const KUNOS_CARS: &[&str] = &[
@@ -7010,6 +7011,7 @@ pub fn run() {
             open_folder,
             kunos_lobby::get_kunos_online_servers,
             get_server_details,
+            featured_timings::get_featured_stored_lap,
             server_slots::get_server_car_slots,
             join_server,
             detect_steam_id,

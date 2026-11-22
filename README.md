@@ -94,6 +94,7 @@ It's a tool for the community, so we can all keep enjoying this incredible game.
 *   **A server browser** using the Kunos lobby: opening the tab sends the configured Steam ID to the lobby over HTTPS.
     Opening a server checks unoccupied and total slots per car without sending the Steam ID to that server for this check. Some unoccupied slots may be reserved; counts remain unknown if the check fails.
     The Kunos list is fetched in one request, then displayed progressively while scrolling; filters apply to all received servers.
+    The three featured servers show the fastest stored lap of disconnected drivers in the current Emperor Server event and link to their live timing pages. QARL requests their public live timing data when the online tab is open and refreshes it every 90 seconds; these are not permanent historical records.
 
 ### 📸 Screenshots
 | **Main Interface** | **Built-in Visual Guide** |

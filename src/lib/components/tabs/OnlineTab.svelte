@@ -4,8 +4,9 @@
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { t } from 'svelte-i18n';
   import { getFlagUrl } from '$lib/utils/assets.js';
+  import { getServerGamePort } from '$lib/utils/serverPorts.js';
   import { alert } from '$lib/stores/dialog.svelte';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
 
   type LocalTrack = { id: string; name: string; layouts: { id: string }[] };
   type SlotCount = { free: number; total: number };
@@ -154,17 +155,65 @@
   type FeaturedServer = {
     ip: string;
     httpPort: number;
+    managerIndex: number;
   };
 
   const featuredServers: FeaturedServer[] = [
-    { ip: '82.64.40.23', httpPort: 9602 },
-    { ip: '82.64.40.23', httpPort: 9605 },
-    { ip: '82.64.40.23', httpPort: 9608 }
+    { ip: '82.64.40.23', httpPort: 9602, managerIndex: 0 },
+    { ip: '82.64.40.23', httpPort: 9605, managerIndex: 1 },
+    { ip: '82.64.40.23', httpPort: 9608, managerIndex: 2 }
   ];
+
+  type StoredLap = { driver: string; milliseconds: number };
+  type StoredLapState =
+    | { status: 'loading' | 'empty' | 'error' }
+    | { status: 'ready'; lap: StoredLap };
 
   let featuredDetails = $state<Record<string, any>>({});
   let featuredLoading = $state<Record<string, boolean>>({});
   let featuredErrors = $state<Record<string, boolean>>({});
+  let featuredLaps = $state<Record<string, StoredLapState>>({});
+  let timingsLoading = false;
+  let lastTimingsRequest = 0;
+
+  async function loadFeaturedTimings() {
+    if (timingsLoading || Date.now() - lastTimingsRequest < 90_000) return;
+    timingsLoading = true;
+    lastTimingsRequest = Date.now();
+    try {
+      await Promise.all(featuredServers.map(async (server) => {
+        const key = `${server.ip}:${server.httpPort}`;
+        if (!featuredLaps[key]) featuredLaps[key] = { status: 'loading' };
+        try {
+          const lap = await invoke<StoredLap | null>('get_featured_stored_lap', {
+            serverIndex: server.managerIndex
+          });
+          featuredLaps[key] = lap ? { status: 'ready', lap } : { status: 'empty' };
+        } catch (error) {
+          console.error(`Erreur chargement des chronos ${key}:`, error);
+          featuredLaps[key] = { status: 'error' };
+        }
+      }));
+    } finally {
+      timingsLoading = false;
+    }
+  }
+
+  function formatLapTime(milliseconds: number): string {
+    const minutes = Math.floor(milliseconds / 60000);
+    const seconds = Math.floor(milliseconds / 1000) % 60;
+    const millis = milliseconds % 1000;
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(millis).padStart(3, '0')}`;
+  }
+
+  async function openLiveTiming(event: MouseEvent, url: string) {
+    event.preventDefault();
+    try {
+      await openUrl(url);
+    } catch (error) {
+      alert(String(error));
+    }
+  }
 
   async function loadFeaturedServers() {
     await Promise.all(featuredServers.map(async (server) => {
@@ -722,9 +771,7 @@
 
       const rawTrack = serverDetails?.track || selectedServer.track || '';
       const { trackId, layoutId } = getTrackAndLayout(rawTrack, serverDetails?.track_config || '');
-      const gamePort = selectedServer.source === 'kunos'
-        ? serverDetails?.tport || selectedServer.game_port || serverDetails?.gamePort
-        : serverDetails?.gamePort || serverDetails?.port || selectedServer.port;
+      const gamePort = getServerGamePort(serverDetails, selectedServer);
       if (!gamePort) {
         alert($t('online_servers.error_game_port'));
         return;
@@ -766,6 +813,13 @@
 
   onMount(() => {
     loadFeaturedServers();
+  });
+
+  $effect(() => {
+    if (appState.activeTab !== 'tab-online') return;
+    untrack(() => loadFeaturedTimings());
+    const timer = window.setInterval(loadFeaturedTimings, 90_000);
+    return () => window.clearInterval(timer);
   });
 
   $effect(() => {
@@ -925,6 +979,8 @@
     {#each featuredServers as server}
       {@const key = `${server.ip}:${server.httpPort}`}
       {@const details = featuredDetails[key]}
+      {@const storedLap = featuredLaps[key]}
+      {@const liveTimingUrl = `http://${server.ip}:33255/live-timing?server=${server.managerIndex}`}
       {@const description = details?.description || details?.desc || ''}
       {@const presentation = extractFeaturedPresentation(description, details)}
       <article class="featured-server-card">
@@ -966,17 +1022,38 @@
             {/if}
           </div>
 
-          {#if featuredLoading[key]}
-            <div class="featured-server-description empty">{$t('online_servers.featured_loading')}</div>
-          {:else if featuredErrors[key]}
-            <div class="featured-server-description empty">{$t('online_servers.featured_unavailable')}</div>
-          {:else if presentation.imageHtml}
-            <div class="featured-server-description featured-server-image">
-              {@html presentation.imageHtml}
+          <div class="featured-server-presentation">
+            {#if featuredLoading[key]}
+              <div class="featured-server-description empty">{$t('online_servers.featured_loading')}</div>
+            {:else if featuredErrors[key]}
+              <div class="featured-server-description empty">{$t('online_servers.featured_unavailable')}</div>
+            {:else if presentation.imageHtml}
+              <div class="featured-server-description featured-server-image">
+                {@html presentation.imageHtml}
+              </div>
+            {:else}
+              <div class="featured-server-description empty">{$t('online_servers.featured_no_description')}</div>
+            {/if}
+            <div class="featured-server-timings">
+              <div>
+                <span class="featured-server-info-label">{$t('online_servers.info_stored_lap')} : </span>
+                <span>
+                  {#if !storedLap || storedLap.status === 'loading'}
+                    {$t('common.loading')}
+                  {:else if storedLap.status === 'error'}
+                    {$t('online_servers.stored_lap_unavailable')}
+                  {:else if storedLap.status === 'empty'}
+                    {$t('online_servers.stored_lap_empty')}
+                  {:else if storedLap.status === 'ready'}
+                    {storedLap.lap.driver} / {formatLapTime(storedLap.lap.milliseconds)}
+                  {/if}
+                </span>
+              </div>
+              <a class="featured-server-timings-link" href={liveTimingUrl} onclick={(event) => openLiveTiming(event, liveTimingUrl)}>
+                {$t('online_servers.all_times_link')}
+              </a>
             </div>
-          {:else}
-            <div class="featured-server-description empty">{$t('online_servers.featured_no_description')}</div>
-          {/if}
+          </div>
         </div>
 
         <button
