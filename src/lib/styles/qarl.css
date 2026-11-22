@@ -1536,6 +1536,34 @@ select:disabled, input:disabled {
   flex-direction: column;
   gap: 8px;
 }
+.servers-list.virtual {
+  position: relative;
+  display: block;
+  flex-shrink: 0;
+}
+.servers-list.virtual .server-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 76px;
+  box-sizing: border-box;
+}
+.servers-list.virtual .server-meta {
+  flex-wrap: nowrap;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.servers-list.virtual .server-meta > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.server-list-progress {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+  font-weight: normal;
+}
 .online-saved-lists {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

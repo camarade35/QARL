@@ -5,34 +5,46 @@
   import { t } from 'svelte-i18n';
   import { getFlagUrl } from '$lib/utils/assets.js';
   import { alert } from '$lib/stores/dialog.svelte';
+  import { onMount } from 'svelte';
 
   type LocalTrack = { id: string; name: string; layouts: { id: string }[] };
+  type SlotCount = { free: number; total: number };
+  type KunosServer = {
+    ip: string;
+    http_port: number;
+    game_port: number | null;
+    name: string | null;
+    track: string | null;
+    players: number | null;
+    max_players: number | null;
+    cars: string[] | null;
+    country: string | null;
+    password_required: boolean | null;
+  };
 
-  let servers = $state<any[]>([]);
+  let servers = $state.raw<any[]>([]);
+  let loadGeneration = 0;
+  let onlineStarted = false;
   let manualFilter = $state({ favoritesOnly: false });
   let recentFilter = $state({ favoritesOnly: false });
   let isLoading = $state(false);
   let errorMsg = $state('');
-  let pingStatus = $state<Record<string, any>>({});
-  let serverInfos = $state<Record<string, any>>({});
-
-  let currentPage = $state(1);
-  let hasNextPage = $state(true);
-  let isLoadingMore = $state(false);
   let searchQuery = $state('');
   let filterCountry = $state('');
   let filterTrack = $state('');
   let filterMinPlayers = $state(0);
   let filterOnlyPlayable = $state(false);
+  let localCarIds = $derived(new Set(appState.cars.map(car => car.id.toLowerCase())));
+  const SERVER_BLOCK_SIZE = 100;
+  const SERVER_ROW_HEIGHT = 84;
+  const SERVER_OVERSCAN = 8;
+  let serverListElement = $state<HTMLDivElement | null>(null);
+  let revealedServers = $state(0);
+  let visibleStart = $state(0);
+  let visibleEnd = $state(0);
 
   let filteredServers = $derived(
     servers.filter(server => {
-      const key = server.ip + ':' + server.port;
-      const ping = pingStatus[key];
-      if (ping && ping.status === 'fail') {
-        return false;
-      }
-
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         if (!server.name.toLowerCase().includes(q) && !`${server.ip}:${server.port}`.includes(q)) {
@@ -44,22 +56,62 @@
       
       if (filterTrack && cleanTrackName(server.track) !== filterTrack) return false;
       
-      if (filterMinPlayers > 0 && server.players < filterMinPlayers) return false;
+      if (filterMinPlayers > 0 && (server.players == null || server.players < filterMinPlayers)) return false;
 
       if (filterOnlyPlayable) {
-        const info = serverInfos[key];
-        if (info) {
-          const trackData = getTrackDisplay(info.track, info.track_config || '');
-          const carsData = getCarsDisplay(info.cars);
-          if (!trackData.exists || !carsData.allExist) {
-            return false;
-          }
+        if (!server.track || !server.cars?.length ||
+            !getTrackDisplay(server.track).exists || !getCarsDisplay(server.cars).allExist) {
+          return false;
         }
       }
 
       return true;
     })
   );
+
+  let visibleServers = $derived(filteredServers.slice(visibleStart, visibleEnd));
+
+  $effect(() => {
+    const count = filteredServers.length;
+    const initialCount = Math.min(SERVER_BLOCK_SIZE, count);
+    revealedServers = initialCount;
+    visibleStart = 0;
+    visibleEnd = Math.min(initialCount, 20);
+  });
+
+  $effect(() => {
+    const list = serverListElement;
+    const count = filteredServers.length;
+    const revealed = revealedServers;
+    if (!list) return;
+    const container = list.closest<HTMLElement>('.tab-content');
+    if (!container) return;
+
+    let frame = 0;
+    function updateVisibleServers() {
+      frame = 0;
+      if (!container || !list || container.clientHeight === 0) return;
+      const viewport = container.getBoundingClientRect();
+      const bounds = list.getBoundingClientRect();
+      if (bounds.bottom <= viewport.bottom + SERVER_ROW_HEIGHT * SERVER_OVERSCAN && revealed < count) {
+        revealedServers = Math.min(count, revealed + SERVER_BLOCK_SIZE);
+      }
+      visibleStart = Math.max(0, Math.min(revealed, Math.floor((viewport.top - bounds.top) / SERVER_ROW_HEIGHT) - SERVER_OVERSCAN));
+      visibleEnd = Math.max(visibleStart, Math.min(revealed, Math.ceil((viewport.bottom - bounds.top) / SERVER_ROW_HEIGHT) + SERVER_OVERSCAN));
+    }
+    function scheduleUpdate() {
+      if (!frame) frame = requestAnimationFrame(updateVisibleServers);
+    }
+    container.addEventListener('scroll', scheduleUpdate, { passive: true });
+    const observer = new ResizeObserver(scheduleUpdate);
+    observer.observe(container);
+    scheduleUpdate();
+    return () => {
+      container.removeEventListener('scroll', scheduleUpdate);
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    };
+  });
 
   let availableCountries = $derived(
     Array.from(new Set(servers.map(s => s.country).filter(Boolean))).sort()
@@ -75,6 +127,10 @@
   let selectedServer = $state<any>(null);
   let serverDetails = $state<any>(null);
   let loadingDetails = $state(false);
+  let modalGeneration = 0;
+  let carSlots = $state<Record<string, SlotCount>>({});
+  let slotsLoading = $state(false);
+  let slotsError = $state(false);
   
   let commonCars = $state<any[]>([]);
   let missingCars = $state<string[]>([]);
@@ -234,8 +290,7 @@
     
     let missing = 0;
     for (const carId of serverCars) {
-      const localCar = appState.cars.find(c => c.id.toLowerCase() === carId.toLowerCase());
-      if (!localCar) missing++;
+      if (!localCarIds.has(carId.toLowerCase())) missing++;
     }
     
     return { 
@@ -265,7 +320,8 @@
       ip: srv.ip,
       port: srv.port,
       httpPort: srv.httpPort || (srv.port + 1),
-      name: srv.name || `${srv.ip}:${srv.port}`
+      name: srv.name || `${srv.ip}:${srv.port}`,
+      ...(srv.source === 'kunos' ? { source: 'kunos', game_port: srv.game_port } : {})
     });
     saveServerState();
   }
@@ -284,9 +340,14 @@
       return;
     }
     editingServer.name = editName || `${m[1]}:${m[2]}`;
+    if (editingServer.source === 'kunos' &&
+        (editingServer.ip !== m[1] || editingServer.port !== parseInt(m[2], 10))) {
+      delete editingServer.source;
+      delete editingServer.game_port;
+    }
     editingServer.ip = m[1];
     editingServer.port = parseInt(m[2], 10);
-    editingServer.httpPort = editingServer.port + 1;
+    editingServer.httpPort = editingServer.source === 'kunos' ? editingServer.port : editingServer.port + 1;
     
     saveServerState();
     editingServer = null;
@@ -430,57 +491,29 @@
     return { ip, httpPort, password };
   }
 
-  async function chargerServeurs(isLoadMore = false) {
-    if (isLoadMore) {
-      isLoadingMore = true;
-    } else {
-      isLoading = true;
-      servers = [];
-      currentPage = 1;
-      hasNextPage = true;
-      errorMsg = '';
-    }
+  async function chargerServeurs() {
+    const generation = ++loadGeneration;
+    isLoading = true;
+    servers = [];
+    errorMsg = '';
 
     try {
-      const res = await invoke<{ servers: any[], has_next: boolean }>('get_online_servers', { 
-        page: isLoadMore ? currentPage + 1 : 1 
-      });
-      
-      if (isLoadMore) {
-        servers = [...servers, ...res.servers];
-        currentPage++;
-      } else {
-        servers = res.servers;
-        currentPage = 1;
-      }
-      
-      hasNextPage = res.has_next;
-      pingAllServers();
+      const entries = await invoke<KunosServer[]>('get_kunos_online_servers', { steamId: appState.steamId });
+      if (generation !== loadGeneration) return;
+      servers = entries.map(server => ({
+        ...server,
+        port: server.http_port,
+        httpPort: server.http_port,
+        name: server.name || `${server.ip}:${server.http_port}`,
+        track: server.track || '',
+        source: 'kunos'
+      }));
     } catch (e) {
+      if (generation !== loadGeneration) return;
       errorMsg = String(e);
-      if (!isLoadMore) servers = [];
     } finally {
-      isLoading = false;
-      isLoadingMore = false;
+      if (generation === loadGeneration) isLoading = false;
     }
-  }
-
-  async function pingAllServers() {
-    const serversToPing = servers.filter(server => !serverInfos[server.ip + ':' + server.port]);
-
-    await Promise.all(serversToPing.map(async (server) => {
-      const key = server.ip + ':' + server.port;
-      try {
-        const start = Date.now();
-        const info = await invoke<any>('get_server_details', { ip: server.ip, httpPort: server.port });
-        const ms = Date.now() - start;
-        
-        pingStatus[key] = { ms, status: 'ok' };
-        serverInfos[key] = info;
-      } catch (e) {
-        pingStatus[key] = { ms: null, status: 'fail' };
-      }
-    }));
   }
 
   function handlePasteLink() {
@@ -524,8 +557,12 @@
   }
 
   async function openJoinModal(server: any) {
+    const generation = ++modalGeneration;
     selectedServer = server;
     serverDetails = null;
+    carSlots = {};
+    slotsLoading = false;
+    slotsError = false;
     commonCars = [];
     missingCars = [];
     missingTracks = [];
@@ -541,7 +578,12 @@
     serverPassword = (appState.serverPasswords || {})[pwdKey] || '';
 
     try {
-      const info = await invoke<any>('get_server_details', { ip: server.ip, httpPort: server.port });
+      const info = await invoke<any>('get_server_details', {
+        ip: server.ip,
+        httpPort: server.port,
+        exactPort: server.source === 'kunos'
+      });
+      if (generation !== modalGeneration || !selectedServer) return;
       serverDetails = info;
 
       serverDescription = info.description || info.desc || '';
@@ -574,11 +616,32 @@
 
       passwordRequired = !!(info.pass || info.passwordRequired);
       if (Array.isArray(info.features)) serverFeatures = info.features;
+      refreshCarSlots(server, info._qarl_http_port || server.port, generation);
 
     } catch (e) {
-      console.error(e);
+      if (generation === modalGeneration) console.error(e);
     } finally {
-      loadingDetails = false;
+      if (generation === modalGeneration) loadingDetails = false;
+    }
+  }
+
+  async function refreshCarSlots(server: any, httpPort: number, generation: number) {
+    slotsLoading = true;
+    slotsError = false;
+    carSlots = {};
+    try {
+      const slots = await invoke<Record<string, SlotCount>>('get_server_car_slots', {
+        ip: server.ip,
+        httpPort
+      });
+      if (generation === modalGeneration && selectedServer) carSlots = slots;
+    } catch (e) {
+      if (generation === modalGeneration && selectedServer) {
+        console.error('Unable to load server car slots:', e);
+        slotsError = true;
+      }
+    } finally {
+      if (generation === modalGeneration) slotsLoading = false;
     }
   }
 
@@ -630,6 +693,7 @@
       countryCode: server.country || '',
       playersCurrent: info?.clients || server.players || 0,
       playersMax: info?.maxclients || server.max_players || 0,
+      ...(server.source === 'kunos' ? { source: 'kunos', game_port: server.game_port } : {}),
       date: Date.now()
     });
     
@@ -658,14 +722,22 @@
 
       const rawTrack = serverDetails?.track || selectedServer.track || '';
       const { trackId, layoutId } = getTrackAndLayout(rawTrack, serverDetails?.track_config || '');
+      const gamePort = selectedServer.source === 'kunos'
+        ? serverDetails?.tport || selectedServer.game_port || serverDetails?.gamePort
+        : serverDetails?.gamePort || serverDetails?.port || selectedServer.port;
+      if (!gamePort) {
+        alert($t('online_servers.error_game_port'));
+        return;
+      }
 
       await invoke('join_server', {
         acPath: appState.acPath,
         documentsPath: appState.documentsPath,
         ip: selectedServer.ip,
-        // Le port de jeu peut être fourni sous différents noms selon le serveur.
-        port: serverDetails?.gamePort || serverDetails?.port || selectedServer.port,
-        httpPort: serverDetails?.httpPort || serverDetails?.cport || selectedServer.port,
+        port: gamePort,
+        httpPort: selectedServer.source === 'kunos'
+          ? selectedServer.port
+          : serverDetails?.httpPort || serverDetails?.cport || selectedServer.port,
         carId: selectedCar.id,
         skinId: selectedSkin ? selectedSkin.name : "",
         onlineName: appState.onlineName || appState.driverName || "Player",
@@ -692,9 +764,15 @@
     }
   }
 
-  $effect(() => {
-    chargerServeurs(false);
+  onMount(() => {
     loadFeaturedServers();
+  });
+
+  $effect(() => {
+    if (appState.activeTab === 'tab-online' && !onlineStarted) {
+      onlineStarted = true;
+      chargerServeurs();
+    }
   });
 
   $effect(() => {
@@ -923,14 +1001,14 @@
 <div style="position: sticky; top: -24px; z-index: 100; background: var(--bg-root); margin: -24px -24px 0 -24px; padding: 24px 24px 15px 24px; border-bottom: 1px solid var(--border-subtle); box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
   
   <div class="section-header" style="margin-bottom: 15px;">
-    <h2 class="section-title">{$t('online_servers.public_title', { values: { filtered: filteredServers.length, total: servers.length } })}</h2>
-    <div style="display: flex; gap: 10px;">
-      {#if hasNextPage}
-        <button class="btn-secondary" onclick={() => chargerServeurs(true)} disabled={isLoadingMore || isLoading} style="padding: 0 15px;">
-          {isLoadingMore ? '⏳...' : $t('online_servers.load_more')}
-        </button>
+    <h2 class="section-title">
+      {$t('online_servers.public_title', { values: { filtered: filteredServers.length, total: servers.length } })}
+      {#if servers.length > 0}
+        <span class="server-list-progress">{$t('online_servers.revealed', { values: { shown: revealedServers, total: filteredServers.length } })}</span>
       {/if}
-      <button class="btn-secondary" onclick={() => chargerServeurs(false)} disabled={isLoading}>
+    </h2>
+    <div style="display: flex; gap: 10px;">
+      <button class="btn-secondary" onclick={chargerServeurs} disabled={isLoading}>
         {isLoading ? $t('common.loading') : $t('online_servers.refresh')}
       </button>
     </div>
@@ -976,13 +1054,13 @@
 {:else if filteredServers.length === 0}
   <div class="servers-empty">{$t('online_servers.no_results')}</div>
 {:else}
-  <div class="servers-list">
-    {#each filteredServers as server}
-      {@const key = server.ip + ':' + server.port}
-      {@const ping = pingStatus[key]}
-      {@const isFull = server.players >= server.max_players}
+  <div class="servers-list virtual" bind:this={serverListElement} style:height={`${revealedServers * SERVER_ROW_HEIGHT}px`}>
+    {#each visibleServers as server, index}
+      {@const isFull = server.players != null && server.max_players != null && server.players >= server.max_players}
+      {@const trackData = getTrackDisplay(server.track)}
+      {@const carsData = getCarsDisplay(server.cars)}
       
-      <div class="server-row">
+      <div class="server-row" style:top={`${(visibleStart + index) * SERVER_ROW_HEIGHT}px`}>
         <div class="server-flag" title={server.country || $t('common.unknown')}>
           {#if getFlagImage(server.country)}
             <img src={getFlagImage(server.country)} alt={server.country} style="width: 100%; height: 100%; object-fit: cover; border-radius: 2px;" />
@@ -995,13 +1073,13 @@
           <div class="server-meta">
             <code>{server.ip}:{server.port}</code>
             
-            {#if serverInfos[key]}
-              {@const trackData = getTrackDisplay(serverInfos[key].track)}
-              {@const carsData = getCarsDisplay(serverInfos[key].cars)}
-              
-              <span style="color: {trackData.exists ? '#6fc98a' : '#e57373'}; font-weight: 600; display: flex; align-items: center; gap: 4px;" title={trackData.exists ? $t('online_servers.track_installed') : $t('online_servers.track_missing')}>
-                {trackData.exists ? '✅' : '❌'} {cleanTrackName(server.track)}
-              </span>
+              {#if server.track}
+                <span style="color: {trackData.exists ? '#6fc98a' : '#e57373'}; font-weight: 600; display: flex; align-items: center; gap: 4px;" title={trackData.exists ? $t('online_servers.track_installed') : $t('online_servers.track_missing')}>
+                  {trackData.exists ? '✅' : '❌'} {cleanTrackName(server.track)}
+                </span>
+              {:else}
+                <span style="color: var(--text-tertiary);">{$t('common.unknown')}</span>
+              {/if}
 
               <span style="color: {carsData.allExist ? '#6fc98a' : '#e57373'}; font-weight: 600; display: flex; align-items: center; gap: 4px;" title={carsData.allExist ? $t('online_servers.cars_installed') : $t('online_servers.cars_missing', { values: { count: carsData.missingCount } })}>
                 {#if carsData.total > 0}
@@ -1009,22 +1087,12 @@
                   {carsData.allExist ? $t('online_servers.cars_ok') : $t('online_servers.mods_missing', { values: { count: carsData.missingCount } })}
                 {/if}
               </span>
-            {:else}
-              <span style="color: var(--text-tertiary); display: flex; align-items: center; gap: 4px;">
-                {$t('online_servers.analyzing')}
-              </span>
-            {/if}
           </div>
         </div>
         <div class="server-players" class:full={isFull} class:empty={server.players === 0}>
-          {server.players} / {server.max_players}
+          {server.players ?? '–'} / {server.max_players ?? '–'}
         </div>
-        {#if ping}
-          {#if ping.status === 'ok'}<div class="server-ping good">{ping.ms} ms</div>
-          {:else}<div class="server-ping bad">✕</div>{/if}
-        {:else}
-          <div class="server-ping">⏳</div>
-        {/if}
+        <div class="server-ping" title={$t('online_servers.ping_not_checked')}>–</div>
         <button class="server-action" onclick={() => openJoinModal(server)}>{$t('online_servers.join')}</button>
       </div>
     {/each}
@@ -1145,11 +1213,21 @@
         <!-- Choix de la voiture -->
         <div class="field" style="margin-top: 15px;">
           <div class="field-label" id="qarl-online-car-label">{$t('online_servers.choose_car')}</div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+            <span style="font-size: 0.75rem; color: var(--text-tertiary);">{$t('online_servers.slots_hint')}</span>
+            <button class="btn-secondary" disabled={slotsLoading} onclick={() => refreshCarSlots(selectedServer, serverDetails._qarl_http_port || selectedServer.port, modalGeneration)}>
+              {$t('online_servers.slots_refresh')}
+            </button>
+          </div>
+          {#if slotsError}
+            <div class="server-join-warning">{$t('online_servers.slots_error')}</div>
+          {/if}
           <div class="car-select-list" role="group" aria-labelledby="qarl-online-car-label">
             {#if commonCars.length === 0}
               <div style="padding: 15px; color: var(--text-tertiary);">{$t('online_servers.no_cars')}</div>
             {:else}
               {#each commonCars as car}
+                {@const slots = carSlots[car.id.toLowerCase()]}
                 <div class="car-select-row" class:selected={selectedCar?.id === car.id} onclick={() => selectCar(car)} onkeydown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault();
@@ -1161,7 +1239,9 @@
                     <div class="car-select-name">{car.name}</div>
                     <div class="car-select-id">{car.id}</div>
                   </div>
-                  <div class="car-select-count free">(1/1)</div>
+                  <div class="car-select-count" class:free={slots && slots.free > 0} class:full={slots && slots.free === 0} class:unknown={!slots} title={$t('online_servers.slots_hint')}>
+                    {slotsLoading ? '…' : slots ? `${slots.free}/${slots.total}` : '–'}
+                  </div>
                 </div>
               {/each}
             {/if}

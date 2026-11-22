@@ -1,41 +1,49 @@
-![Three free-practice servers in QARL's Online tab](https://raw.githubusercontent.com/camarade35/QARL/v1.4.2/docs/screenshots/online-servers.png)
-
 # English
 
-## QARL {{VERSION}} — Online servers, layout and quality fixes
+## QARL {{VERSION}} — A new online server browser
 
-- Added three free-practice server cards with live server details, descriptions and images when available.
-- Recent and saved servers now appear side by side, and the opponent list makes better use of the sidebar space.
-- Fixed Svelte and TypeScript errors and accessibility warnings across the interface.
+- The public server list now comes directly from the Kunos lobby, replacing GS4U. Opening the Online tab sends your configured Steam ID to the Kunos lobby over HTTPS.
+- Browse large lists smoothly with automatic scrolling and a progress counter. Filters search all servers received.
+- Check unoccupied slots per car when joining, and refresh the counts when needed. Some unoccupied slots may be reserved; unavailable counts are shown as unknown.
+- Fixed missing country flags. Latency is not checked in the public list.
+- Removed a duplicate mod-installation translation without changing the displayed text.
 
 # Français
 
-## QARL {{VERSION}} — Serveurs en ligne, interface et correctifs
+## QARL {{VERSION}} — Un nouveau navigateur de serveurs
 
-- Ajout de trois cartes de serveurs d’essais libres avec leurs informations en direct, leur descriptif et leurs images lorsqu’elles sont disponibles.
-- Les serveurs récents et enregistrés sont maintenant côte à côte, et la liste des adversaires utilise mieux l’espace de la barre latérale.
-- Correction des erreurs Svelte et TypeScript ainsi que des avertissements d’accessibilité dans l’interface.
+- La liste des serveurs publics provient désormais directement du lobby Kunos, à la place de GS4U. L'ouverture de l'onglet En ligne transmet le Steam ID configuré au lobby Kunos en HTTPS.
+- Parcours les grandes listes plus fluidement grâce au défilement automatique et à son compteur. Les filtres recherchent dans tous les serveurs reçus.
+- Consulte les places inoccupées par voiture avant de rejoindre et actualise les compteurs si nécessaire. Certaines places inoccupées peuvent être réservées ; les compteurs indisponibles restent inconnus.
+- Correction de drapeaux manquants. La latence n'est pas vérifiée dans la liste publique.
+- Suppression d'une traduction en double pour l'installation des mods, sans changer le texte affiché.
 
 # Deutsch
 
-## QARL {{VERSION}} — Online-Server, Oberfläche und Fehlerbehebungen
+## QARL {{VERSION}} — Ein neuer Serverbrowser
 
-- Drei Karten für Server zum freien Üben hinzugefügt, mit aktuellen Serverinformationen, Beschreibung und verfügbaren Bildern.
-- Zuletzt verwendete und gespeicherte Server werden jetzt nebeneinander angezeigt. Außerdem nutzt die Gegnerliste den Platz in der Seitenleiste besser.
-- Svelte- und TypeScript-Fehler sowie Barrierefreiheitswarnungen in der Oberfläche wurden behoben.
+- Die öffentliche Serverliste stammt jetzt direkt aus der Kunos-Lobby statt von GS4U. Beim Öffnen des Online-Tabs wird die konfigurierte Steam-ID über HTTPS an die Kunos-Lobby gesendet.
+- Große Listen lassen sich mit automatischem Scrollen und Fortschrittsanzeige flüssig durchsuchen. Die Filter berücksichtigen alle empfangenen Server.
+- Vor dem Beitreten werden unbesetzte Plätze pro Fahrzeug angezeigt und können aktualisiert werden. Einige unbesetzte Plätze können reserviert sein; nicht verfügbare Angaben bleiben unbekannt.
+- Fehlende Länderflaggen wurden korrigiert. Die Latenz wird in der öffentlichen Liste nicht geprüft.
+- Eine doppelte Übersetzung für die Mod-Installation wurde entfernt, ohne den angezeigten Text zu ändern.
 
 # Español
 
-## QARL {{VERSION}} — Servidores online, interfaz y correcciones
+## QARL {{VERSION}} — Un nuevo navegador de servidores
 
-- Se han añadido tres tarjetas de servidores de práctica libre con información en directo, descripción e imágenes cuando están disponibles.
-- Los servidores recientes y guardados ahora aparecen uno al lado del otro, y la lista de rivales aprovecha mejor el espacio de la barra lateral.
-- Se han corregido errores de Svelte y TypeScript y advertencias de accesibilidad en la interfaz.
+- La lista de servidores públicos procede ahora directamente del lobby de Kunos, en lugar de GS4U. Al abrir la pestaña En línea se envía el Steam ID configurado al lobby de Kunos mediante HTTPS.
+- Recorre listas grandes con desplazamiento automático y un contador de progreso. Los filtros buscan en todos los servidores recibidos.
+- Consulta las plazas desocupadas por coche antes de entrar y actualiza los contadores cuando lo necesites. Algunas plazas desocupadas pueden estar reservadas; si no se pueden consultar, se muestran como desconocidas.
+- Se han corregido banderas de países que faltaban. La latencia no se comprueba en la lista pública.
+- Se ha eliminado una traducción duplicada de la instalación de mods sin cambiar el texto mostrado.
 
 # Italiano
 
-## QARL {{VERSION}} — Server online, interfaccia e correzioni
+## QARL {{VERSION}} — Un nuovo browser dei server
 
-- Aggiunte tre schede per i server di pratica libera con informazioni in tempo reale, descrizione e immagini quando disponibili.
-- I server recenti e salvati sono ora affiancati e l’elenco degli avversari sfrutta meglio lo spazio della barra laterale.
-- Corretti gli errori Svelte e TypeScript e gli avvisi di accessibilità nell’interfaccia.
+- L'elenco dei server pubblici proviene ora direttamente dalla lobby Kunos, al posto di GS4U. Aprendo la scheda Online, lo Steam ID configurato viene inviato alla lobby Kunos tramite HTTPS.
+- Scorri gli elenchi più grandi con caricamento automatico e un contatore di avanzamento. I filtri cercano in tutti i server ricevuti.
+- Controlla i posti non occupati per auto prima di entrare e aggiorna i conteggi quando necessario. Alcuni posti non occupati possono essere riservati; i conteggi non disponibili rimangono sconosciuti.
+- Corrette alcune bandiere nazionali mancanti. La latenza non viene verificata nell'elenco pubblico.
+- Rimossa una traduzione duplicata per l'installazione delle mod senza cambiare il testo visualizzato.

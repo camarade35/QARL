@@ -11,6 +11,9 @@ use tauri::Listener; // ⭐ Ajouté pour corriger l'erreur E0599
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use cpal::traits::{DeviceTrait, HostTrait};
 
+mod kunos_lobby;
+mod server_slots;
+
 // ⭐ Listes officielles des IDs de dossiers Kunos basées sur les captures
 const KUNOS_CARS: &[&str] = &[
     "abarth500", "abarth500_s1", "alfa_romeo_giulietta_qv", "alfa_romeo_giulietta_qv_le",
@@ -3015,147 +3018,8 @@ fn open_folder(ac_path: String, documents_path: String, folder_type: String, fol
     Ok(())
 }
 
-#[derive(Serialize, Clone)]
-struct OnlineServer {
-    name: String,
-    ip: String, 
-    port: u16,  
-    track: String,
-    players: u32,
-    max_players: u32,
-    status: String,
-    country: Option<String>,
-    join_url: String,
-    cars: Vec<String>,
-    description: Option<String>,
-}
-
-#[derive(Serialize, Clone)]
-struct OnlineServersResponse {
-    servers: Vec<OnlineServer>,
-    has_next: bool,
-}
-
 #[tauri::command]
-async fn get_online_servers(page: u32) -> Result<OnlineServersResponse, String> {
-    use scraper::{Html, Selector};
-
-    // On cible la page demandée de gs4u.net
-    let url = format!("https://www.gs4u.net/en/assettocorsa/page-{}", page);
-    let resp = reqwest::get(url)
-        .await
-        .map_err(|e| format!("Erreur réseau: {}", e))?;
-
-    if !resp.status().is_success() {
-        return Err(format!("Erreur HTTP: {}", resp.status()));
-    }
-
-    let body = resp.text().await.map_err(|e| format!("Erreur lecture HTML: {}", e))?;
-    let document = Html::parse_document(&body);
-
-    // Sélecteurs CSS basés sur ton ancien main.js
-    let row_selector = Selector::parse("tr[data-server-id]").unwrap();
-    let name_selector = Selector::parse("td.servername a").unwrap();
-    let players_selector = Selector::parse("td.players").unwrap();
-    let ipport_selector = Selector::parse("td.ipport a").unwrap();
-    let map_selector = Selector::parse("td.mapname a").unwrap();
-    let country_selector = Selector::parse("td.contryname span").unwrap();
-
-    let mut servers = Vec::new();
-
-    for row in document.select(&row_selector) {
-        // Nom du serveur
-        let raw_name = row.select(&name_selector)
-            .next()
-            .and_then(|el| el.value().attr("title"))
-            .unwrap_or("Serveur inconnu")
-            .to_string();
-        
-        // ⭐ Nettoyage du nom (on retire le texte parasite de gs4u)
-        let name = raw_name.replace("Go to page with detailed information about the server: ", "");
-
-        // Joueurs (ex: "16&nbsp;/&nbsp;32" -> on nettoie)
-        let players_text = row.select(&players_selector)
-            .next()
-            .map(|el| el.text().collect::<String>().replace("&nbsp;", " "))
-            .unwrap_or_default();
-        
-        let mut players = 0;
-        let mut max_players = 0;
-        if let Some((p, m)) = players_text.split_once('/') {
-            players = p.trim().parse::<u32>().unwrap_or(0);
-            max_players = m.trim().parse::<u32>().unwrap_or(0);
-        }
-
-        // IP:Port (ex: "46.4.115.244:8390")
-        let ipport_text = row.select(&ipport_selector)
-            .next()
-            .map(|el| el.text().collect::<String>())
-            .unwrap_or_default();
-
-        let (ip, port) = if let Some((i, p)) = ipport_text.split_once(':') {
-            (i.to_string(), p.parse::<u16>().unwrap_or(0))
-        } else {
-            ("0.0.0.0".to_string(), 0)
-        };
-
-        // Circuit (Map)
-        let raw_track = row.select(&map_selector)
-            .next()
-            .and_then(|el| el.value().attr("title"))
-            .unwrap_or("Circuit inconnu")
-            .to_string();
-            
-        // ⭐ Nettoyage du texte parasite de GS4u
-        let mut clean_track = raw_track.replace("Search server with a map: ", "");
-        
-        // ⭐ Nettoyage des chemins complexes envoyés par certains serveurs (ex: "csp/.../ks_nordschleife")
-        if clean_track.contains('/') {
-            if let Some(last_part) = clean_track.split('/').last() {
-                clean_track = last_part.to_string();
-            }
-        }
-        let track = clean_track;
-
-        // Pays (on cherche la classe 'flagicon16 xx' comme 'fr', 'de', etc.)
-        let country = row.select(&country_selector)
-            .next()
-            .and_then(|el| {
-                // On cherche la classe qui fait exactement 2 lettres (ex: "fr", "de", "us")
-                for class in el.value().classes() {
-                    if class.len() == 2 && class != "16" && class.chars().all(|c| c.is_ascii_alphabetic()) {
-                        return Some(class.to_uppercase());
-                    }
-                }
-                None
-            });
-
-        if port > 0 {
-            servers.push(OnlineServer {
-                name,
-                ip,
-                port,
-                track,
-                players,
-                max_players,
-                status: "En ligne".to_string(),
-                country,
-                join_url: String::new(), // On n'en a pas besoin
-                cars: Vec::new(),        
-                description: None,
-            });
-        }
-    }
-
-    // ⭐ Détection de la page suivante
-    let next_page_str = format!("page-{}", page + 1);
-    let has_next = body.contains(&next_page_str);
-
-    Ok(OnlineServersResponse { servers, has_next })
-}
-
-#[tauri::command]
-async fn get_server_details(ip: String, http_port: u16) -> Result<serde_json::Value, String> {
+async fn get_server_details(ip: String, http_port: u16, exact_port: Option<bool>) -> Result<serde_json::Value, String> {
     // On prépare un client avec un timeout plus court (2s) et un User-Agent de navigateur
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
@@ -3174,7 +3038,10 @@ async fn get_server_details(ip: String, http_port: u16) -> Result<serde_json::Va
         if let Ok(resp) = client.get(&url_details).send().await {
             if resp.status().is_success() {
                 if let Ok(text) = resp.text().await {
-                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+                    if let Ok(mut json) = serde_json::from_str::<serde_json::Value>(&text) {
+                        if let Some(object) = json.as_object_mut() {
+                            object.insert("_qarl_http_port".into(), port.into());
+                        }
                         return Ok(json);
                     }
                 }
@@ -3186,7 +3053,10 @@ async fn get_server_details(ip: String, http_port: u16) -> Result<serde_json::Va
         if let Ok(resp) = client.get(&url_info).send().await {
             if resp.status().is_success() {
                 if let Ok(text) = resp.text().await {
-                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+                    if let Ok(mut json) = serde_json::from_str::<serde_json::Value>(&text) {
+                        if let Some(object) = json.as_object_mut() {
+                            object.insert("_qarl_http_port".into(), port.into());
+                        }
                         return Ok(json);
                     }
                 }
@@ -3194,6 +3064,11 @@ async fn get_server_details(ip: String, http_port: u16) -> Result<serde_json::Va
         }
 
         Err("Introuvable".into())
+    }
+
+    if exact_port.unwrap_or(false) {
+        return test_port(client, ip, http_port).await
+            .map_err(|_| "Serveur injoignable. Vérifie qu'il est en ligne.".to_string());
     }
 
     // ⭐ On lance les 3 tests EN PARALLÈLE
@@ -7133,8 +7008,9 @@ pub fn run() {
             read_crashfx_data,
             save_crashfx_data,
             open_folder,
-            get_online_servers,
+            kunos_lobby::get_kunos_online_servers,
             get_server_details,
+            server_slots::get_server_car_slots,
             join_server,
             detect_steam_id,
             list_ac_controller_files,

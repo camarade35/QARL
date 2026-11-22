@@ -1,5 +1,5 @@
 // Dictionnaire : { 'nom_normalise': { name: 'Nom Lisible', file: 'Fichier.png' } }
-/** @type {Record<string, { name: string, file: string }>} */
+/** @type {Record<string, { name: string, file: string | null }>} */
 const COUNTRY_MAP = {
   // Europe
   'fr': { name: 'countries.france', file: 'france23.png' },
@@ -52,7 +52,7 @@ const COUNTRY_MAP = {
   'hu': { name: 'countries.hungary', file: 'hungary23.png' },
   'ro': { name: 'countries.romania', file: 'romania23.png' },
   'gr': { name: 'countries.greece', file: 'greece23.png' },
-  'is': { name: 'countries.iceland', file: 'iceland23.png' },
+  'is': { name: 'countries.iceland', file: 'iceland.svg' },
 
   // Amériques
   'us': { name: 'countries.usa', file: 'usa23.png' },
@@ -80,27 +80,27 @@ const COUNTRY_MAP = {
   'cn': { name: 'countries.china', file: 'china23.png' },
   'china': { name: 'countries.china', file: 'china23.png' },
   'chine': { name: 'countries.china', file: 'china23.png' },
-  'kr': { name: 'countries.south_korea', file: 'southkorea23.png' },
-  'tw': { name: 'countries.taiwan', file: 'taiwan23.png' },
+  'kr': { name: 'countries.south_korea', file: 'korea23.png' },
+  'tw': { name: 'countries.taiwan', file: 'chinesetaipei23.png' },
   'hk': { name: 'countries.hong_kong', file: 'hongkong23.png' },
   'sg': { name: 'countries.singapore', file: 'singapore23.png' },
   'my': { name: 'countries.malaysia', file: 'malaysia23.png' },
-  'th': { name: 'countries.thailand', file: 'thailand23.png' },
-  'vn': { name: 'countries.vietnam', file: 'vietnam23.png' },
-  'id': { name: 'countries.indonesia', file: 'indonesia23.png' },
+  'th': { name: 'countries.thailand', file: 'thailand23-01.png' },
+  'vn': { name: 'countries.vietnam', file: 'vietnam.svg' },
+  'id': { name: 'countries.indonesia', file: 'indonesian23-01.png' },
   'ph': { name: 'countries.philippines', file: 'philippines23.png' },
   'in': { name: 'countries.india', file: 'india23.png' },
-  'pk': { name: 'countries.pakistan', file: 'pakistan23.png' },
-  'bd': { name: 'countries.bangladesh', file: 'bangladesh23.png' },
+  'pk': { name: 'countries.pakistan', file: null },
+  'bd': { name: 'countries.bangladesh', file: null },
   'ae': { name: 'countries.uae', file: 'uae23.png' },
-  'sa': { name: 'countries.saudi_arabia', file: 'saudiarabia23.png' },
+  'sa': { name: 'countries.saudi_arabia', file: 'saudi_arabia23.png' },
   'tr': { name: 'countries.turkey', file: 'turkey23.png' },
   'il': { name: 'countries.israel', file: 'israel23.png' },
   'za': { name: 'countries.south_africa', file: 'southafrica23.png' },
   'southafrica': { name: 'countries.south_africa', file: 'southafrica23.png' },
   'afriquedusud': { name: 'countries.south_africa', file: 'southafrica23.png' },
-  'eg': { name: 'countries.egypt', file: 'egypt23.png' },
-  'ke': { name: 'countries.kenya', file: 'kenya23.png' },
+  'eg': { name: 'countries.egypt', file: null },
+  'ke': { name: 'countries.kenya', file: null },
   'ng': { name: 'countries.nigeria', file: 'nigeria23.png' },
   'au': { name: 'countries.australia', file: 'australia23.png' },
   'australia': { name: 'countries.australia', file: 'australia23.png' },
@@ -163,7 +163,7 @@ export function getFlagUrl(input, fallbackPath = null) {
     norm = normalizeStr(input);
   }
 
-  if (norm && COUNTRY_MAP[norm]) {
+  if (norm && COUNTRY_MAP[norm]?.file) {
     return `/assets/flags/${COUNTRY_MAP[norm].file}`;
   }
   

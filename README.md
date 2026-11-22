@@ -28,6 +28,9 @@ C'est un outil pour la communauté, pour qu'on puisse tous continuer à profiter
 *   **Un gestionnaire de mods** simple (glisser-déposer).
 *   **Un catalogue d'applications Assetto Corsa** pour découvrir CrashFX, CMRT et Map Display.
 *   **Une interface traduite en 5 langues**, claire et moderne.
+*   **Un navigateur de serveurs** utilisant le lobby Kunos : l'ouverture de l'onglet envoie le Steam ID configuré au lobby en HTTPS.
+    À l'ouverture d'un serveur, les places inoccupées et le total sont vérifiés par voiture, sans transmettre le Steam ID au serveur pour cette vérification. Certaines places inoccupées peuvent être réservées ; si la vérification échoue, leur nombre reste inconnu.
+    La liste Kunos est récupérée en une fois, puis affichée progressivement au défilement ; les filtres portent sur tous les serveurs reçus.
 
 ---
 
@@ -88,6 +91,9 @@ It's a tool for the community, so we can all keep enjoying this incredible game.
 *   **A simple mod manager** (drag & drop).
 *   **An Assetto Corsa app catalog** featuring CrashFX, CMRT, and Map Display.
 *   **An interface translated into 5 languages**, clean and modern.
+*   **A server browser** using the Kunos lobby: opening the tab sends the configured Steam ID to the lobby over HTTPS.
+    Opening a server checks unoccupied and total slots per car without sending the Steam ID to that server for this check. Some unoccupied slots may be reserved; counts remain unknown if the check fails.
+    The Kunos list is fetched in one request, then displayed progressively while scrolling; filters apply to all received servers.
 
 ### 📸 Screenshots
 | **Main Interface** | **Built-in Visual Guide** |
