@@ -12,7 +12,7 @@
     controllersCount: number;
   };
 
-  let { onContinue = () => {} } = $props();
+  let { onContinue = () => {} }: { onContinue?: () => void } = $props();
 
   let status = $state<AcInitStatus | null>(null);
   let checking = $state(false);

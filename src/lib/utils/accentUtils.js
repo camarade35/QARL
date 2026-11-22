@@ -6,6 +6,10 @@ export const DEFAULT_ACCENT = '#319dd3';
 export const DEFAULT_INTENSITY = 100;
 export const DEFAULT_THEME = 'dark';
 
+/**
+ * @param {string} hex
+ * @returns {{ r: number, g: number, b: number }}
+ */
 export function hexToRgb(hex) {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   return result
@@ -17,16 +21,30 @@ export function hexToRgb(hex) {
     : { r: 49, g: 157, b: 211 };
 }
 
+/**
+ * @param {number} r
+ * @param {number} g
+ * @param {number} b
+ * @returns {string}
+ */
 export function rgbToHex(r, g, b) {
+  /** @param {number} v */
   const clamp = (v) => Math.max(0, Math.min(255, Math.round(v)));
+  /** @param {number} v */
   const toHex = (v) => clamp(v).toString(16).padStart(2, '0');
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
+/** @param {string} theme */
 function isLightTheme(theme) {
   return theme === 'light' || theme === 'office';
 }
 
+/**
+ * @param {string} color
+ * @param {string} theme
+ * @param {number} intensity
+ */
 export function applyAccentColor(color, theme, intensity) {
   if (typeof document === 'undefined') return;
 
@@ -80,6 +98,7 @@ export const GRAYSCALE_SHADES = [
   { id: 'g10', hex: '#ffffff', label: 'sidebar.bg_shade_g10' }
 ];
 
+/** @param {string} shadeId */
 export function applyBackgroundShade(shadeId) {
   if (typeof document === 'undefined') return;
   const root = document.documentElement;

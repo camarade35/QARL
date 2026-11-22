@@ -1161,8 +1161,8 @@
   },
   "online": {
     "paste_title": "🔗 Incolla un link del server",
-    "dissociate_btn": "🔓 DISSOCIA",
-    "associate_btn": "🔗 ASSOCIA",
+    "dissociate_btn": "🔓 Disassociare i link acstuff da QARL",
+    "associate_btn": "🔗 Associare i link acstuff a QARL",
     "edit_btn_title": "Modifica",
     "paste_placeholder": "https://acstuff.club/... o IP:PORT",
     "join_btn": "▶ Unisciti",
@@ -1221,6 +1221,10 @@
     "save_success": "Impostazioni audio salvate!"
   },
   "online_servers": {
+    "featured_title": "Server prove libere",
+    "featured_loading": "Caricamento presentazione...",
+    "featured_unavailable": "Server temporaneamente non disponibile",
+    "featured_no_description": "Nessuna presentazione disponibile",
     "public_title": "Server pubblici ({filtered} / {total})",
     "load_more": "⬇ Carica altri",
     "refresh": "🔄 Aggiorna",

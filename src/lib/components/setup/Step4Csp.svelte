@@ -21,7 +21,7 @@
   };
   type InstallProgress = { type: string; percent?: number; current_file?: string };
 
-  let { onContinue = () => {} } = $props();
+  let { onContinue = () => {} }: { onContinue?: () => void } = $props();
 
   let loading = $state(true);
   let status = $state<SetupStatus | null>(null);
@@ -128,7 +128,7 @@
     };
   });
 
-  let state: 'none' | 'csp_only' | 'all_good' | 'loading' = $derived(
+  let setupStatus: 'none' | 'csp_only' | 'all_good' | 'loading' = $derived(
     loading ? 'loading' :
     !status ? 'none' :
     !status.has_csp && !status.has_sol && !status.has_pure ? 'none' :
@@ -142,12 +142,12 @@
     ⏳ Analyse des modules…
   </div>
 {:else}
-  {#if state === 'none'}
+  {#if setupStatus === 'none'}
     <div class="setup-warning">
       <strong>⚠️ {$t('setup.csp.none_installed')}</strong>
       <p style="margin-top: 8px; white-space: pre-line;">{$t('setup.csp.none_desc')}</p>
     </div>
-  {:else if state === 'csp_only'}
+  {:else if setupStatus === 'csp_only'}
     <div class="setup-warning">
       <strong>⚠️ {$t('setup.csp.csp_only')}</strong>
       <p style="margin-top: 8px;">{$t('setup.csp.csp_only_desc')}</p>
@@ -164,7 +164,7 @@
     <p style="color: var(--text-secondary); margin-bottom: 16px;">{$t('setup.csp.all_desc')}</p>
   {/if}
 
-  {#if state === 'none' || state === 'csp_only' || forceShowDropzone}
+  {#if setupStatus === 'none' || setupStatus === 'csp_only' || forceShowDropzone}
     <!-- Options d'installation -->
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
       <!-- Offre gratuite avec Sol -->

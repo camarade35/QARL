@@ -6,7 +6,7 @@
     hasChanges = false,
     onSave = async () => {},
     label = ''
-  } = $props<{ hasChanges: boolean; onSave: () => Promise<void>; label?: string }>();
+  }: { hasChanges?: boolean; onSave?: () => Promise<void>; label?: string } = $props();
 
   let saving = $state(false);
   let justSaved = $state(false);
@@ -20,7 +20,7 @@
     try {
       await onSave();
       justSaved = true;
-      savedAt = new Date().toLocaleTimeString($locale, { hour: '2-digit', minute: '2-digit' });
+      savedAt = new Date().toLocaleTimeString($locale ?? undefined, { hour: '2-digit', minute: '2-digit' });
       setTimeout(() => { justSaved = false; }, 3000);
     } finally {
       saving = false;

@@ -95,6 +95,40 @@
 
   let isAssociated = $state(false);
 
+  type FeaturedServer = {
+    ip: string;
+    httpPort: number;
+  };
+
+  const featuredServers: FeaturedServer[] = [
+    { ip: '82.64.40.23', httpPort: 9602 },
+    { ip: '82.64.40.23', httpPort: 9605 },
+    { ip: '82.64.40.23', httpPort: 9608 }
+  ];
+
+  let featuredDetails = $state<Record<string, any>>({});
+  let featuredLoading = $state<Record<string, boolean>>({});
+  let featuredErrors = $state<Record<string, boolean>>({});
+
+  async function loadFeaturedServers() {
+    await Promise.all(featuredServers.map(async (server) => {
+      const key = `${server.ip}:${server.httpPort}`;
+      featuredLoading[key] = true;
+      featuredErrors[key] = false;
+      try {
+        featuredDetails[key] = await invoke<any>('get_server_details', {
+          ip: server.ip,
+          httpPort: server.httpPort
+        });
+      } catch (e) {
+        console.error(`Erreur chargement serveur d’essais libres ${key}:`, e);
+        featuredErrors[key] = true;
+      } finally {
+        featuredLoading[key] = false;
+      }
+    }));
+  }
+
   $effect(() => {
     async function checkStatus() {
       try {
@@ -317,15 +351,15 @@
   }
 
   // Les descriptions peuvent être du HTML ou du BBCode.
-  function formatServerDescription(text: string | null | undefined) {
+  function formatServerDescription(text: string | null | undefined, details: any = serverDetails) {
     if (!text) return '';
     try {
       let formatted = text;
 
       if (/<[a-z][\s\S]*>/i.test(formatted)) {
-        if (serverDetails) {
-          formatted = formatted.replace(/\{\{\s*\.ServerName\s*\}\}/gi, serverDetails.name || '');
-          formatted = formatted.replace(/\{\{\s*\.TrackName\s*\}\}/gi, serverDetails.track || '');
+        if (details) {
+          formatted = formatted.replace(/\{\{\s*\.ServerName\s*\}\}/gi, details.name || '');
+          formatted = formatted.replace(/\{\{\s*\.TrackName\s*\}\}/gi, details.track || '');
           formatted = formatted.replace(/<a\s+(?!.*?target=)/gi, '<a target="_blank" ');
         }
         return formatted;
@@ -336,6 +370,38 @@
       console.error("Erreur parsing description:", e);
       return text;
     }
+  }
+
+  function extractFeaturedPresentation(text: string | null | undefined, details: any) {
+    if (!text) return { textHtml: '', imageHtml: '' };
+
+    let remaining = text;
+    let imageHtml = '';
+
+    if (/<[a-z][\s\S]*>/i.test(remaining)) {
+      const images: string[] = [];
+      remaining = remaining.replace(/<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi, (_match, src: string) => {
+        images.push(src);
+        return '';
+      });
+      if (images.length > 0) {
+        imageHtml = images.map(src => `<img class="bb-img" src="${src}" alt="" onerror="this.style.display='none'">`).join('');
+      }
+    } else {
+      const images: string[] = [];
+      remaining = remaining.replace(/\[img(?:=)?["]?([^"\]]+)["]?\]([\s\S]*?)\[\/img\]/gi, (_match, src: string) => {
+        images.push(src);
+        return '';
+      });
+      if (images.length > 0) {
+        imageHtml = images.map(src => `<img class="bb-img" src="${src}" alt="" onerror="this.style.display='none'">`).join('');
+      }
+    }
+
+    return {
+      textHtml: formatServerDescription(remaining, details),
+      imageHtml
+    };
   }
 
   // Accepte les liens avec paramètres et le format IP:PORT.
@@ -628,6 +694,7 @@
 
   $effect(() => {
     chargerServeurs(false);
+    loadFeaturedServers();
   });
 
   $effect(() => {
@@ -640,7 +707,7 @@
         openJoinModal({ 
           id: 'deeplink_' + Date.now(), 
           ip: parsed.ip, 
-          port: parsed.httpPort || parsed.port, // On s'assure d'avoir un port
+          port: parsed.httpPort || undefined, // On s'assure d'avoir un port
           name: parsed.ip,
           source: 'deeplink'
         });
@@ -687,8 +754,9 @@
   </div>
 </div>
 
+<div class="online-saved-lists">
 <!-- Serveurs récents -->
-<div class="group" style="margin-top: 20px;">
+<div class="group online-saved-list">
   <div class="group-title" style="display: flex; justify-content: space-between; align-items: center;">
     <span>{$t('online.recent_title')}</span>
     <button class="filter-btn" onclick={() => recentFilter.favoritesOnly = !recentFilter.favoritesOnly} style="font-size: 0.75rem; padding: 4px 10px;" class:active={recentFilter.favoritesOnly}>
@@ -731,7 +799,7 @@
 </div>
 
 <!-- Serveurs enregistrés -->
-<div class="group">
+<div class="group online-saved-list">
   <div class="group-title" style="display: flex; justify-content: space-between; align-items: center;">
     <span>{$t('online.saved_title')}</span>
     <button class="filter-btn" onclick={() => manualFilter.favoritesOnly = !manualFilter.favoritesOnly} style="font-size: 0.75rem; padding: 4px 10px;" class:active={manualFilter.favoritesOnly}>
@@ -766,6 +834,88 @@
         </div>
       {/each}
     {/if}
+  </div>
+</div>
+</div>
+
+<!-- Serveurs d’essais libres -->
+<div class="featured-servers-section">
+  <div class="section-header" style="margin-bottom: 12px;">
+    <h2 class="section-title">{$t('online_servers.featured_title')}</h2>
+  </div>
+  <div class="featured-servers-grid">
+    {#each featuredServers as server}
+      {@const key = `${server.ip}:${server.httpPort}`}
+      {@const details = featuredDetails[key]}
+      {@const description = details?.description || details?.desc || ''}
+      {@const presentation = extractFeaturedPresentation(description, details)}
+      <article class="featured-server-card">
+        <div class="featured-server-body">
+          <div class="featured-server-info">
+            {#if featuredLoading[key]}
+              <span>{$t('common.loading')}</span>
+            {:else if featuredErrors[key]}
+              <span>{$t('online_servers.featured_unavailable')}</span>
+            {:else}
+              <div class="featured-server-info-item">
+                <span class="featured-server-info-label">{$t('online_servers.info_server')}</span>
+                <span>{details?.name || `${server.ip}:${server.httpPort}`}</span>
+              </div>
+              {#if details?.track}
+                <div class="featured-server-info-item">
+                  <span class="featured-server-info-label">{$t('online_servers.info_track')}</span>
+                  <span>{getTrackDisplay(details.track, details.track_config || '').name}</span>
+                </div>
+              {/if}
+              <div class="featured-server-info-item">
+                <span class="featured-server-info-label">{$t('online_servers.info_players')}</span>
+                <span>
+                  {typeof details?.clients === 'number' ? details.clients : (details?.players || 0)}
+                  / {typeof details?.maxclients === 'number' ? details.maxclients : (details?.max_players || 0)}
+                </span>
+              </div>
+              {#if typeof details?.pass === 'boolean'}
+                <div class="featured-server-info-item">
+                  <span class="featured-server-info-label">{$t('online_servers.info_password')}</span>
+                  <span>{details.pass ? `🔒 ${$t('common.yes')}` : $t('common.no')}</span>
+                </div>
+              {/if}
+              {#if presentation.textHtml}
+                <div class="featured-server-description-text">
+                  {@html presentation.textHtml}
+                </div>
+              {/if}
+            {/if}
+          </div>
+
+          {#if featuredLoading[key]}
+            <div class="featured-server-description empty">{$t('online_servers.featured_loading')}</div>
+          {:else if featuredErrors[key]}
+            <div class="featured-server-description empty">{$t('online_servers.featured_unavailable')}</div>
+          {:else if presentation.imageHtml}
+            <div class="featured-server-description featured-server-image">
+              {@html presentation.imageHtml}
+            </div>
+          {:else}
+            <div class="featured-server-description empty">{$t('online_servers.featured_no_description')}</div>
+          {/if}
+        </div>
+
+        <button
+          class="btn-secondary featured-server-join"
+          onclick={() => openJoinModal({
+            id: `featured_${key}`,
+            ip: server.ip,
+            port: server.httpPort,
+            httpPort: server.httpPort,
+            name: details?.name || `${server.ip}:${server.httpPort}`,
+            source: 'featured'
+          })}
+        >
+          {$t('online_servers.join')}
+        </button>
+      </article>
+    {/each}
   </div>
 </div>
 
@@ -901,29 +1051,28 @@
         
         <!-- Informations serveur -->
         <div class="server-join-info">
-          <div class="item">
-            <span class="label">{$t('online_servers.info_server')}</span>
-            <span class="value">{serverDetails.name || selectedServer.name}</span>
-          </div>
-          <div class="item">
-            <span class="label">{$t('online_servers.info_track')}</span>
-            <span class="value">{trackInfo.name} {serverDetails.track_config ? `(${serverDetails.track_config})` : ''}</span>
-          </div>
-          <div class="item">
-            <span class="label">{$t('online_servers.info_players')}</span>
-            <span class="value">
-              {typeof serverDetails.clients === 'number' ? serverDetails.clients : (typeof serverDetails.players === 'number' ? serverDetails.players : 0)} 
-              / 
-              {typeof serverDetails.maxclients === 'number' ? serverDetails.maxclients : (typeof serverDetails.max_players === 'number' ? serverDetails.max_players : 0)}
-            </span>
-          </div>
-          <div class="item">
-            <span class="label">{$t('online_servers.info_password')}</span>
-            <span class="value">{passwordRequired ? `🔒 ${$t('common.yes')}` : $t('common.no')}</span>
-          </div>
+              <div class="item">
+                <span class="label">{$t('online_servers.info_server')}</span>
+                <span class="value">{serverDetails.name || selectedServer.name}</span>
+              </div>
+              <div class="item">
+                <span class="label">{$t('online_servers.info_track')}</span>
+                <span class="value">{trackInfo.name} {serverDetails.track_config ? `(${serverDetails.track_config})` : ''}</span>
+              </div>
+              <div class="item">
+                <span class="label">{$t('online_servers.info_players')}</span>
+                <span class="value">
+                  {typeof serverDetails.clients === 'number' ? serverDetails.clients : (typeof serverDetails.players === 'number' ? serverDetails.players : 0)}
+                  /
+                  {typeof serverDetails.maxclients === 'number' ? serverDetails.maxclients : (typeof serverDetails.max_players === 'number' ? serverDetails.max_players : 0)}
+                </span>
+              </div>
+              <div class="item">
+                <span class="label">{$t('online_servers.info_password')}</span>
+                <span class="value">{passwordRequired ? `🔒 ${$t('common.yes')}` : $t('common.no')}</span>
+              </div>
         </div>
 
-        <!-- Fonctionnalités CSP -->
         {#if serverFeatures.length > 0}
           <div style="margin-top: 15px; padding: 10px 14px; background: var(--bg-elevated); border-radius: 6px;">
             <div style="font-size: 0.65rem; font-weight: 800; color: var(--text-tertiary); text-transform: uppercase; margin-bottom: 8px;">{$t('online_servers.features')}</div>
@@ -937,7 +1086,6 @@
           </div>
         {/if}
 
-        <!-- Description -->
         {#if serverDescription}
           <div class="server-description-wrap" style="margin-top: 15px;">
             <div class="server-description-label">{$t('online_servers.description')}</div>
@@ -996,13 +1144,18 @@
 
         <!-- Choix de la voiture -->
         <div class="field" style="margin-top: 15px;">
-          <label>{$t('online_servers.choose_car')}</label>
-          <div class="car-select-list">
+          <div class="field-label" id="qarl-online-car-label">{$t('online_servers.choose_car')}</div>
+          <div class="car-select-list" role="group" aria-labelledby="qarl-online-car-label">
             {#if commonCars.length === 0}
               <div style="padding: 15px; color: var(--text-tertiary);">{$t('online_servers.no_cars')}</div>
             {:else}
               {#each commonCars as car}
-                <div class="car-select-row" class:selected={selectedCar?.id === car.id} onclick={() => selectCar(car)}>
+                <div class="car-select-row" class:selected={selectedCar?.id === car.id} onclick={() => selectCar(car)} onkeydown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    selectCar(car);
+                  }
+                }} role="button" aria-pressed={selectedCar?.id === car.id} tabindex="0">
                   <div class="car-select-radio"></div>
                   <div class="car-select-main">
                     <div class="car-select-name">{car.name}</div>
@@ -1018,10 +1171,15 @@
         <!-- Choix du skin -->
         {#if selectedCar && availableSkins.length > 0}
           <div class="field" style="margin-top: 15px;">
-            <label>{$t('online_servers.choose_skin')}</label>
-            <div class="skin-select-list">
+            <div class="field-label" id="qarl-online-skin-label">{$t('online_servers.choose_skin')}</div>
+            <div class="skin-select-list" role="group" aria-labelledby="qarl-online-skin-label">
               {#each availableSkins as skin}
-                <div class="skin-select-row" class:selected={selectedSkin?.name === skin.name} onclick={() => selectedSkin = skin}>
+                <div class="skin-select-row" class:selected={selectedSkin?.name === skin.name} onclick={() => selectedSkin = skin} onkeydown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    selectedSkin = skin;
+                  }
+                }} role="button" aria-pressed={selectedSkin?.name === skin.name} tabindex="0">
                   {#if skin.image_path}
                     <img class="skin-select-preview" src={convertFileSrc(skin.image_path)} alt="preview" />
                   {:else}
@@ -1037,8 +1195,8 @@
         <!-- Mot de passe -->
         {#if passwordRequired}
           <div class="field" style="margin-top: 15px;">
-            <label>{$t('online_servers.password_label')}</label>
-            <input type="text" bind:value={serverPassword} placeholder={$t('online_servers.password_placeholder')} />
+            <label for="qarl-online-password">{$t('online_servers.password_label')}</label>
+            <input id="qarl-online-password" type="text" bind:value={serverPassword} placeholder={$t('online_servers.password_placeholder')} />
           </div>
         {/if}
 
@@ -1075,13 +1233,13 @@
       </div>
       
       <div class="field">
-        <label>{$t('online.edit_name')}</label>
-        <input type="text" bind:value={editName} placeholder={$t('online.edit_name_placeholder')} />
+        <label for="qarl-online-edit-name">{$t('online.edit_name')}</label>
+        <input id="qarl-online-edit-name" type="text" bind:value={editName} placeholder={$t('online.edit_name_placeholder')} />
       </div>
       
       <div class="field">
-        <label>{$t('online.edit_ip')}</label>
-        <input type="text" bind:value={editIp} placeholder={$t('online.edit_ip_placeholder')} />
+        <label for="qarl-online-edit-ip">{$t('online.edit_ip')}</label>
+        <input id="qarl-online-edit-ip" type="text" bind:value={editIp} placeholder={$t('online.edit_ip_placeholder')} />
       </div>
 
       <div style="font-size: 0.72rem; color: var(--text-tertiary); line-height: 1.5; margin-top: -5px;">

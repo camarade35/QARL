@@ -26,6 +26,13 @@
     openGroups[group] = !openGroups[group];
   }
 
+  function handleToggleKeydown(event: KeyboardEvent, toggle: () => void) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      toggle();
+    }
+  }
+
   // ⭐ Liste des filtres PP disponibles
   let availableFilters = $state<string[]>([]);
   let hasChanges = $state(false);
@@ -321,7 +328,7 @@ WIDTH=${v.video.width}
         selectedPreset = '';
         await loadVideoPresets();
       } catch (e) {
-        alert(e);
+        alert(String(e));
       }
     }
   }
@@ -431,7 +438,7 @@ WIDTH=${v.video.width}
 
 <!-- ⭐ RENDU — STYLE & FILTRE -->
 <div class="group" style="margin-bottom: 20px; border: 1px solid var(--border); background: var(--bg-panel);">
-  <div class="group-title" style="color: var(--accent); display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;" onclick={() => toggleGroup('rendu')}>
+  <div class="group-title" style="color: var(--accent); display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;" onclick={() => toggleGroup('rendu')} onkeydown={(event) => handleToggleKeydown(event, () => toggleGroup('rendu'))} role="button" aria-expanded={openGroups.rendu} tabindex="0">
     <span style="transform: rotate({openGroups.rendu ? '90deg' : '0deg'}); transition: transform 0.2s; font-size: 1.1rem; line-height: 1;">▸</span>
     🎥 {$t('video.group_rendering')}
   </div>
@@ -482,7 +489,7 @@ WIDTH=${v.video.width}
 
 <!-- ⭐ CAMÉRA LIBRE & VUE ORBITE -->
 <div class="group" style="margin-bottom: 20px; border: 1px solid var(--border); background: var(--bg-panel);">
-  <div class="group-title" style="color: var(--accent); display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;" onclick={() => toggleGroup('cameralibre')}>
+  <div class="group-title" style="color: var(--accent); display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;" onclick={() => toggleGroup('cameralibre')} onkeydown={(event) => handleToggleKeydown(event, () => toggleGroup('cameralibre'))} role="button" aria-expanded={openGroups.cameralibre} tabindex="0">
     <span style="transform: rotate({openGroups.cameralibre ? '90deg' : '0deg'}); transition: transform 0.2s; font-size: 1.1rem; line-height: 1;">▸</span>
     🎥 {$t('video.group_camera')}
   </div>
@@ -501,7 +508,7 @@ WIDTH=${v.video.width}
 
 <!-- ⭐ AFFICHAGE -->
 <div class="group" style="margin-bottom: 20px; border: 1px solid var(--border); background: var(--bg-panel);">
-  <div class="group-title" style="color: var(--accent); display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;" onclick={() => toggleGroup('affichage')}>
+  <div class="group-title" style="color: var(--accent); display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;" onclick={() => toggleGroup('affichage')} onkeydown={(event) => handleToggleKeydown(event, () => toggleGroup('affichage'))} role="button" aria-expanded={openGroups.affichage} tabindex="0">
     <span style="transform: rotate({openGroups.affichage ? '90deg' : '0deg'}); transition: transform 0.2s; font-size: 1.1rem; line-height: 1;">▸</span>
     🖥️ {$t('video.group_display')}
   </div>
@@ -509,7 +516,7 @@ WIDTH=${v.video.width}
   {#if openGroups.affichage}
     <!-- Section [VIDEO] -->
     <div class="ini-section">
-      <div class="ini-section-header" onclick={() => toggleVideoSection('display')}>
+      <div class="ini-section-header" onclick={() => toggleVideoSection('display')} onkeydown={(event) => handleToggleKeydown(event, () => toggleVideoSection('display'))} role="button" aria-expanded={openVideoSections.display} tabindex="0">
         <span class="ini-section-arrow" style="transform: rotate({openVideoSections.display ? '90deg' : '0deg'});">▸</span>
         <span class="ini-section-label" style="font-weight: 700;">{$t('video.display')}</span>
         <span class="ini-section-raw">[VIDEO]</span>
@@ -610,7 +617,7 @@ WIDTH=${v.video.width}
 
     <!-- Section [REFRESH] -->
     <div class="ini-section">
-      <div class="ini-section-header" onclick={() => toggleVideoSection('refresh')}>
+      <div class="ini-section-header" onclick={() => toggleVideoSection('refresh')} onkeydown={(event) => handleToggleKeydown(event, () => toggleVideoSection('refresh'))} role="button" aria-expanded={openVideoSections.refresh} tabindex="0">
         <span class="ini-section-arrow" style="transform: rotate({openVideoSections.refresh ? '90deg' : '0deg'});">▸</span>
         <span class="ini-section-label" style="font-weight: 700;">{$t('video.refresh_rate')}</span>
         <span class="ini-section-raw">[REFRESH]</span>
@@ -628,7 +635,7 @@ WIDTH=${v.video.width}
 
     <!-- Section [CAMERA] -->
     <div class="ini-section">
-      <div class="ini-section-header" onclick={() => toggleVideoSection('camera')}>
+      <div class="ini-section-header" onclick={() => toggleVideoSection('camera')} onkeydown={(event) => handleToggleKeydown(event, () => toggleVideoSection('camera'))} role="button" aria-expanded={openVideoSections.camera} tabindex="0">
         <span class="ini-section-arrow" style="transform: rotate({openVideoSections.camera ? '90deg' : '0deg'});">▸</span>
         <span class="ini-section-label" style="font-weight: 700;">{$t('video.camera')}</span>
         <span class="ini-section-raw">[CAMERA]</span>
@@ -650,7 +657,7 @@ WIDTH=${v.video.width}
 
 <!-- ⭐ EFFETS & QUALITÉ -->
 <div class="group" style="margin-bottom: 20px; border: 1px solid var(--border); background: var(--bg-panel);">
-  <div class="group-title" style="color: var(--accent); display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;" onclick={() => toggleGroup('effets')}>
+  <div class="group-title" style="color: var(--accent); display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;" onclick={() => toggleGroup('effets')} onkeydown={(event) => handleToggleKeydown(event, () => toggleGroup('effets'))} role="button" aria-expanded={openGroups.effets} tabindex="0">
     <span style="transform: rotate({openGroups.effets ? '90deg' : '0deg'}); transition: transform 0.2s; font-size: 1.1rem; line-height: 1;">▸</span>
     🎨 {$t('video.group_effects')}
   </div>
@@ -658,7 +665,7 @@ WIDTH=${v.video.width}
   {#if openGroups.effets}
     <!-- [POST_PROCESS] -->
     <div class="ini-section">
-      <div class="ini-section-header" onclick={() => toggleVideoSection('post_process')}>
+      <div class="ini-section-header" onclick={() => toggleVideoSection('post_process')} onkeydown={(event) => handleToggleKeydown(event, () => toggleVideoSection('post_process'))} role="button" aria-expanded={openVideoSections.post_process} tabindex="0">
         <span class="ini-section-arrow" style="transform: rotate({openVideoSections.post_process ? '90deg' : '0deg'});">▸</span>
         <span class="ini-section-label" style="font-weight: 700;">{$t('video.post_process')}</span>
         <span class="ini-section-raw">[POST_PROCESS]</span>
@@ -708,7 +715,7 @@ WIDTH=${v.video.width}
 
     <!-- [SATURATION] -->
     <div class="ini-section">
-      <div class="ini-section-header" onclick={() => toggleVideoSection('saturation')}>
+      <div class="ini-section-header" onclick={() => toggleVideoSection('saturation')} onkeydown={(event) => handleToggleKeydown(event, () => toggleVideoSection('saturation'))} role="button" aria-expanded={openVideoSections.saturation} tabindex="0">
         <span class="ini-section-arrow" style="transform: rotate({openVideoSections.saturation ? '90deg' : '0deg'});">▸</span>
         <span class="ini-section-label" style="font-weight: 700;">{$t('video.saturation')}</span>
         <span class="ini-section-raw">[SATURATION]</span>
@@ -726,7 +733,7 @@ WIDTH=${v.video.width}
 
     <!-- [EFFECTS] -->
     <div class="ini-section">
-      <div class="ini-section-header" onclick={() => toggleVideoSection('effects')}>
+      <div class="ini-section-header" onclick={() => toggleVideoSection('effects')} onkeydown={(event) => handleToggleKeydown(event, () => toggleVideoSection('effects'))} role="button" aria-expanded={openVideoSections.effects} tabindex="0">
         <span class="ini-section-arrow" style="transform: rotate({openVideoSections.effects ? '90deg' : '0deg'});">▸</span>
         <span class="ini-section-label" style="font-weight: 700;">{$t('video.effects')}</span>
         <span class="ini-section-raw">[EFFECTS]</span>
@@ -762,7 +769,7 @@ WIDTH=${v.video.width}
 
     <!-- [MIRROR] -->
     <div class="ini-section">
-      <div class="ini-section-header" onclick={() => toggleVideoSection('mirror')}>
+      <div class="ini-section-header" onclick={() => toggleVideoSection('mirror')} onkeydown={(event) => handleToggleKeydown(event, () => toggleVideoSection('mirror'))} role="button" aria-expanded={openVideoSections.mirror} tabindex="0">
         <span class="ini-section-arrow" style="transform: rotate({openVideoSections.mirror ? '90deg' : '0deg'});">▸</span>
         <span class="ini-section-label" style="font-weight: 700;">{$t('video.mirrors')}</span>
         <span class="ini-section-raw">[MIRROR]</span>
@@ -786,7 +793,7 @@ WIDTH=${v.video.width}
 
     <!-- [CUBEMAP] -->
     <div class="ini-section">
-      <div class="ini-section-header" onclick={() => toggleVideoSection('cubemap')}>
+      <div class="ini-section-header" onclick={() => toggleVideoSection('cubemap')} onkeydown={(event) => handleToggleKeydown(event, () => toggleVideoSection('cubemap'))} role="button" aria-expanded={openVideoSections.cubemap} tabindex="0">
         <span class="ini-section-arrow" style="transform: rotate({openVideoSections.cubemap ? '90deg' : '0deg'});">▸</span>
         <span class="ini-section-label" style="font-weight: 700;">{$t('video.cubemap')}</span>
         <span class="ini-section-raw">[CUBEMAP]</span>
@@ -820,7 +827,7 @@ WIDTH=${v.video.width}
 
 <!-- ⭐ VISUEL IN-GAME -->
 <div class="group" style="margin-bottom: 20px; border: 1px solid var(--border); background: var(--bg-panel);">
-  <div class="group-title" style="color: var(--accent); display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;" onclick={() => toggleGroup('ingame')}>
+  <div class="group-title" style="color: var(--accent); display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;" onclick={() => toggleGroup('ingame')} onkeydown={(event) => handleToggleKeydown(event, () => toggleGroup('ingame'))} role="button" aria-expanded={openGroups.ingame} tabindex="0">
     <span style="transform: rotate({openGroups.ingame ? '90deg' : '0deg'}); transition: transform 0.2s; font-size: 1.1rem; line-height: 1;">▸</span>
     🇮🇹 {$t('video.group_ingame')}
   </div>
@@ -828,7 +835,7 @@ WIDTH=${v.video.width}
   {#if openGroups.ingame}
     <!-- [ASSETTOCORSA] -->
     <div class="ini-section">
-      <div class="ini-section-header" onclick={() => toggleVideoSection('assetto')}>
+      <div class="ini-section-header" onclick={() => toggleVideoSection('assetto')} onkeydown={(event) => handleToggleKeydown(event, () => toggleVideoSection('assetto'))} role="button" aria-expanded={openVideoSections.assetto} tabindex="0">
         <span class="ini-section-arrow" style="transform: rotate({openVideoSections.assetto ? '90deg' : '0deg'});">▸</span>
         <span class="ini-section-label" style="font-weight: 700;">{$t('video.ac_settings')}</span>
         <span class="ini-section-raw">[ASSETTOCORSA]</span>

@@ -153,7 +153,7 @@
     };
   }
 
-  function selectTrack(track) {
+  function selectTrack(track: any) {
     appState.selectedTrack = track;
     bumpUsedCount('tracks', track.id);
     if (track.layouts && track.layouts.length > 1) {
@@ -249,8 +249,8 @@
 {:else}
   <div class="cards-grid">
     {#each filteredTracks as track (track.id)}
-      {@const layoutPreview = track.layouts.find(l => l.preview_path)}
-      {@const layoutOutline = track.layouts.find(l => l.outline_path)}
+      {@const layoutPreview = track.layouts.find((l: any) => l.preview_path)}
+      {@const layoutOutline = track.layouts.find((l: any) => l.outline_path)}
       {@const bgImage = track.preview_path || (layoutPreview ? layoutPreview.preview_path : null)}
       {@const outlineImage = track.outline_path || (layoutOutline ? layoutOutline.outline_path : null)}
       
@@ -260,6 +260,11 @@
         class="card" 
         class:selected={appState.selectedTrack?.id === track.id}
         onclick={() => selectTrack(track)}
+        onkeydown={(event) => {
+          if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
+          event.preventDefault();
+          selectTrack(track);
+        }}
         oncontextmenu={(e) => { 
           e.preventDefault(); 
           invoke('open_folder', { 
@@ -299,7 +304,10 @@
         </div>
 
         {#if flagUrl}
-          <div class="flag-badge"><img src={flagUrl} alt="" onerror={(e) => e.currentTarget.parentElement.style.display = 'none'} /></div>
+          <div class="flag-badge"><img src={flagUrl} alt="" onerror={(e) => {
+            const parent = e.currentTarget.parentElement;
+            if (parent) parent.style.display = 'none';
+          }} /></div>
         {/if}
 
         <button class="fav-btn" class:active={appState.favorites.tracks.includes(track.id)} onclick={(e) => { e.stopPropagation(); toggleFavorite('tracks', track.id); }}>

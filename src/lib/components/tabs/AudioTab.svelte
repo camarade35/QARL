@@ -29,7 +29,12 @@
   }
 
   // Valeurs utilisées lorsqu'une clé est absente de audio.ini.
-  let audioData = $state({
+  let audioData = $state<{
+    LEVELS: Record<string, number>;
+    LEVELS_EXT: Record<string, number>;
+    SETTINGS: { DRIVER_NAME: string };
+    SKIDS: { ENTRY_POINT: number };
+  }>({
     LEVELS: {
       BRAKES: 0.8, DIRT_BOTTOM: 1.0, ENGINE: 1.0, MASTER: 0.64, MUSIC: 0.5,
       OPPONENTS: 0.8, SURFACES: 0.9, TYRES: 0.5, UISOUNDS: 0.7, WIND: 0.4

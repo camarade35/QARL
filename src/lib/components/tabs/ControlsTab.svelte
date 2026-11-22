@@ -54,7 +54,7 @@
   let loadingMappings = new Set<string>();
 
   function parseIni(text: string) {
-    const result: Record<string, Record<string, string>> = {};
+    const result: Record<string, Record<string, any>> = {};
     let currentSection = '';
 
     text.split('\n').forEach(line => {
@@ -254,6 +254,24 @@
     if (sectionId === '__EXT_TURNLIGHTS_RIGHT') targetSection = '__EXT_TURNSIGNAL_RIGHT';
     
     capturingHoldMode = parsedIni[targetSection]?.['HOLD_MODE'] === '1';
+  }
+
+  function handleInteractiveKeydown(event: KeyboardEvent, activate: () => void, section: string) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      activate();
+    } else if (event.key === 'Delete' || event.key === 'Backspace') {
+      event.preventDefault();
+      unbindAction(section);
+    }
+
+  }
+
+  function handleToggleKeydown(event: KeyboardEvent, toggle: () => void) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      toggle();
+    }
   }
 
   function closeCapture() {
@@ -787,7 +805,7 @@
     else stopGamepadPolling();
   });
 
-  let demoValues = $state({ brake: 0, throttle: 0, clutch: 0, handbrake: 0, steer: 50 });
+  let demoValues = $state<Record<string, number>>({ brake: 0, throttle: 0, clutch: 0, handbrake: 0, steer: 50 });
   let animationFrameId: number | null = null;
   let gamepadStatus = $state($t('settings.controls.status_searching'));
   let liveAxisValues = $state<Record<string, number>>({});
@@ -1179,11 +1197,11 @@
       {:else}
         {#if showSaveAs}
           <input type="text" class="ini-text" style="width: 150px;" placeholder={$t('settings.controls.save_as_placeholder')} bind:value={saveAsName} />
-          <button class="btn-secondary ini-btn-save" onclick={saveIni} disabled={!saveAsName}>{$t('settings.controls.btn_save_new')}</button>
+          <button class="btn-secondary ini-btn-save" onclick={() => saveIni()} disabled={!saveAsName}>{$t('settings.controls.btn_save_new')}</button>
           <button class="btn-secondary" onclick={() => showSaveAs = false}>{$t('settings.controls.btn_cancel')}</button>
         {:else}
           <button class="btn-secondary" onclick={() => showSaveAs = true} title={$t('settings.controls.title_save_as')}>{$t('settings.controls.btn_copy')}</button>
-          <button class="btn-secondary ini-btn-save" class:dirty={hasChanges} onclick={saveIni} disabled={isSaving || !hasChanges}>
+          <button class="btn-secondary ini-btn-save" class:dirty={hasChanges} onclick={() => saveIni()} disabled={isSaving || !hasChanges}>
             {$t('settings.controls.btn_save')}
           </button>
         {/if}
@@ -1210,7 +1228,7 @@
         <div style="display: flex; flex-direction: column; gap: 20px; margin-top: 10px;">
           
           <!-- SNIPPET POUR LES BOUTONS -->
-                    {#snippet cockpitBtn(section, IconComponent, label)}
+                    {#snippet cockpitBtn(section: string, IconComponent: any, label: string)}
             {@const assigned = isAssigned(section)}
             {@const axisVal = liveAxisValues[section]}
             {@const min = parseFloat(parsedIni[section]?.['MIN'] || '-1')}
@@ -1298,7 +1316,7 @@
             </button>
           {/snippet}
 
-          {#snippet compactBtn(section, isPlus)}
+          {#snippet compactBtn(section: string, isPlus: boolean)}
             {@const isPressed = liveButtonStates[section] === true}
             {@const val = parsedIni[section]?.['BUTTON'] !== '-1' && parsedIni[section]?.['BUTTON'] ? `Btn ${parsedIni[section]?.['BUTTON']}` : (parsedIni[section]?.['AXLE'] !== '-1' ? `Axe ${parsedIni[section]?.['AXLE']}` : '')}
             <button 
@@ -1324,7 +1342,7 @@
           {/snippet}
 
           <!-- SNIPPET POUR LES PÉDALES (Style Image 3D) -->
-          {#snippet pedalCard(section, imagePath, label, color, isAlt = false)}
+          {#snippet pedalCard(section: string, imagePath: string, label: string, color: string, isAlt = false)}
             {@const demoKey = section === 'BRAKES' ? 'brake' : section.toLowerCase()}
             {@const altPressed = liveButtonStates['HANDBRAKE_ALT'] === true}
             {@const currentVal = isAlt ? 0 : (demoValues[demoKey] || 0)}
@@ -1337,6 +1355,10 @@
                 style="display: flex; align-items: center; justify-content: center; width: 60px; cursor: pointer; position: relative;" 
                 onclick={() => openCapture(isAlt ? section + '_ALT' : section, label)}
                 oncontextmenu={(e) => { e.preventDefault(); unbindAction(isAlt ? section + '_ALT' : section); }}
+                onkeydown={(event) => handleInteractiveKeydown(event, () => openCapture(isAlt ? section + '_ALT' : section, label), isAlt ? section + '_ALT' : section)}
+                role="button"
+                aria-label={$t(label)}
+                tabindex="0"
               >
                 <img 
                   src={imagePath} 
@@ -1356,7 +1378,7 @@
               <div style="display: flex; flex-direction: column; flex: 1; justify-content: center; gap: 6px;">
                 
                 <div style="display: flex; justify-content: space-between; align-items: flex-end;">
-                  <div style="cursor: pointer;" onclick={() => openCapture(isAlt ? section + '_ALT' : section, label)}>
+                  <div style="cursor: pointer;" onclick={() => openCapture(isAlt ? section + '_ALT' : section, label)} onkeydown={(event) => handleInteractiveKeydown(event, () => openCapture(isAlt ? section + '_ALT' : section, label), isAlt ? section + '_ALT' : section)} role="button" aria-label={$t(label)} tabindex="0">
                     <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary);">{$t(label)}</div>
                     <div style="font-size: 0.7rem; color: var(--text-tertiary);">
                       {assignedAxis && assignedAxis !== '-1' ? `${$t('settings.controls.axis_prefix')} ${assignedAxis}` : $t('settings.controls.unassigned')}
@@ -1368,7 +1390,7 @@
                 </div>
                 
                 <!-- Barre de progression horizontale -->
-                <div style="width: 100%; height: 8px; background: var(--bg-elevated); border-radius: 4px; overflow: hidden; cursor: pointer;" onclick={() => openCapture(isAlt ? section + '_ALT' : section, label)}>
+                <div style="width: 100%; height: 8px; background: var(--bg-elevated); border-radius: 4px; overflow: hidden; cursor: pointer;" onclick={() => openCapture(isAlt ? section + '_ALT' : section, label)} onkeydown={(event) => handleInteractiveKeydown(event, () => openCapture(isAlt ? section + '_ALT' : section, label), isAlt ? section + '_ALT' : section)} role="button" aria-label={$t(label)} tabindex="0">
                   <div style="height: 100%; width: {currentVal}%; background-color: {color}; transition: width 0.1s linear;"></div>
                 </div>
                 
@@ -1430,6 +1452,10 @@
                   style="cursor: pointer; width: 100%; display: flex; flex-direction: column; align-items: center; position: relative; padding: 10px 0;" 
                   onclick={() => openCapture('STEER', $t('settings.controls.actions.STEER'))}
                   oncontextmenu={(e) => { e.preventDefault(); unbindAction('STEER'); }}
+                  onkeydown={(event) => handleInteractiveKeydown(event, () => openCapture('STEER', $t('settings.controls.actions.STEER')), 'STEER')}
+                  role="button"
+                  aria-label={$t('settings.controls.actions.STEER')}
+                  tabindex="0"
                 >
                   <!-- Image du volant qui tourne (Agrandie à 340px) -->
                   <div style="position: relative; width: 340px; height: 340px; display: flex; align-items: center; justify-content: center;">
@@ -1601,17 +1627,17 @@
                       "></div>
                     </div>
 
-                                        <div class="gear-hitbox" class:pressed={liveButtonStates['GEAR_1']} style="top: 24%; left: 32.6%;" onclick={() => openCapture('GEAR_1', $t('settings.controls.gear_1'))} oncontextmenu={(e) => { e.preventDefault(); unbindAction('GEAR_1'); }} title={$t('settings.controls.gear_1')}></div>
-                    <div class="gear-hitbox" class:pressed={liveButtonStates['GEAR_2']} style="top: 66.8%; left: 32.6%;" onclick={() => openCapture('GEAR_2', $t('settings.controls.gear_2'))} oncontextmenu={(e) => { e.preventDefault(); unbindAction('GEAR_2'); }} title={$t('settings.controls.gear_2')}></div>
+                                        <div class="gear-hitbox" class:pressed={liveButtonStates['GEAR_1']} style="top: 24%; left: 32.6%;" onclick={() => openCapture('GEAR_1', $t('settings.controls.gear_1'))} oncontextmenu={(e) => { e.preventDefault(); unbindAction('GEAR_1'); }} onkeydown={(event) => handleInteractiveKeydown(event, () => openCapture('GEAR_1', $t('settings.controls.gear_1')), 'GEAR_1')} role="button" aria-label={$t('settings.controls.gear_1')} tabindex="0" title={$t('settings.controls.gear_1')}></div>
+                                        <div class="gear-hitbox" class:pressed={liveButtonStates['GEAR_2']} style="top: 66.8%; left: 32.6%;" onclick={() => openCapture('GEAR_2', $t('settings.controls.gear_2'))} oncontextmenu={(e) => { e.preventDefault(); unbindAction('GEAR_2'); }} onkeydown={(event) => handleInteractiveKeydown(event, () => openCapture('GEAR_2', $t('settings.controls.gear_2')), 'GEAR_2')} role="button" aria-label={$t('settings.controls.gear_2')} tabindex="0" title={$t('settings.controls.gear_2')}></div>
                     
-                    <div class="gear-hitbox" class:pressed={liveButtonStates['GEAR_3']} style="top: 24%; left: 44%;" onclick={() => openCapture('GEAR_3', $t('settings.controls.gear_3'))} oncontextmenu={(e) => { e.preventDefault(); unbindAction('GEAR_3'); }} title={$t('settings.controls.gear_3')}></div>
-                    <div class="gear-hitbox" class:pressed={liveButtonStates['GEAR_4']} style="top: 66.8%; left: 44%;" onclick={() => openCapture('GEAR_4', $t('settings.controls.gear_4'))} oncontextmenu={(e) => { e.preventDefault(); unbindAction('GEAR_4'); }} title={$t('settings.controls.gear_4')}></div>
+                    <div class="gear-hitbox" class:pressed={liveButtonStates['GEAR_3']} style="top: 24%; left: 44%;" onclick={() => openCapture('GEAR_3', $t('settings.controls.gear_3'))} oncontextmenu={(e) => { e.preventDefault(); unbindAction('GEAR_3'); }} onkeydown={(event) => handleInteractiveKeydown(event, () => openCapture('GEAR_3', $t('settings.controls.gear_3')), 'GEAR_3')} role="button" aria-label={$t('settings.controls.gear_3')} tabindex="0" title={$t('settings.controls.gear_3')}></div>
+                    <div class="gear-hitbox" class:pressed={liveButtonStates['GEAR_4']} style="top: 66.8%; left: 44%;" onclick={() => openCapture('GEAR_4', $t('settings.controls.gear_4'))} oncontextmenu={(e) => { e.preventDefault(); unbindAction('GEAR_4'); }} onkeydown={(event) => handleInteractiveKeydown(event, () => openCapture('GEAR_4', $t('settings.controls.gear_4')), 'GEAR_4')} role="button" aria-label={$t('settings.controls.gear_4')} tabindex="0" title={$t('settings.controls.gear_4')}></div>
                     
-                    <div class="gear-hitbox" class:pressed={liveButtonStates['GEAR_5']} style="top: 24%; left: 55%;" onclick={() => openCapture('GEAR_5', $t('settings.controls.gear_5'))} oncontextmenu={(e) => { e.preventDefault(); unbindAction('GEAR_5'); }} title={$t('settings.controls.gear_5')}></div>
-                    <div class="gear-hitbox" class:pressed={liveButtonStates['GEAR_6']} style="top: 66.8%; left: 55%;" onclick={() => openCapture('GEAR_6', $t('settings.controls.gear_6'))} oncontextmenu={(e) => { e.preventDefault(); unbindAction('GEAR_6'); }} title={$t('settings.controls.gear_6')}></div>
+                    <div class="gear-hitbox" class:pressed={liveButtonStates['GEAR_5']} style="top: 24%; left: 55%;" onclick={() => openCapture('GEAR_5', $t('settings.controls.gear_5'))} oncontextmenu={(e) => { e.preventDefault(); unbindAction('GEAR_5'); }} onkeydown={(event) => handleInteractiveKeydown(event, () => openCapture('GEAR_5', $t('settings.controls.gear_5')), 'GEAR_5')} role="button" aria-label={$t('settings.controls.gear_5')} tabindex="0" title={$t('settings.controls.gear_5')}></div>
+                    <div class="gear-hitbox" class:pressed={liveButtonStates['GEAR_6']} style="top: 66.8%; left: 55%;" onclick={() => openCapture('GEAR_6', $t('settings.controls.gear_6'))} oncontextmenu={(e) => { e.preventDefault(); unbindAction('GEAR_6'); }} onkeydown={(event) => handleInteractiveKeydown(event, () => openCapture('GEAR_6', $t('settings.controls.gear_6')), 'GEAR_6')} role="button" aria-label={$t('settings.controls.gear_6')} tabindex="0" title={$t('settings.controls.gear_6')}></div>
                     
-                    <div class="gear-hitbox" class:pressed={liveButtonStates['GEAR_7']} style="top: 24%; left: 66.6%;" onclick={() => openCapture('GEAR_7', $t('settings.controls.gear_7'))} oncontextmenu={(e) => { e.preventDefault(); unbindAction('GEAR_7'); }} title={$t('settings.controls.gear_7')}></div>
-                    <div class="gear-hitbox" class:pressed={liveButtonStates['GEAR_R']} style="top: 66.8%; left: 66.6%;" onclick={() => openCapture('GEAR_R', $t('settings.controls.gear_r'))} oncontextmenu={(e) => { e.preventDefault(); unbindAction('GEAR_R'); }} title={$t('settings.controls.gear_r')}></div>
+                    <div class="gear-hitbox" class:pressed={liveButtonStates['GEAR_7']} style="top: 24%; left: 66.6%;" onclick={() => openCapture('GEAR_7', $t('settings.controls.gear_7'))} oncontextmenu={(e) => { e.preventDefault(); unbindAction('GEAR_7'); }} onkeydown={(event) => handleInteractiveKeydown(event, () => openCapture('GEAR_7', $t('settings.controls.gear_7')), 'GEAR_7')} role="button" aria-label={$t('settings.controls.gear_7')} tabindex="0" title={$t('settings.controls.gear_7')}></div>
+                    <div class="gear-hitbox" class:pressed={liveButtonStates['GEAR_R']} style="top: 66.8%; left: 66.6%;" onclick={() => openCapture('GEAR_R', $t('settings.controls.gear_r'))} oncontextmenu={(e) => { e.preventDefault(); unbindAction('GEAR_R'); }} onkeydown={(event) => handleInteractiveKeydown(event, () => openCapture('GEAR_R', $t('settings.controls.gear_r')), 'GEAR_R')} role="button" aria-label={$t('settings.controls.gear_r')} tabindex="0" title={$t('settings.controls.gear_r')}></div>
 
                   </div>
                   
@@ -1747,8 +1773,7 @@
                 </div>
                 
                 <div style="display: flex; flex-direction: column; gap: 12px;">
-                  
-                  {#if deviceType !== 'keyboard'}
+                  {#if deviceType === 'x360'}
                     {@const section = deviceType === 'x360' ? 'X360' : 'STEER'}
                     {@const gamma = parseFloat(parsedIni[section]?.['STEER_GAMMA'] || (deviceType === 'x360' ? '3.01' : '1.0'))}
                     {@const filter = parseFloat(parsedIni[section]?.['STEER_FILTER'] || (deviceType === 'x360' ? '0.60' : '0.0'))}
@@ -1788,7 +1813,6 @@
                 </div>
 
                 <!-- Option Combiner avec le clavier (Volant et Manette) -->
-                {#if deviceType !== 'keyboard'}
                   <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;">
                     <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary);">{$t('settings.controls.combine_keyboard')}</span>
                     <label style="display: flex; align-items: center; cursor: pointer;">
@@ -1801,7 +1825,6 @@
                       }} style="display: none;" />
                     </label>
                   </div>
-                {/if}
               </div>
               {/if}
 
@@ -1811,7 +1834,7 @@
           <!-- LIGNE DU BAS : 6 Cartes Harmonieuses avec Pastille de Couleur (Uniquement pour le volant) -->
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; width: 100%; align-items: stretch;">
             
-            {#snippet cardHeader(titleKey, dotColor)}
+            {#snippet cardHeader(titleKey: string, dotColor: string)}
               <div style="position: relative; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 4px; min-height: 20px;">
                 <!-- Le point plus grand et plus lumineux -->
                 <div style="position: absolute; left: 4px; width: 16px; height: 16px; border-radius: 50%; background: {dotColor}; box-shadow: 0 0 16px {dotColor}, 0 0 4px {dotColor};"></div>
@@ -1943,6 +1966,10 @@
           class="qacrl-ctrl-section-header" 
           style="padding: 12px 16px; background: var(--bg-elevated); border-bottom: 1px solid {openDinputDevices ? '#e6a33b' : 'transparent'}; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: background 0.2s;"
           onclick={() => { openDinputDevices = !openDinputDevices; saveMenuState(); }}
+          onkeydown={(event) => handleToggleKeydown(event, () => { openDinputDevices = !openDinputDevices; saveMenuState(); })}
+          role="button"
+          aria-expanded={openDinputDevices}
+          tabindex="0"
         >
           <span class="qacrl-ctrl-section-arrow" style="transform: rotate({openDinputDevices ? '90deg' : '0deg'}); transition: transform 0.2s; color: #e6a33b;">▸</span>
           <span class="qacrl-ctrl-section-title" style="font-size: 0.85rem; color: #e6a33b;">{$t('settings.controls.advanced_dinput_title')}</span>
@@ -1969,6 +1996,10 @@
           class="qacrl-ctrl-section-header" 
           style="padding: 12px 16px; background: var(--bg-elevated); border-bottom: 1px solid {openWebviewDevices ? '#e6a33b' : 'transparent'}; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: background 0.2s;"
           onclick={() => { openWebviewDevices = !openWebviewDevices; saveMenuState(); }}
+          onkeydown={(event) => handleToggleKeydown(event, () => { openWebviewDevices = !openWebviewDevices; saveMenuState(); })}
+          role="button"
+          aria-expanded={openWebviewDevices}
+          tabindex="0"
         >
           <span class="qacrl-ctrl-section-arrow" style="transform: rotate({openWebviewDevices ? '90deg' : '0deg'}); transition: transform 0.2s; color: #e6a33b;">▸</span>
           <span class="qacrl-ctrl-section-title" style="font-size: 0.85rem; color: #e6a33b;">{$t('settings.controls.advanced_webview_title')}</span>
@@ -2027,6 +2058,10 @@
                   class="qacrl-ctrl-section-header" 
                   style="padding: 12px 16px; background: var(--bg-elevated); border-bottom: 1px solid {isOpen ? 'var(--border)' : 'transparent'}; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: background 0.2s;"
                   onclick={() => { openCategories[group.name] = !isOpen; saveMenuState(); }}
+                  onkeydown={(event) => handleToggleKeydown(event, () => { openCategories[group.name] = !isOpen; saveMenuState(); })}
+                  role="button"
+                  aria-expanded={isOpen}
+                  tabindex="0"
                 >
                   <span class="qacrl-ctrl-section-arrow" style="transform: rotate({isOpen ? '90deg' : '0deg'}); transition: transform 0.2s;">▸</span>
                   <span class="qacrl-ctrl-section-title" style="font-size: 0.85rem;">{$t(group.name)}</span>

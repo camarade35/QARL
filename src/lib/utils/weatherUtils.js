@@ -1,6 +1,7 @@
 import { get } from 'svelte/store';
 import { t } from 'svelte-i18n';
 
+/** @type {Record<string, string>} */
 export const WEATHER_ICONS = {
   'clear': '☀️', 'mid_clear': '🌤️', 'light_clouds': '🌤️', 'few_clouds': '🌤️',
   'mid_clouds': '⛅', 'scattered_clouds': '⛅', 'heavy_clouds': '☁️', 'broken_clouds': '☁️',
@@ -14,12 +15,18 @@ export const WEATHER_ICONS = {
   'haze': '🌫️', 'cold': '🥶', 'hot': '🥵', 'no_clouds': '☀️'
 };
 
+/** @param {string | null | undefined} id */
 export function getWeatherIcon(id) {
   if (!id) return '🌡️';
   const cleanId = id.toLowerCase().replace(/^\d+_/, '').replace(/^(sol|pure)_\d*_?/, '');
   return WEATHER_ICONS[cleanId] || '🌡️';
 }
 
+/**
+ * @param {string | null | undefined} id
+ * @param {string} defaultName
+ * @param {string | null | undefined} currentLocale
+ */
 export function translateWeatherName(id, defaultName, currentLocale = 'fr') {
   if (!id) return defaultName;
   const lowerId = id.toLowerCase();
@@ -37,7 +44,7 @@ export function translateWeatherName(id, defaultName, currentLocale = 'fr') {
   // 2. On cherche la traduction dynamique
   if (key) {
     // On passe currentLocale pour forcer la réactivité
-    const translated = get(t)(`weather_names.${key}`, { locale: currentLocale });
+    const translated = get(t)(`weather_names.${key}`, { locale: currentLocale ?? undefined });
     // Si la traduction existe (ce n'est pas juste la clé qui a été retournée)
     if (translated && translated !== `weather_names.${key}`) {
       return translated;

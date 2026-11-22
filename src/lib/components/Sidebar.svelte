@@ -15,9 +15,8 @@
   // ⭐ Gestion du thème (Carbon, Cloud, Bureautique)
   let currentTheme = $state(accentState.theme);
 
-  // Appliquer le thème au chargement
   if (typeof document !== 'undefined') {
-    document.documentElement.setAttribute('data-theme', currentTheme);
+    document.documentElement.setAttribute('data-theme', accentState.theme);
   }
 
   function setTheme(theme: string) {
@@ -43,6 +42,13 @@
       localStorage.setItem('qarl_accent_intensity', String(accentIntensity));
     }
   });
+
+  function handleCardKeydown(event: KeyboardEvent, tab: string) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      appState.activeTab = tab;
+    }
+  }
 
   // ⭐ NOUVEAU : Gestion du fond (Nuances de gris)
   let currentBgShade = $state(
@@ -268,7 +274,7 @@
     </div>
 
     <!-- CARTE VOITURE -->
-    <div class="recap-card clickable" onclick={() => appState.activeTab = 'tab-cars'}>
+    <div class="recap-card clickable" onclick={() => appState.activeTab = 'tab-cars'} onkeydown={(event) => handleCardKeydown(event, 'tab-cars')} role="button" tabindex="0">
       <div class="recap-label">{$t('sidebar.car')}</div>
       {#if appState.selectedCar}
         <div class="recap-title-row">
@@ -293,7 +299,7 @@
     </div>
 
     <!-- CARTE CIRCUIT -->
-    <div class="recap-card clickable" onclick={() => appState.activeTab = 'tab-tracks'}>
+    <div class="recap-card clickable" onclick={() => appState.activeTab = 'tab-tracks'} onkeydown={(event) => handleCardKeydown(event, 'tab-tracks')} role="button" tabindex="0">
            <div class="recap-label">{$t('sidebar.track')}</div>
       {#if appState.selectedTrack}
         <div class="recap-title-row">
@@ -329,7 +335,7 @@
     </div>
 
     <!-- CARTE SESSION -->
-    <div class="recap-card clickable" onclick={() => { appState.activeTab = 'tab-session'; }}>
+    <div class="recap-card clickable" onclick={() => { appState.activeTab = 'tab-session'; }} onkeydown={(event) => handleCardKeydown(event, 'tab-session')} role="button" tabindex="0">
       <div class="recap-label">{$t('sidebar.session')}</div>
       <div class="recap-title">
         {(appState.session.type === 'RACE_QUICK' || appState.session.type === 'RACE_WEEKEND') 
@@ -342,7 +348,7 @@
     </div>
 
             <!-- ⭐ CARTE MÉTÉO -->
-    <div class="recap-card clickable" onclick={() => { appState.activeTab = 'tab-graphics'; }}>
+    <div class="recap-card clickable" onclick={() => { appState.activeTab = 'tab-graphics'; }} onkeydown={(event) => handleCardKeydown(event, 'tab-graphics')} role="button" tabindex="0">
       <div class="recap-label" style="display: flex; justify-content: space-between; align-items: center;">
         <span>{$t('sidebar.weather')}</span>
         <span style="font-size: 0.65rem; color: var(--text-tertiary); font-weight: 400;">{$t('sidebar.modify')}</span>
@@ -423,7 +429,7 @@
 
     <!-- ⭐ CARTE GRILLE DE DÉPART -->
     {#if appState.selectedCar && appState.session.opponentsCount > 0}
-      <div class="recap-card clickable" onclick={() => appState.activeTab = 'tab-session'} style="cursor: pointer;">
+      <div class="recap-card clickable grid-recap-card" onclick={() => appState.activeTab = 'tab-session'} onkeydown={(event) => handleCardKeydown(event, 'tab-session')} role="button" tabindex="0" style="cursor: pointer;">
         <div class="recap-label" style="margin-bottom: 6px;">
           <span>{$t('sidebar.grid')}</span>
           <span style="font-size: 0.65rem; color: var(--accent); background: var(--accent-muted); padding: 2px 6px; border-radius: 4px;">
@@ -431,7 +437,7 @@
           </span>
         </div>
         
-        <div style="max-height: 150px; overflow-y: auto; padding-right: 4px; display: flex; flex-direction: column; gap: 4px;">
+        <div class="grid-recap-list">
           <!-- Le joueur en premier -->
           <div style="font-size: 0.75rem; font-weight: 600; color: var(--accent); padding: 4px 6px; background: var(--accent-muted); border-radius: 4px;">
             1. {appState.selectedCar.brand} - {appState.selectedCar.name.replace(appState.selectedCar.brand, '').trim()} <span style="font-weight: 400; opacity: 0.8;">{$t('sidebar.you')}</span>

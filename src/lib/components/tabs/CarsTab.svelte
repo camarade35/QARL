@@ -313,11 +313,16 @@
       title={$t('cars.context_menu_open_folder')}
     >
       {#if brandLogo}
-        <img src={brandLogo} class="brand-badge" alt="" onerror={(e) => e.currentTarget.style.display = 'none'} />
+        <img src={brandLogo} class="brand-badge" alt="" onerror={(e) => {
+          (e.currentTarget as HTMLImageElement).style.display = 'none';
+        }} />
       {/if}
 
       {#if flagUrl}
-        <div class="flag-badge"><img src={flagUrl} alt="" onerror={(e) => e.currentTarget.parentElement.style.display = 'none'} /></div>
+        <div class="flag-badge">        <img src={flagUrl} alt="" onerror={(e) => {
+          const parent = e.currentTarget.parentElement;
+          if (parent) parent.style.display = 'none';
+        }} /></div>
       {/if}
 
       {#if car.image_path}

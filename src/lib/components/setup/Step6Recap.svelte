@@ -2,7 +2,7 @@
   import { t } from 'svelte-i18n';
   import { setupState } from '$lib/stores/setupState.svelte.js';
 
-  let { onFinish = () => {} } = $props();
+  let { onFinish = () => {} }: { onFinish?: () => void } = $props();
 
   function truncatePath(path: string, maxLength = 40) {
     if (!path) return '—';

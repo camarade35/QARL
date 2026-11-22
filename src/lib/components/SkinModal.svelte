@@ -3,7 +3,7 @@
   import { convertFileSrc } from '@tauri-apps/api/core';
   import { t } from 'svelte-i18n';
 
-  function selectSkin(skin) {
+  function selectSkin(skin: any) {
     appState.selectedSkin = skin;
     appState.showSkinModal = false;
   }
@@ -23,6 +23,9 @@
             class="skin-select-row" 
             class:selected={appState.selectedSkin?.name === skin.name}
             onclick={() => selectSkin(skin)}
+            onkeydown={(event) => event.key === 'Enter' && selectSkin(skin)}
+            role="button"
+            tabindex="0"
           >
             <img src={convertFileSrc(skin.image_path)} class="skin-select-preview" alt={skin.name} />
             <div class="skin-select-name">{skin.name}</div>

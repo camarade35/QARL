@@ -12,6 +12,7 @@ if (typeof localStorage !== 'undefined') {
   }
 }
 
+/** @param {string} q */
 export function setSearchQuery(q) {
   searchState.query = q;
 }
@@ -20,6 +21,7 @@ export function clearSearch() {
   searchState.query = '';
 }
 
+/** @param {number} v */
 export function setAutosaveDelay(v) {
   searchState.autosaveDelay = Number(v) || 0;
   if (typeof localStorage !== 'undefined') {

@@ -68,6 +68,7 @@ export function resetSetup() {
   }
 }
 
+/** @param {boolean} disabled */
 export function setTutorialDisabled(disabled) {
   setupState.tutorialDisabled = disabled;
   if (typeof localStorage !== 'undefined') {
@@ -76,6 +77,7 @@ export function setTutorialDisabled(disabled) {
   }
 }
 
+/** @param {number} step */
 export function goToStep(step) {
   setupState.currentStep = Math.max(0, step);
   setupState.hiddenForRedirect = false;

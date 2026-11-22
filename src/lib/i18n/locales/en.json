@@ -489,6 +489,8 @@
     "start_hour": "Session start time",
     "time_mult": "Time multiplier",
     "group_conditions": "Weather conditions",
+    "refresh_btn": "Refresh",
+    "refresh_title": "Refresh weather and plans",
     "mode_label": "Weather mode",
     "mode_static": "Fixed weather",
     "mode_schedule": "Schedule (CSP Dynamic)",
@@ -1160,8 +1162,8 @@
   },
     "online": {
     "paste_title": "🔗 Paste a server link",
-    "dissociate_btn": "🔓 DISSOCIATE",
-    "associate_btn": "🔗 ASSOCIATE",
+    "dissociate_btn": "🔓 Dissociate acstuff links from QARL",
+    "associate_btn": "🔗 Associate acstuff links with QARL",
     "edit_btn_title": "Edit",
     "paste_placeholder": "https://acstuff.club/... or IP:PORT",
     "join_btn": "▶ Join",
@@ -1220,6 +1222,10 @@
     "save_success": "Audio settings saved!"
   },
     "online_servers": {
+      "featured_title": "Free practice servers",
+      "featured_loading": "Loading presentation...",
+      "featured_unavailable": "Server temporarily unavailable",
+      "featured_no_description": "No presentation available",
     "public_title": "Public servers ({filtered} / {total})",
     "load_more": "⬇ Load more",
     "refresh": "🔄 Refresh",

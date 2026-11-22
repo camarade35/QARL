@@ -3,7 +3,7 @@
   import { setupState, setTutorialDisabled } from '$lib/stores/setupState.svelte.js';
 
   // ⭐ On reçoit isOpen et onFinish depuis App.svelte
-  let { isOpen = false, onFinish = () => {} } = $props();
+  let { isOpen = $bindable(false), onFinish = () => {} }: { isOpen?: boolean; onFinish?: () => void } = $props();
 
   let isHidden = $state(false);
   let currentSlide = $state(0);

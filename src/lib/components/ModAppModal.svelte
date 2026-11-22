@@ -11,7 +11,7 @@
     onDownload,
     onEnabledChange,
     onVolumeChange
-  } = $props<{
+  }: {
     show: boolean;
     installed: boolean;
     enabled: boolean;
@@ -21,7 +21,7 @@
     onDownload: () => void;
     onEnabledChange: (enabled: boolean) => void;
     onVolumeChange: (volume: number) => void;
-  }>();
+  } = $props();
 </script>
 
 {#if show}

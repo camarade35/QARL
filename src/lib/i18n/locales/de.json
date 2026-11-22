@@ -1161,8 +1161,8 @@
   },
   "online": {
     "paste_title": "🔗 Server-Link einfügen",
-    "dissociate_btn": "🔓 TRENNEN",
-    "associate_btn": "🔗 VERKNÜPFEN",
+    "dissociate_btn": "🔓 acstuff-Link-Zuordnung von QARL trennen",
+    "associate_btn": "🔗 acstuff-Links mit QARL verknüpfen",
     "edit_btn_title": "Bearbeiten",
     "paste_placeholder": "https://acstuff.club/... oder IP:PORT",
     "join_btn": "▶ Beitreten",
@@ -1221,6 +1221,10 @@
     "save_success": "Audio-Einstellungen gespeichert!"
   },
   "online_servers": {
+    "featured_title": "Freie-Training-Server",
+    "featured_loading": "Präsentation wird geladen...",
+    "featured_unavailable": "Server vorübergehend nicht verfügbar",
+    "featured_no_description": "Keine Präsentation verfügbar",
     "public_title": "Öffentliche Server ({filtered} / {total})",
     "load_more": "⬇ Weitere laden",
     "refresh": "🔄 Aktualisieren",

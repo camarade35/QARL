@@ -1165,8 +1165,8 @@
   },
     "online": {
     "paste_title": "🔗 Coller un lien de serveur",
-    "dissociate_btn": "🔓 DISSOCIER",
-    "associate_btn": "🔗 ASSOCIER",
+    "dissociate_btn": "🔓 Dissocier les liens acstuff de QARL",
+    "associate_btn": "🔗 Associer les liens acstuff à QARL",
     "edit_btn_title": "Modifier",
     "paste_placeholder": "https://acstuff.club/... ou IP:PORT",
     "join_btn": "▶ Rejoindre",
@@ -1223,6 +1223,10 @@
     "entry_point": "Point d'entrée"
   },
     "online_servers": {
+      "featured_title": "Serveurs d’essais libres",
+      "featured_loading": "Chargement de la présentation...",
+      "featured_unavailable": "Serveur temporairement indisponible",
+      "featured_no_description": "Aucune présentation disponible",
     "public_title": "Serveurs publics ({filtered} / {total})",
     "load_more": "⬇ Charger plus",
     "refresh": "🔄 Rafraîchir",

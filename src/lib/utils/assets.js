@@ -1,4 +1,5 @@
 // Dictionnaire : { 'nom_normalise': { name: 'Nom Lisible', file: 'Fichier.png' } }
+/** @type {Record<string, { name: string, file: string }>} */
 const COUNTRY_MAP = {
   // Europe
   'fr': { name: 'countries.france', file: 'france23.png' },
@@ -38,7 +39,6 @@ const COUNTRY_MAP = {
   'se': { name: 'countries.sweden', file: 'sweden23.png' },
   'sweden': { name: 'countries.sweden', file: 'sweden23.png' },
   'suede': { name: 'countries.sweden', file: 'sweden23.png' },
-  'pl': { name: 'countries.poland', file: 'poland23.png' },
   'pl': { name: 'countries.poland', file: 'poland23.png' },
   'ru': { name: 'countries.russia', file: 'russia23.png' },
   'russia': { name: 'countries.russia', file: 'russia23.png' },
@@ -111,7 +111,9 @@ const COUNTRY_MAP = {
 };
 
 // Nettoie une chaîne : minuscules, sans espaces, sans points, sans accents
+/** @param {unknown} str */
 function normalizeStr(str) {
+  if (typeof str !== 'string') return '';
   if (!str) return '';
   return str.toLowerCase()
             .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Enlève les accents
@@ -120,6 +122,10 @@ function normalizeStr(str) {
 
 /**
  * Retourne le nom normalisé du pays à partir d'une chaîne ou d'un tableau de tags.
+ */
+/**
+ * @param {unknown} input
+ * @returns {string | null}
  */
 export function getCountryName(input) {
   if (!input) return null;
@@ -138,6 +144,11 @@ export function getCountryName(input) {
 
 /**
  * Retourne l'URL du drapeau local.
+ */
+/**
+ * @param {unknown} input
+ * @param {string | null} fallbackPath
+ * @returns {string | null}
  */
 export function getFlagUrl(input, fallbackPath = null) {
   if (!input) return fallbackPath ? fallbackPath : null;
@@ -162,8 +173,13 @@ export function getFlagUrl(input, fallbackPath = null) {
 /**
  * Tente de trouver un logo local pour la marque.
  */
+/**
+ * @param {unknown} brandName
+ * @param {string | null} fallbackPath
+ * @returns {string | null}
+ */
 export function getBrandLogoUrl(brandName, fallbackPath = null) {
-  if (!brandName || brandName === 'Mod') {
+  if (typeof brandName !== 'string' || brandName === 'Mod') {
     return fallbackPath ? fallbackPath : null;
   }
   return `/assets/manufacturers/${brandName.trim()}.png`;

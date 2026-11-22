@@ -33,7 +33,7 @@
   // ⭐ Fonction pour traduire l'index Pure (15, 16...) en icône
   function getIconFromIndex(index: number) {
     const map: Record<number, string> = {
-      1: '☀️', 2: '☀️', 3: '🌤️', 4: '⛅', 5: '💨', 6: '☁️', 7: '☁️', 8: '🌫️', 9: '🌫️', 10: '🌫️',
+      3: '🌤️', 4: '⛅', 5: '💨', 6: '☁️', 7: '☁️', 8: '🌫️', 9: '🌫️', 10: '🌫️',
       14: '🌧️', 15: '🌧️', 17: '🌧️', 18: '🌧️', 19: '🌧️', 0: '⛈️', 1: '⛈️', 2: '⛈️'
     };
     return map[index] || '☁️';
@@ -85,7 +85,7 @@
       await invoke('delete_pure_plan', { acPath: appState.acPath, planId });
       refreshPlans();
     } catch (e) {
-      alert($t('weather.errors.delete_error', { values: { error: e } }));
+      alert($t('weather.errors.delete_error', { values: { error: String(e) } }));
     }
   }
 
@@ -170,7 +170,7 @@
         alert($t('weather.errors.edit_loaded'));
       }
     } catch (e) {
-      alert($t('weather.errors.edit_error', { values: { error: e } }));
+      alert($t('weather.errors.edit_error', { values: { error: String(e) } }));
     }
   }
   let isSavingPlan = $state(false);
@@ -315,7 +315,7 @@
       const result = await invoke<string>('save_custom_pure_plan', {
         acPath: appState.acPath,
         planName: appState.session.weather.customPlanName,
-        steps: appState.session.weather.customPlanSteps.map(s => ({
+        steps: appState.session.weather.customPlanSteps.map((s: any) => ({
           weather: s.weather,
           duration: parseInt(String(s.duration)) || 10
         })),
@@ -336,7 +336,7 @@
 
       alert($t('weather.errors.save_success', { values: { path: result } }));
     } catch (e) {
-      alert($t('weather.errors.save_error', { values: { error: e } }));
+      alert($t('weather.errors.save_error', { values: { error: String(e) } }));
     } finally {
       isSavingPlan = false;
     }
@@ -358,7 +358,7 @@
   // Durée totale du plan perso
   let totalDuration = $derived(
     appState.session.weather.customPlanSteps.reduce(
-      (acc, s) => acc + (parseInt(String(s.duration)) || 0),
+      (acc: number, s: any) => acc + (parseInt(String(s.duration)) || 0),
       0
     )
   );
@@ -490,15 +490,15 @@
   <div class="group-title">{$t('weather.group_time')}</div>
   <div class="row">
     <div class="field">
-      <label>{$t('weather.start_hour')}</label>
+      <label for="qarl-weather-start-hour">{$t('weather.start_hour')}</label>
       <div class="time-picker">
-        <select bind:value={appState.session.weather.startHour}>
+        <select id="qarl-weather-start-hour" bind:value={appState.session.weather.startHour}>
           {#each HOURS as h}
             <option value={h}>{String(h).padStart(2, '0')}</option>
           {/each}
         </select>
         <span class="sep">:</span>
-        <select bind:value={appState.session.weather.startMinute}>
+        <select aria-label={$t('weather.start_hour')} bind:value={appState.session.weather.startMinute}>
           {#each MINUTES as m}
             <option value={m}>{String(m).padStart(2, '0')}</option>
           {/each}
@@ -506,8 +506,8 @@
       </div>
     </div>
     <div class="field">
-      <label>{$t('weather.time_mult')}</label>
-      <input type="number" bind:value={appState.session.weather.timeMultiplier} min="1" max="24" />
+      <label for="qarl-weather-time-multiplier">{$t('weather.time_mult')}</label>
+      <input id="qarl-weather-time-multiplier" type="number" bind:value={appState.session.weather.timeMultiplier} min="1" max="24" />
     </div>
   </div>
 </div>
@@ -522,8 +522,8 @@
   </div>
   <div class="row">
     <div class="field">
-      <label>{$t('weather.mode_label')}</label>
-      <select bind:value={appState.session.weather.mode} onchange={applyModeToPureCtrl}>
+      <label for="qarl-weather-mode">{$t('weather.mode_label')}</label>
+      <select id="qarl-weather-mode" bind:value={appState.session.weather.mode} onchange={applyModeToPureCtrl}>
         <option value="static">{$t('weather.mode_static')}</option>
         <option value="schedule">Schedule (CSP)</option>
         <option value="pure_plan">Plans Pure</option>
@@ -534,8 +534,8 @@
   {#if appState.session.weather.mode === 'static'}
     <div class="row">
       <div class="field">
-        <label>{$t('weather.weather_label')}</label>
-        <select bind:value={appState.session.weather.staticWeather}>
+        <label for="qarl-weather-static">{$t('weather.weather_label')}</label>
+        <select id="qarl-weather-static" bind:value={appState.session.weather.staticWeather}>
           {#if availableWeathers.length === 0}
             <option value="3_clear">{$t('weather.loading_weathers')}</option>
           {:else}
@@ -567,12 +567,12 @@
   {#if appState.session.weather.mode === 'schedule'}
     <div class="row">
       <div class="field">
-        <label>{$t('weather.schedule.slots_count')}</label>
-        <input type="number" bind:value={appState.session.weather.scheduleSlots} min="1" max="5" />
+        <label for="qarl-weather-slots">{$t('weather.schedule.slots_count')}</label>
+        <input id="qarl-weather-slots" type="number" bind:value={appState.session.weather.scheduleSlots} min="1" max="5" />
       </div>
       <div class="field">
-        <label>{$t('weather.schedule.time_per_slot')}</label>
-        <input type="number" bind:value={appState.session.weather.scheduleTimePerSlot} min="1" max="30" />
+        <label for="qarl-weather-time-per-slot">{$t('weather.schedule.time_per_slot')}</label>
+        <input id="qarl-weather-time-per-slot" type="number" bind:value={appState.session.weather.scheduleTimePerSlot} min="1" max="30" />
       </div>
       <div class="field">
         <label class="check" style="margin-top: 28px;">
@@ -584,8 +584,8 @@
 
     {#each Array(appState.session.weather.scheduleSlots || 3) as _, i}
       <div class="row" style="align-items: center; gap: 10px; margin-top: 8px;">
-        <label style="min-width: 60px;">{$t('weather.schedule.slot_label', { values: { n: i + 1 } })}</label>
-        <select bind:value={appState.session.weather.scheduleSlotValues[i]} style="flex: 1;">
+        <label for={`qarl-weather-schedule-slot-${i}`} style="min-width: 60px;">{$t('weather.schedule.slot_label', { values: { n: i + 1 } })}</label>
+        <select id={`qarl-weather-schedule-slot-${i}`} bind:value={appState.session.weather.scheduleSlotValues[i]} style="flex: 1;">
           {#each CSP_SCHEDULE_WEATHERS as weather}
             <option value={weather.index}>
               {getWeatherIcon(weather.id)} {translateWeatherName(weather.id, weather.id, $locale)}
@@ -653,12 +653,12 @@
     </div>
     <div class="row" style="margin-top: 14px;">
       <div class="field">
-        <label>{$t('weather.pure_ctrl.start_wetness')}</label>
-        <input type="number" bind:value={appState.session.weather.pureCtrl.startWetness} min="1" max="10" />
+        <label for="qarl-weather-start-wetness">{$t('weather.pure_ctrl.start_wetness')}</label>
+        <input id="qarl-weather-start-wetness" type="number" bind:value={appState.session.weather.pureCtrl.startWetness} min="1" max="10" />
       </div>
       <div class="field">
-        <label>{$t('weather.pure_ctrl.start_puddles')}</label>
-        <input type="number" bind:value={appState.session.weather.pureCtrl.startPuddles} min="1" max="10" />
+        <label for="qarl-weather-start-puddles">{$t('weather.pure_ctrl.start_puddles')}</label>
+        <input id="qarl-weather-start-puddles" type="number" bind:value={appState.session.weather.pureCtrl.startPuddles} min="1" max="10" />
       </div>
     </div>
   </div>
@@ -753,8 +753,8 @@
   {:else if pureSubTab === 'custom'}
     <div class="row">
       <div class="field">
-        <label>{$t('weather.custom.plan_name')}</label>
-        <input type="text" bind:value={appState.session.weather.customPlanName} placeholder={$t('weather.custom.plan_name_placeholder')} />
+        <label for="qarl-weather-custom-plan-name">{$t('weather.custom.plan_name')}</label>
+        <input id="qarl-weather-custom-plan-name" type="text" bind:value={appState.session.weather.customPlanName} placeholder={$t('weather.custom.plan_name_placeholder')} />
       </div>
       <div class="field">
         <label class="check" style="margin-top: 28px;">

@@ -127,7 +127,7 @@
   });
 
     // Constante pour la version (à modifier lors du push Github)
-  const APP_VERSION = "v1.4.1";
+  const APP_VERSION = "v1.4.2";
 
   async function detectSteamId() {
     isDetectingSteam = true;
@@ -135,9 +135,18 @@
       const id = await invoke<string>('detect_steam_id');
       setSteamId(id);
     } catch (e) {
-      alert($t('settings.general.steam_detect_error', { values: { error: e } }));
+      alert($t('settings.general.steam_detect_error', { values: { error: String(e) } }));
     } finally {
       isDetectingSteam = false;
+    }
+  }
+
+  async function openExternalLink(url: string) {
+    try {
+      await openUrl(url);
+    } catch (e) {
+      console.error('Impossible d’ouvrir le lien externe:', e);
+      alert('Impossible d’ouvrir ce lien :\n' + String(e));
     }
   }
 
@@ -345,8 +354,8 @@
 
     <div style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
       <div class="field" style="flex: 1; min-width: 300px;">
-        <label>{$t('settings.general.path_label')}</label>
-        <input type="text" readonly bind:value={selectedPath} placeholder="{$t('settings.general.path_placeholder')}" />
+        <label for="qarl-ac-path">{$t('settings.general.path_label')}</label>
+        <input id="qarl-ac-path" type="text" readonly bind:value={selectedPath} placeholder="{$t('settings.general.path_placeholder')}" />
       </div>
       <button class="btn-secondary" onclick={choisirDossier} style="padding: 10px 20px; height: 40px;">{$t('settings.general.path_browse')}</button>
       <button class="btn-launch" onclick={sauvegarder} style="padding: 10px 20px; height: 40px;">{$t('settings.general.path_save')}</button>
@@ -354,8 +363,8 @@
 
     <div style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-top: 8px;">
       <div class="field" style="flex: 1; min-width: 300px;">
-        <label>{$t('settings.general.docs_label')}</label>
-        <input type="text" readonly value={appState.documentsPath || $t('settings.general.docs_auto')} placeholder={$t('settings.general.docs_placeholder')} />
+        <label for="qarl-documents-path">{$t('settings.general.docs_label')}</label>
+        <input id="qarl-documents-path" type="text" readonly value={appState.documentsPath || $t('settings.general.docs_auto')} placeholder={$t('settings.general.docs_placeholder')} />
       </div>
       <button class="btn-secondary" onclick={choisirDossierDocuments} style="padding: 10px 20px; height: 40px;">{$t('settings.general.path_browse')}</button>
     </div>
@@ -367,18 +376,18 @@
       <div class="group-title">{$t('settings.general.identity_title')}</div>
       <div class="row">
         <div class="field">
-          <label>{$t('settings.general.name_solo')}</label>
-          <input type="text" value={appState.driverName} oninput={(e) => setDriverName(e.currentTarget.value)} placeholder={$t('settings.general.name_solo_placeholder')} />
+          <label for="qarl-driver-name">{$t('settings.general.name_solo')}</label>
+          <input id="qarl-driver-name" type="text" value={appState.driverName} oninput={(e) => setDriverName(e.currentTarget.value)} placeholder={$t('settings.general.name_solo_placeholder')} />
         </div>
         <div class="field">
-          <label>{$t('settings.general.name_online')}</label>
-          <input type="text" value={appState.onlineName} oninput={(e) => setOnlineName(e.currentTarget.value)} placeholder={$t('settings.general.name_online_placeholder')} />
+          <label for="qarl-online-name">{$t('settings.general.name_online')}</label>
+          <input id="qarl-online-name" type="text" value={appState.onlineName} oninput={(e) => setOnlineName(e.currentTarget.value)} placeholder={$t('settings.general.name_online_placeholder')} />
         </div>
       </div>
       <div class="row">
         <div class="field" style="flex: 2;">
-          <label>{$t('settings.general.steam_id')}</label>
-          <input type="text" value={appState.steamId} oninput={(e) => setSteamId(e.currentTarget.value)} placeholder={$t('settings.general.steam_id_placeholder')} />
+          <label for="qarl-steam-id">{$t('settings.general.steam_id')}</label>
+          <input id="qarl-steam-id" type="text" value={appState.steamId} oninput={(e) => setSteamId(e.currentTarget.value)} placeholder={$t('settings.general.steam_id_placeholder')} />
         </div>
         <div class="field" style="flex: 0 0 auto; justify-content: flex-end;">
           <button class="btn-secondary" onclick={detectSteamId} disabled={isDetectingSteam}>
@@ -392,8 +401,8 @@
       <div class="group-title">Apparence</div>
       <div class="row">
         <div class="field">
-          <label>Police de l'interface</label>
-          <select class="ini-select" style="padding: 8px;" value={appState.fontFamily} onchange={(e) => setFontFamily(e.currentTarget.value)}>
+          <label for="qarl-font-family">Police de l'interface</label>
+          <select id="qarl-font-family" class="ini-select" style="padding: 8px;" value={appState.fontFamily} onchange={(e) => setFontFamily(e.currentTarget.value)}>
             <option value="Inter">Inter (Moderne & Neutre)</option>
             <option value="Roboto">Roboto (Classique & Lisible)</option>
             <option value="Montserrat">Montserrat (Géométrique & Élégant)</option>
@@ -411,8 +420,8 @@
       <div class="group-title">{$t('settings.general.ac_language_title')}</div>
       <div class="row">
         <div class="field">
-          <label>{$t('settings.general.ac_language_label')}</label>
-          <select class="ini-select" style="padding: 8px;" bind:value={gameLang} onchange={(e) => updateGameLanguage(e.currentTarget.value)}>
+          <label for="qarl-ac-language">{$t('settings.general.ac_language_label')}</label>
+          <select id="qarl-ac-language" class="ini-select" style="padding: 8px;" bind:value={gameLang} onchange={(e) => updateGameLanguage(e.currentTarget.value)}>
             <option value="EN">English</option>
             <option value="FR">Français</option>
             <option value="ES">Español</option>
@@ -434,28 +443,28 @@
         <div class="group-title">{$t('settings.general.modules_title')}</div>
         <div class="row">
           <div class="field">
-            <label>Content Shaders Patch (CSP) {#if capabilities.has_csp}<span style="color: var(--accent); font-weight: normal;">{capabilities.csp_version}</span>{/if}</label>
+            <div class="field-label">Content Shaders Patch (CSP) {#if capabilities.has_csp}<span style="color: var(--accent); font-weight: normal;">{capabilities.csp_version}</span>{/if}</div>
             <div style="display: flex; align-items: center; gap: 8px; padding: 8px 0;">
               <span style="font-size: 1.2rem;">{capabilities.has_csp ? '✅' : '❌'}</span>
               <span>{capabilities.has_csp ? $t('settings.general.module_installed') : $t('settings.general.module_not_installed')}</span>
             </div>
           </div>
           <div class="field">
-            <label>Pure Weather {#if capabilities.has_pure_weather && capabilities.pure_version !== 'Inconnue'}<span style="color: var(--accent); font-weight: normal;">{capabilities.pure_version}</span>{/if}</label>
+            <div class="field-label">Pure Weather {#if capabilities.has_pure_weather && capabilities.pure_version !== 'Inconnue'}<span style="color: var(--accent); font-weight: normal;">{capabilities.pure_version}</span>{/if}</div>
             <div style="display: flex; align-items: center; gap: 8px; padding: 8px 0;">
               <span style="font-size: 1.2rem;">{capabilities.has_pure_weather ? '✅' : '❌'}</span>
               <span>{capabilities.has_pure_weather ? $t('settings.general.module_installed') : $t('settings.general.module_not_installed')}</span>
             </div>
           </div>
           <div class="field">
-            <label>Sol Weather {#if capabilities.has_sol && capabilities.sol_version !== 'Inconnue'}<span style="color: var(--accent); font-weight: normal;">{capabilities.sol_version}</span>{/if}</label>
+            <div class="field-label">Sol Weather {#if capabilities.has_sol && capabilities.sol_version !== 'Inconnue'}<span style="color: var(--accent); font-weight: normal;">{capabilities.sol_version}</span>{/if}</div>
             <div style="display: flex; align-items: center; gap: 8px; padding: 8px 0;">
               <span style="font-size: 1.2rem;">{capabilities.has_sol ? '✅' : '❌'}</span>
               <span>{capabilities.has_sol ? $t('settings.general.module_installed') : $t('settings.general.module_not_installed')}</span>
             </div>
           </div>
           <div class="field">
-            <label>Pure Planner {#if capabilities.has_pure && capabilities.pure_planner_version !== 'Inconnue'}<span style="color: var(--accent); font-weight: normal;">{capabilities.pure_planner_version}</span>{/if}</label>
+            <div class="field-label">Pure Planner {#if capabilities.has_pure && capabilities.pure_planner_version !== 'Inconnue'}<span style="color: var(--accent); font-weight: normal;">{capabilities.pure_planner_version}</span>{/if}</div>
             <div style="display: flex; align-items: center; gap: 8px; padding: 8px 0;">
               <span style="font-size: 1.2rem;">{capabilities.has_pure ? '✅' : '❌'}</span>
               <span>{capabilities.has_pure ? $t('settings.general.module_installed') : $t('settings.general.module_not_installed')}</span>
@@ -553,10 +562,10 @@
     </div>
     
     <div class="row" style="margin-top: 15px; gap: 10px;">
-      <button class="filter-btn" onclick={() => openUrl('https://acstuff.ru/app/')}>🌐 Content Manager</button>
-      <button class="filter-btn" onclick={() => openUrl('https://www.patreon.com/pure')}>🌤️ Pure</button>
-      <button class="filter-btn" onclick={() => openUrl('https://discord.gg/assettocorsa')}>💬 Discord AC</button>
-      <button class="filter-btn" onclick={() => openUrl('https://www.overtake.gg/')}>🏁 Overtake.gg</button>
+      <button class="filter-btn" onclick={() => openExternalLink('https://acstuff.ru/app/')}>🌐 Content Manager</button>
+      <button class="filter-btn" onclick={() => openExternalLink('https://www.patreon.com/pure')}>🌤️ Pure</button>
+      <button class="filter-btn" onclick={() => openExternalLink('https://discord.gg/assettocorsa')}>💬 Discord AC</button>
+      <button class="filter-btn" onclick={() => openExternalLink('https://www.overtake.gg/')}>🏁 Overtake.gg</button>
     </div>
   </div>
 </div> <!-- ⭐ Fermeture du sous-onglet Général -->

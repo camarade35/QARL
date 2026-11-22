@@ -55,14 +55,14 @@
   function formatDate(timestampStr: string) {
     const ts = parseInt(timestampStr) * 1000;
     const d = new Date(ts);
-    return d.toLocaleString($locale, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleString($locale ?? undefined, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   }
 
   // Récupère l'image de la voiture depuis l'état global
   function getCarImage(carId: string, skinId: string) {
     const car = appState.cars.find(c => c.id === carId);
     if (!car) return '';
-    const skin = car.skins.find(s => s.name === skinId);
+    const skin = car.skins.find((s: any) => s.name === skinId);
     if (skin) return convertFileSrc(skin.image_path);
     if (car.image_path) return convertFileSrc(car.image_path);
     return '';
@@ -78,7 +78,7 @@
     if (!track) return trackId;
     let name = track.name;
     if (layoutId && layoutId !== trackId && layoutId.toLowerCase() !== 'défaut' && layoutId.toLowerCase() !== 'default') {
-      const layout = track.layouts.find(l => l.id === layoutId);
+      const layout = track.layouts.find((l: any) => l.id === layoutId);
       if (layout) name += ` (${layout.name})`;
     }
     return name;
@@ -286,8 +286,8 @@
     <div class="group-title">{$t('session.session.group_title')}</div>
     <div class="row">
       <div class="field">
-        <label>{$t('session.session.type_label')}</label>
-        <select bind:value={appState.session.type}>
+        <label for="qarl-session-type">{$t('session.session.type_label')}</label>
+        <select id="qarl-session-type" bind:value={appState.session.type}>
           <option value="PRACTICE">{$t('session.types.practice')}</option>
           <option value="RACE_QUICK">{$t('session.types.race_quick')}</option>
           <option value="RACE_WEEKEND">{$t('session.types.race_weekend')}</option>
@@ -299,8 +299,8 @@
     {#if appState.session.type !== 'RACE_QUICK' && appState.session.type !== 'RACE_WEEKEND'}
       <div class="row">
         <div class="field">
-          <label>{$t('session.session.duration_label')}</label>
-          <input type="number" bind:value={appState.session.sessionMinutes} min="1" max="240" />
+          <label for="qarl-session-duration">{$t('session.session.duration_label')}</label>
+          <input id="qarl-session-duration" type="number" bind:value={appState.session.sessionMinutes} min="1" max="240" />
         </div>
       </div>
     {/if}
@@ -310,17 +310,17 @@
         <!-- ⭐ On cache les essais/qualifs si c'est une course rapide -->
         {#if appState.session.type === 'RACE_WEEKEND'}
           <div class="field">
-            <label>{$t('session.session.practice_label')}</label>
-            <input type="number" bind:value={appState.session.practiceMinutes} min="0" max="240" />
+            <label for="qarl-session-practice">{$t('session.session.practice_label')}</label>
+            <input id="qarl-session-practice" type="number" bind:value={appState.session.practiceMinutes} min="0" max="240" />
           </div>
           <div class="field">
-            <label>{$t('session.session.qualify_label')}</label>
-            <input type="number" bind:value={appState.session.qualifyMinutes} min="0" max="120" />
+            <label for="qarl-session-qualify">{$t('session.session.qualify_label')}</label>
+            <input id="qarl-session-qualify" type="number" bind:value={appState.session.qualifyMinutes} min="0" max="120" />
           </div>
         {/if}
         <div class="field">
-          <label>{$t('session.session.laps_label')}</label>
-          <input type="number" bind:value={appState.session.laps} min="1" max="99" />
+          <label for="qarl-session-laps">{$t('session.session.laps_label')}</label>
+          <input id="qarl-session-laps" type="number" bind:value={appState.session.laps} min="1" max="99" />
         </div>
       </div>
     {/if}
@@ -334,9 +334,10 @@
     <div class="row">
       {#if appState.session.gridType !== 'CUSTOM_GRID'}
         <div class="field">
-          <label>{$t('session.race_ia.opponents_count')}</label>
+          <label for="qarl-session-opponents">{$t('session.race_ia.opponents_count')}</label>
           <input 
             type="number" 
+            id="qarl-session-opponents"
             bind:value={appState.session.opponentsCount} 
             min="0" 
             max={maxOpponents}
@@ -356,8 +357,8 @@
       {/if}
       <!-- ⭐ Type de Grille (Cohérence) -->
       <div class="field">
-        <label>{$t('session.race_ia.grid_type')}</label>
-        <select bind:value={appState.session.gridType}>
+        <label for="qarl-session-grid-type">{$t('session.race_ia.grid_type')}</label>
+        <select id="qarl-session-grid-type" bind:value={appState.session.gridType}>
           <option value="SAME_CAR">{$t('session.race_ia.grid_same_car')}</option>
           <option value="RANDOM">{$t('session.race_ia.grid_random')}</option>
           
@@ -380,8 +381,8 @@
       <!-- ⭐ NOUVEAU : Restriction (affiché seulement si ce n'est pas Custom ou Same Car) -->
       {#if appState.session.gridType !== 'CUSTOM_GRID' && appState.session.gridType !== 'SAME_CAR'}
         <div class="field">
-          <label>{$t('session.race_ia.grid_restriction_label')}</label>
-          <select bind:value={appState.session.gridRestriction}>
+          <label for="qarl-session-grid-restriction">{$t('session.race_ia.grid_restriction_label')}</label>
+          <select id="qarl-session-grid-restriction" bind:value={appState.session.gridRestriction}>
             <option value="ALL">{$t('session.race_ia.grid_restriction_all')}</option>
             <option value="KUNOS">{$t('session.race_ia.grid_restriction_kunos')}</option>
             <option value="MODS">{$t('session.race_ia.grid_restriction_mods')}</option>
@@ -396,7 +397,7 @@
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
           <div style="font-weight: 600; color: var(--text-secondary);">{$t('session.race_ia.custom_grid_title')}</div>
           <div style="font-size: 0.8rem; color: var(--text-tertiary);">
-            {$t('session.race_ia.custom_grid_total', { values: { total: appState.session.customGrid.reduce((acc, row) => acc + (parseInt(row.quantity) || 0), 0), max: maxOpponents } })}
+            {$t('session.race_ia.custom_grid_total', { values: { total: appState.session.customGrid.reduce((acc: number, row: any) => acc + (parseInt(row.quantity) || 0), 0), max: maxOpponents } })}
           </div>
         </div>
         
@@ -471,8 +472,8 @@
     
     <div class="row">
       <div class="field">
-        <label>{$t('session.race_ia.start_position')}</label>
-        <select bind:value={appState.session.startingPositionMode}>
+        <label for="qarl-session-start-position">{$t('session.race_ia.start_position')}</label>
+        <select id="qarl-session-start-position" bind:value={appState.session.startingPositionMode}>
           <option value="LAST">{$t('session.race_ia.pos_last')}</option>
           <option value="RANDOM">{$t('session.race_ia.pos_random')}</option>
           <option value="FIRST">{$t('session.race_ia.pos_first')}</option>
@@ -483,18 +484,19 @@
       </div>
       {#if appState.session.startingPositionMode === 'CUSTOM'}
         <div class="field">
-          <label>{$t('session.race_ia.pos_exact')}</label>
-          <input type="number" bind:value={appState.session.customStartPos} min="1" max="100" />
+          <label for="qarl-session-exact-position">{$t('session.race_ia.pos_exact')}</label>
+          <input id="qarl-session-exact-position" type="number" bind:value={appState.session.customStartPos} min="1" max="100" />
         </div>
       {/if}
 
       <!-- ⭐ NOUVEAU : Écart de grille (seulement pour Dernier) -->
       {#if appState.session.startingPositionMode === 'LAST'}
         <div class="field">
-          <label>{$t('session.race_ia.grid_offset')}</label>
+          <label for="qarl-session-grid-offset">{$t('session.race_ia.grid_offset')}</label>
           <div style="display: flex; align-items: center; gap: 10px;">
             <input 
               type="range" 
+              id="qarl-session-grid-offset"
               bind:value={appState.session.gridOffset} 
               min="0" 
               max={maxGridOffset} 
@@ -503,6 +505,7 @@
             />
             <input 
               type="number" 
+              aria-label={$t('session.race_ia.grid_offset')}
               bind:value={appState.session.gridOffset} 
               min="0" 
               max={maxGridOffset}
@@ -517,8 +520,8 @@
       {/if}
 
       <div class="field">
-        <label>{$t('session.race_ia.jump_start')}</label>
-        <select bind:value={appState.session.jumpStartPenalty}>
+        <label for="qarl-session-jump-start">{$t('session.race_ia.jump_start')}</label>
+        <select id="qarl-session-jump-start" bind:value={appState.session.jumpStartPenalty}>
           <option value={0}>{$t('session.race_ia.jump_disabled')}</option>
           <option value={1}>{$t('session.race_ia.jump_drivethrough')}</option>
           <option value={2}>{$t('session.race_ia.jump_stopgo')}</option>
@@ -531,14 +534,14 @@
     <div class="group-title">{$t('session.race_ia.group_ai')}</div>
     <div class="row">
       <div class="field">
-        <label>{$t('session.race_ia.ai_level', { values: { level: appState.session.aiLevel, var: appState.session.aiLevelVar } })}</label>
-        <input type="range" bind:value={appState.session.aiLevel} min="50" max="100" />
-        <input type="range" bind:value={appState.session.aiLevelVar} min="0" max="20" />
+        <label id="qarl-session-ai-level-label" for="qarl-session-ai-level">{$t('session.race_ia.ai_level', { values: { level: appState.session.aiLevel, var: appState.session.aiLevelVar } })}</label>
+        <input id="qarl-session-ai-level" type="range" bind:value={appState.session.aiLevel} min="50" max="100" />
+        <input type="range" aria-labelledby="qarl-session-ai-level-label" bind:value={appState.session.aiLevelVar} min="0" max="20" />
       </div>
       <div class="field">
-        <label>{$t('session.race_ia.ai_aggression', { values: { level: appState.session.aiAggression, var: appState.session.aiAggressionVar } })}</label>
-        <input type="range" bind:value={appState.session.aiAggression} min="0" max="100" />
-        <input type="range" bind:value={appState.session.aiAggressionVar} min="0" max="50" />
+        <label id="qarl-session-ai-aggression-label" for="qarl-session-ai-aggression">{$t('session.race_ia.ai_aggression', { values: { level: appState.session.aiAggression, var: appState.session.aiAggressionVar } })}</label>
+        <input id="qarl-session-ai-aggression" type="range" bind:value={appState.session.aiAggression} min="0" max="100" />
+        <input type="range" aria-labelledby="qarl-session-ai-aggression-label" bind:value={appState.session.aiAggressionVar} min="0" max="50" />
       </div>
     </div>
   </div>
@@ -552,12 +555,12 @@
     </div>
     <div class="row">
       <div class="field">
-        <label>{$t('session.pilot.ballast')} : {appState.session.ballast} kg</label>
-        <input type="range" bind:value={appState.session.ballast} min="0" max="200" step="5" />
+        <label for="qarl-session-ballast">{$t('session.pilot.ballast')} : {appState.session.ballast} kg</label>
+        <input id="qarl-session-ballast" type="range" bind:value={appState.session.ballast} min="0" max="200" step="5" />
       </div>
       <div class="field">
-        <label>{$t('session.pilot.restrictor')} : {appState.session.restrictor} %</label>
-        <input type="range" bind:value={appState.session.restrictor} min="0" max="100" step="5" />
+        <label for="qarl-session-restrictor">{$t('session.pilot.restrictor')} : {appState.session.restrictor} %</label>
+        <input id="qarl-session-restrictor" type="range" bind:value={appState.session.restrictor} min="0" max="100" step="5" />
       </div>
     </div>
   </div>
@@ -571,9 +574,10 @@
     <div class="row" style="align-items: flex-end;">
       <!-- Charger un preset -->
       <div class="field">
-        <label>{$t('session.pilot.load_preset')}</label>
+        <label for="qarl-session-load-preset">{$t('session.pilot.load_preset')}</label>
         <div style="display: flex; gap: 8px;">
           <select 
+            id="qarl-session-load-preset"
             bind:value={selectedAssistPreset} 
             onchange={loadAssistPreset} 
             class="ini-select" 
@@ -599,9 +603,9 @@
 
       <!-- Sauvegarder un nouveau preset -->
       <div class="field">
-        <label>{$t('session.pilot.save_preset')}</label>
+        <label for="qarl-session-save-preset">{$t('session.pilot.save_preset')}</label>
         <div style="display: flex; gap: 8px;">
-          <input type="text" bind:value={newAssistPresetName} placeholder={$t('session.pilot.preset_name_placeholder')} style="flex: 1;" />
+          <input id="qarl-session-save-preset" type="text" bind:value={newAssistPresetName} placeholder={$t('session.pilot.preset_name_placeholder')} style="flex: 1;" />
           <button class="filter-btn" onclick={saveAssistPreset} style="background-color: var(--accent); color: white; border-color: var(--accent);">💾 {$t('common.save')}</button>
         </div>
       </div>
@@ -628,8 +632,9 @@
       
       <!-- ⭐ Slider FOV -->
       <div class="field">
-        <label>{$t('session.pilot.fov')} : {currentFov}°</label>
+        <label for="qarl-session-fov">{$t('session.pilot.fov')} : {currentFov}°</label>
         <input 
+          id="qarl-session-fov"
           type="range" 
           min="5" 
           max="180" 
@@ -642,16 +647,16 @@
     </div>
     <div class="row">
       <div class="field">
-        <label>{$t('session.pilot.tc')}</label>
-        <select bind:value={appState.session.assists.tc}>
+        <label for="qarl-session-tc">{$t('session.pilot.tc')}</label>
+        <select id="qarl-session-tc" bind:value={appState.session.assists.tc}>
           <option value={0}>{$t('session.pilot.assist_off')}</option>
           <option value={1}>{$t('session.pilot.assist_factory')}</option>
           <option value={2}>{$t('session.pilot.assist_on')}</option>
         </select>
       </div>
       <div class="field">
-        <label>{$t('session.pilot.abs')}</label>
-        <select bind:value={appState.session.assists.abs}>
+        <label for="qarl-session-abs">{$t('session.pilot.abs')}</label>
+        <select id="qarl-session-abs" bind:value={appState.session.assists.abs}>
           <option value={0}>{$t('session.pilot.assist_off')}</option>
           <option value={1}>{$t('session.pilot.assist_factory')}</option>
           <option value={2}>{$t('session.pilot.assist_on')}</option>
@@ -664,22 +669,22 @@
     <div class="group-title">{$t('session.pilot.group_realism')}</div>
     <div class="row">
       <div class="field">
-        <label>{$t('session.pilot.fuel', { values: { value: appState.session.assists.fuelRate } })}</label>
-        <input type="range" bind:value={appState.session.assists.fuelRate} min="0" max="5" step="1" />
+        <label for="qarl-session-fuel">{$t('session.pilot.fuel', { values: { value: appState.session.assists.fuelRate } })}</label>
+        <input id="qarl-session-fuel" type="range" bind:value={appState.session.assists.fuelRate} min="0" max="5" step="1" />
       </div>
       <div class="field">
-        <label>{$t('session.pilot.damage', { values: { value: appState.session.assists.mechanicalDamage } })}</label>
-        <input type="range" bind:value={appState.session.assists.mechanicalDamage} min="0" max="100" step="10" />
+        <label for="qarl-session-damage">{$t('session.pilot.damage', { values: { value: appState.session.assists.mechanicalDamage } })}</label>
+        <input id="qarl-session-damage" type="range" bind:value={appState.session.assists.mechanicalDamage} min="0" max="100" step="10" />
       </div>
     </div>
     <div class="row">
       <div class="field">
-        <label>{$t('session.pilot.tyre_wear', { values: { value: appState.session.assists.tyreWear } })}</label>
-        <input type="range" bind:value={appState.session.assists.tyreWear} min="0" max="5" step="1" />
+        <label for="qarl-session-tyre-wear">{$t('session.pilot.tyre_wear', { values: { value: appState.session.assists.tyreWear } })}</label>
+        <input id="qarl-session-tyre-wear" type="range" bind:value={appState.session.assists.tyreWear} min="0" max="5" step="1" />
       </div>
       <div class="field">
-        <label>{$t('session.pilot.slipstream', { values: { value: appState.session.assists.slipstream } })}</label>
-        <input type="range" bind:value={appState.session.assists.slipstream} min="0" max="5" step="1" />
+        <label for="qarl-session-slipstream">{$t('session.pilot.slipstream', { values: { value: appState.session.assists.slipstream } })}</label>
+        <input id="qarl-session-slipstream" type="range" bind:value={appState.session.assists.slipstream} min="0" max="5" step="1" />
       </div>
     </div>
   </div>
@@ -696,8 +701,8 @@
     </div>
     <div class="row">
       <div class="field">
-        <label>{$t('session.pilot.tyres_out')}</label>
-        <select bind:value={appState.session.allowedTyresOut}>
+        <label for="qarl-session-tyres-out">{$t('session.pilot.tyres_out')}</label>
+        <select id="qarl-session-tyres-out" bind:value={appState.session.allowedTyresOut}>
           <option value={-1}>{$t('session.pilot.tyres_out_unlimited')}</option>
           <option value={1}>{$t('session.pilot.tyres_out_strict')}</option>
           <option value={2}>{$t('session.pilot.tyres_out_normal')}</option>
@@ -705,8 +710,8 @@
         </select>
       </div>
       <div class="field">
-        <label>{$t('session.pilot.track_grip')}</label>
-        <select bind:value={appState.session.trackGrip}>
+        <label for="qarl-session-track-grip">{$t('session.pilot.track_grip')}</label>
+        <select id="qarl-session-track-grip" bind:value={appState.session.trackGrip}>
           <option value={0}>{$t('session.pilot.track_grip_low')}</option>
           <option value={1}>{$t('session.pilot.track_grip_normal')}</option>
           <option value={2}>{$t('session.pilot.track_grip_high')}</option>
@@ -715,12 +720,12 @@
     </div>
     <div class="row">
       <div class="field">
-        <label>{$t('session.pilot.wind_speed')} : {appState.session.windSpeed} km/h</label>
-        <input type="range" bind:value={appState.session.windSpeed} min="0" max="40" step="1" />
+        <label for="qarl-session-wind-speed">{$t('session.pilot.wind_speed')} : {appState.session.windSpeed} km/h</label>
+        <input id="qarl-session-wind-speed" type="range" bind:value={appState.session.windSpeed} min="0" max="40" step="1" />
       </div>
       <div class="field">
-        <label>{$t('session.pilot.wind_direction')} : {appState.session.windDirection}°</label>
-        <input type="range" bind:value={appState.session.windDirection} min="0" max="360" step="10" />
+        <label for="qarl-session-wind-direction">{$t('session.pilot.wind_direction')} : {appState.session.windDirection}°</label>
+        <input id="qarl-session-wind-direction" type="range" bind:value={appState.session.windDirection} min="0" max="360" step="10" />
       </div>
     </div>
   </div>
@@ -732,8 +737,8 @@
     <div class="group-title">{$t('session.presets.group_save')}</div>
     <div class="row">
       <div class="field">
-        <label>{$t('session.presets.name_label')}</label>
-        <input type="text" bind:value={presetName} placeholder={$t('session.presets.name_placeholder')} />
+        <label for="qarl-session-preset-name">{$t('session.presets.name_label')}</label>
+        <input id="qarl-session-preset-name" type="text" bind:value={presetName} placeholder={$t('session.presets.name_placeholder')} />
       </div>
       <div class="field" style="flex: 0; min-width: auto; justify-content: flex-end;">
         <button class="filter-btn" onclick={savePreset} style="padding: 10px 22px; background-color: var(--accent); color: white; border-color: var(--accent); white-space: nowrap;">

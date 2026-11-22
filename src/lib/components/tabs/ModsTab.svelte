@@ -132,13 +132,15 @@
     } catch (e) { console.error(e); }
   }
 
-  onMount(async () => {
+  onMount(() => {
     loadHistory();
     void loadCrashFxData();
     void loadModAppsStatus();
 
     // ⭐ Écoute du Drag & Drop natif de Tauri 2
-    const unlisten = await getCurrentWebview().onDragDropEvent((event) => {
+    let unlisten: (() => void) | null = null;
+    let isUnmounted = false;
+    void getCurrentWebview().onDragDropEvent((event) => {
       if (event.payload.type === 'enter') {
         isDragging = true;
       } else if (event.payload.type === 'leave') {
@@ -147,9 +149,15 @@
         isDragging = false;
         handleDrop(event.payload.paths);
       }
+    }).then((listener) => {
+      if (isUnmounted) listener();
+      else unlisten = listener;
     });
 
-    return () => unlisten();
+    return () => {
+      isUnmounted = true;
+      unlisten?.();
+    };
   });
 
     async function browseArchives() {
@@ -229,7 +237,7 @@
   }
 
   function formatDate(ts: string) {
-    return new Date(parseInt(ts) * 1000).toLocaleString($locale);
+    return new Date(parseInt(ts) * 1000).toLocaleString($locale ?? undefined);
   }
 </script>
 
@@ -457,16 +465,6 @@
 />
 
 <style>
-  /* ⭐ NOUVEAU STYLE POUR LES ACCORDÉONS (Style CSP) */
-  .accordion-header {
-    display: flex;
-    align-items: center;
-    cursor: pointer;
-    user-select: none;
-    padding-top: 5px;
-    padding-bottom: 5px;
-  }
-
   .accordion-arrow {
     color: var(--accent); /* Couleur de ton thème (cyan/vert) */
     font-size: 1rem;
@@ -479,15 +477,6 @@
 
   .accordion-arrow.open {
     transform: rotate(90deg);
-  }
-
-  .accordion-title {
-    color: var(--accent); /* La même couleur que tes titres CSP */
-    font-weight: 700;
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    white-space: nowrap;
   }
 
   .accordion-line {

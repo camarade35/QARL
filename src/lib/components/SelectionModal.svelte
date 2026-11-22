@@ -56,11 +56,13 @@
     appState.modalContext = null; // ⭐ On nettoie le contexte
   }
 
+  /** @param {any} layout */
   function selectLayout(layout) {
     appState.selectedTrackLayout = layout;
     closeModal();
   }
 
+  /** @param {any} skin */
   function selectSkin(skin) {
     appState.selectedCarSkin = skin;
     closeModal();
@@ -195,6 +197,12 @@
               class="card selection-layout-card"
               class:selected={appState.selectedTrackLayout?.id === layout.id}
               onclick={() => selectLayout(layout)}
+              onkeydown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  selectLayout(layout);
+                }
+              }}
               role="button"
               tabindex="0"
             >
@@ -220,6 +228,12 @@
               class="skin-select-row" 
               class:selected={appState.selectedCarSkin?.name === skin.name}
               onclick={() => selectSkin(skin)}
+              onkeydown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  selectSkin(skin);
+                }
+              }}
               role="button"
               tabindex="0"
             >

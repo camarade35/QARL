@@ -23,7 +23,17 @@
 <svelte:window onkeydown={handleKeydown} />
 
 {#if dialogState.isOpen}
-  <div class="qacrl-dialog-overlay visible" onclick={(e) => { if(e.target === e.currentTarget) handleCancel(); }}>
+  <div
+    class="qacrl-dialog-overlay visible"
+    role="presentation"
+    onclick={(e) => { if(e.target === e.currentTarget) handleCancel(); }}
+    onkeydown={(e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        handleCancel();
+      }
+    }}
+  >
     <div class="qacrl-dialog qacrl-dialog-{dialogState.variant} {dialogState.type === 'update' ? 'qacrl-dialog-update' : ''}">
       
       <div class="qacrl-dialog-header">

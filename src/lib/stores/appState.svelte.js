@@ -6,7 +6,9 @@ const savedSteamId = typeof localStorage !== 'undefined' ? localStorage.getItem(
 const savedDriverName = typeof localStorage !== 'undefined' ? localStorage.getItem('qarl_driver_name') || 'Driver' : 'Driver';
 const savedOnlineName = typeof localStorage !== 'undefined' ? localStorage.getItem('qarl_online_name') || '' : '';
 const savedDocumentsPath = typeof localStorage !== 'undefined' ? localStorage.getItem('qarl_documents_path') || '' : '';
+/** @type {{ cars: string[], tracks: string[] }} */
 const savedFavorites = typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('qarl_favorites') || '{"cars":[],"tracks":[]}') : {cars:[],tracks:[]};
+/** @type {{ cars: Record<string, number>, tracks: Record<string, number> }} */
 const savedUsed = typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('qarl_used') || '{"cars":{},"tracks":{}}') : {cars:{},tracks:{}};
 
 // ⭐ Serveurs
@@ -28,7 +30,7 @@ const defaultSession = {
   opponentsCount: 10,
   gridType: 'RANDOM',
   gridRestriction: 'ALL', // ⭐ NOUVEAU : 'ALL', 'KUNOS', 'MODS'
-  customGrid: [], // ⭐ NOUVEAU
+  customGrid: /** @type {any[]} */ ([]), // ⭐ NOUVEAU
   gridOffset: 0, // ⭐ NOUVEAU : Écart de grille
   startingPositionMode: 'LAST',
   customStartPos: 1,
@@ -85,13 +87,13 @@ const defaultSession = {
     // Plan existant (Pure / Sol)
     existingPlan: '',            // nom du fichier .plan
     existingPlanRandom: false,   // tirer un plan au hasard à chaque lancement
-    existingPlanSteps: [],       // ⭐ Stocke les étapes du plan chargé pour l'affichage
+    existingPlanSteps: /** @type {any[]} */ ([]), // ⭐ Stocke les étapes du plan chargé pour l'affichage
     existingPlanLoop: false,     // ⭐ NOUVEAU
     existingPlanTimeMult: 1,     // ⭐ NOUVEAU
     
     // Plan personnalisé
     customPlanName: 'Mon plan',
-    customPlanSteps: [],         // [{ weather: '3_clear', duration: 10 }, ...]
+    customPlanSteps: /** @type {any[]} */ ([]), // [{ weather: '3_clear', duration: 10 }, ...]
     customPlanLoop: false,
     
     // Contrôle du temps
@@ -144,21 +146,23 @@ export const appState = $state({
   onlineName: savedOnlineName,
   documentsPath: savedDocumentsPath,
   activeTab: 'tab-cars',
-  cars: [], // ⭐ Stocke toutes les voitures pour la génération de la grille
-  tracks: [], // ⭐ AJOUT : On initialise le tableau des circuits
+  cars: /** @type {any[]} */ ([]),
+  tracks: /** @type {any[]} */ ([]),
   dataLoadedForPath: '', // ⭐ NOUVEAU : chemin AC pour lequel cars/tracks ont été chargés
-  selectedCar: null,
-  selectedCarSkin: null,
-  selectedTrack: null,
-  selectedTrackLayout: null,
+  selectedCar: /** @type {any} */ (null),
+  selectedCarSkin: /** @type {any} */ (null),
+  selectedTrack: /** @type {any} */ (null),
+  selectedTrackLayout: /** @type {any} */ (null),
+  selectedSkin: /** @type {any} */ (null),
+  showSkinModal: false,
   modalOpen: false,
-  modalType: null,
-  modalData: null,
-  modalContext: null, // ⭐ NOUVEAU : pour cibler la ligne de la grille personnalisée
-  favorites: savedFavorites,
-  used: savedUsed,
-  carFilters: { type: 'all', search: '', tags: [], power: '' },
-  trackFilters: { type: 'all', search: '', tags: [] },
+  modalType: /** @type {string | null} */ (null),
+  modalData: /** @type {any} */ (null),
+  modalContext: /** @type {{ rowIndex?: number } | null} */ (null), // ⭐ NOUVEAU : pour cibler la ligne de la grille personnalisée
+  favorites: /** @type {{ cars: string[], tracks: string[] }} */ (savedFavorites),
+  used: /** @type {{ cars: Record<string, number>, tracks: Record<string, number> }} */ (savedUsed),
+  carFilters: { type: 'all', search: '', tags: /** @type {string[]} */ ([]), power: '' },
+  trackFilters: { type: 'all', search: '', tags: /** @type {string[]} */ ([]) },
   
   // ⭐ Serveurs
   customServers: savedCustomServers,
@@ -179,7 +183,7 @@ $effect.root(() => {
       const car = appState.cars.find(c => c.id === savedSelectionIds.carId);
       if (car) {
         appState.selectedCar = car;
-        appState.selectedCarSkin = car.skins.find(s => s.name === savedSelectionIds.skinId) || car.skins[0] || null;
+        appState.selectedCarSkin = car.skins.find((/** @type {any} */ s) => s.name === savedSelectionIds.skinId) || car.skins[0] || null;
       }
     }
   });
@@ -192,7 +196,7 @@ $effect.root(() => {
       const track = appState.tracks.find(t => t.id === savedSelectionIds.trackId);
       if (track) {
         appState.selectedTrack = track;
-        appState.selectedTrackLayout = track.layouts.find(l => l.id === savedSelectionIds.layoutId) || track.layouts[0] || null;
+        appState.selectedTrackLayout = track.layouts.find((/** @type {any} */ l) => l.id === savedSelectionIds.layoutId) || track.layouts[0] || null;
       }
     }
   });
@@ -230,6 +234,7 @@ $effect.root(() => {
   });
 });
 
+/** @param {string} newPath */
 export function setAcPath(newPath) {
   appState.acPath = newPath;
   if (typeof localStorage !== 'undefined') {
@@ -237,6 +242,7 @@ export function setAcPath(newPath) {
   }
 }
 
+/** @param {string} id */
 export function setSteamId(id) {
   appState.steamId = id;
   if (typeof localStorage !== 'undefined') {
@@ -244,6 +250,7 @@ export function setSteamId(id) {
   }
 }
 
+/** @param {string} name */
 export function setDriverName(name) {
   appState.driverName = name;
   if (typeof localStorage !== 'undefined') {
@@ -251,6 +258,7 @@ export function setDriverName(name) {
   }
 }
 
+/** @param {string} name */
 export function setOnlineName(name) {
   appState.onlineName = name;
   if (typeof localStorage !== 'undefined') {
@@ -258,6 +266,7 @@ export function setOnlineName(name) {
   }
 }
 
+/** @param {string} path */
 export function setDocumentsPath(path) {
   appState.documentsPath = path;
   if (typeof localStorage !== 'undefined') {
@@ -265,6 +274,10 @@ export function setDocumentsPath(path) {
   }
 }
 
+/**
+ * @param {'cars' | 'tracks'} kind
+ * @param {string} id
+ */
 export function toggleFavorite(kind, id) {
   const list = appState.favorites[kind];
   const idx = list.indexOf(id);
@@ -275,6 +288,10 @@ export function toggleFavorite(kind, id) {
   }
 }
 
+/**
+ * @param {'cars' | 'tracks'} kind
+ * @param {string} id
+ */
 export function bumpUsedCount(kind, id) {
   appState.used[kind][id] = (appState.used[kind][id] || 0) + 1;
   if (typeof localStorage !== 'undefined') {
@@ -301,6 +318,7 @@ export function saveServerState() {
 }
 
 // ⭐ Fonction pour changer la police
+/** @param {string} fontName */
 export function setFontFamily(fontName) {
   appState.fontFamily = fontName;
   if (typeof localStorage !== 'undefined') {

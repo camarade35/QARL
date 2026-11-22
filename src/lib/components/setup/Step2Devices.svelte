@@ -10,7 +10,7 @@
   type ControllerPreset = { filename: string; name: string; product: string };
   type ControllerEntry = { con_index: number; name: string; iguid: string; pguid: string };
 
-  let { onContinue = () => {} } = $props();
+  let { onContinue = () => {} }: { onContinue?: () => void } = $props();
 
   let devices = $state<DeviceInfo[]>([]);
   let presets = $state<ControllerPreset[]>([]);

@@ -13,7 +13,7 @@
     error,
     onClose,
     onDownload
-  } = $props<{
+  }: {
     show: boolean;
     title: string;
     credit?: string;
@@ -25,7 +25,7 @@
     error: string;
     onClose: () => void;
     onDownload: (url: string) => void | Promise<void>;
-  }>();
+  } = $props();
 </script>
 
 {#if show}

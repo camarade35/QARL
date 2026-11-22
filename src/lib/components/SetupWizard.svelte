@@ -1,5 +1,6 @@
 <script lang="ts">
   import { t } from 'svelte-i18n';
+  import { getCurrentWindow } from '@tauri-apps/api/window';
   import { setupState, goToStep, closeSetup, markSetupCompleted, showAfterRedirect, hideForRedirect } from '$lib/stores/setupState.svelte.js';
   import Step0Paths from './setup/Step0Paths.svelte';
   import Step1AcInit from './setup/Step1AcInit.svelte';
@@ -38,20 +39,13 @@
     
     markSetupCompleted();
     
-    // ⭐ On utilise l'API Tauri pour forcer un vrai rechargement de la WebView (équivalent F5)
-    try {
-      await getCurrentWindow().reload();
-    } catch (e) {
-      // Fallback au cas où l'API Tauri échoue
-      window.location.reload();
-    }
+    window.location.reload();
   }
 
   function handleBack() {
     if (currentIdx > 0) goToStep(currentIdx - 1);
   }
 
-  import { getCurrentWindow } from '@tauri-apps/api/window';
   import { invoke } from '@tauri-apps/api/core';
   import { appState } from '$lib/stores/appState.svelte.js';
   import { confirm, alert } from '$lib/stores/dialog.svelte';
